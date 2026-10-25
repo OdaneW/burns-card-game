@@ -1,7 +1,10 @@
 # Burns Card Game
 
-A phone-first card game with several game modes, played against computer players.
-The first mode is **Burns**: follow the suit, draw when you can't, and be the first to empty your hand.
+A phone-first card game with several game modes, played against computer players:
+
+- **Burns**: follow the suit, draw when you can't, and be the first to empty your hand.
+- **Pass-Roun Donkey**: pass one card round the circle, collect four of a kind, and never be last
+  to put your cards down, or you collect a letter of DONKEY.
 
 **Play:** https://odanew.github.io/burns-card-game/
 
@@ -25,6 +28,9 @@ at the bottom of the menu screen.
 | `src/modes/burns/bot.js` | The Burns computer player. It only sees what a human player would see |
 | `src/modes/burns/ui.js` | The Burns table screen |
 | `src/modes/burns/tutorial.js` | The interactive Burns tutorial: rigged lessons on the real table |
+| `src/modes/donkey/rules.js` | The Pass-Roun Donkey rules: passing, four of a kind, the race, letters and the tie-breaker |
+| `src/modes/donkey/bot.js` | The Donkey computer player, with three reflex speeds for the race |
+| `src/modes/donkey/ui.js` | The Donkey table screen: four seats round a table |
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |
@@ -52,7 +58,7 @@ update reaches everyone who left that option alone.
 Needs Node 18 or newer. There are no dependencies.
 
 ```sh
-npm test         # rule scenarios plus 2,200 simulated all-bot games
+npm test         # rule scenarios plus simulated all-bot games for each mode
 npm run build    # rebuild docs/ and dist/
 ```
 

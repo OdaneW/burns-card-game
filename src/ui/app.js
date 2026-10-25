@@ -11,7 +11,6 @@
   var SETTINGS_KEY = 'cardtable.settings.v1';
   var STATS_KEY = 'cardtable.stats.v1';
   var BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
-  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
 
   function $(id) { return document.getElementById(id); }
 
@@ -113,20 +112,21 @@
         '<h1 class="home-title">Pick a game</h1>';
       if (save) {
         var st = save.session.state;
-        var mine = st.players.filter(function (p) { return p.id === save.me; })[0];
         var mode = CT.getMode(save.session.modeId);
+        var line = mode && mode.describe ? mode.describe(st, save.me) : '';
         html += '<div class="resume"><p>' + UI.esc(mode ? mode.name : 'Game') + ' in progress' +
-          '<small>' + (st.setNo ? 'Set ' + st.setNo : 'Just dealt') + ' · you hold ' + (mine ? mine.hand.length : 0) + ' cards · ' + (st.players.length - 1) + ' opponents</small></p>' +
+          (line ? '<small>' + UI.esc(line) + '</small>' : '') + '</p>' +
           '<button class="btn btn-primary" id="h-resume" type="button">Resume</button></div>';
       }
       html += '<section class="modes">';
       modes.forEach(function (m) {
         var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
         html += '<article class="mode-tile" data-mode="' + m.id + '">' +
-          '<div class="mode-top"><h2 class="wordmark">' + UI.esc(m.name.toUpperCase()) + '</h2><div class="fan" aria-hidden="true"></div></div>' +
+          '<div class="mode-top"><h2 class="wordmark' + (m.name.length > 10 ? ' long' : '') + '">' + UI.esc(m.name.toUpperCase()) + '</h2>' +
+          '<div class="fan" aria-hidden="true" data-cards="' + (m.fan || ['QS', '9D', 'AH']).join(' ') + '"></div></div>' +
           '<p class="tag">' + UI.esc(m.tagline || '') + '</p>' +
-          '<p class="meta">' + m.players.min + '–' + m.players.max + ' players' + hand + ' · you vs computer players</p>' +
-          '<div class="mode-actions"><button class="btn btn-primary" type="button" data-play="' + m.id + '">Play ' + UI.esc(m.name) + '</button>' +
+          '<p class="meta">' + (m.players.min === m.players.max ? m.players.min : m.players.min + '–' + m.players.max) + ' players' + hand + ' · you vs computer players</p>' +
+          '<div class="mode-actions"><button class="btn btn-primary" type="button" data-play="' + m.id + '">Play ' + UI.esc(m.shortName || m.name) + '</button>' +
           '<button class="btn btn-ghost" type="button" data-rules="' + m.id + '">How to play</button></div>' +
           '</article>';
       });
@@ -141,10 +141,10 @@
       var home = $('screen-home');
       home.innerHTML = html;
 
-      // decorative fan of cards on each tile
+      // decorative fan of cards on each tile (a mode can pick its own three)
       home.querySelectorAll('.fan').forEach(function (fan) {
-        [{ id: 'QS', rank: 'Q', suit: 'S' }, { id: '9D', rank: '9', suit: 'D' }, { id: 'AH', rank: 'A', suit: 'H' }].forEach(function (c) {
-          fan.appendChild(UI.makeCard(c));
+        fan.dataset.cards.split(' ').forEach(function (id) {
+          fan.appendChild(UI.makeCard({ id: id, rank: id.slice(0, -1), suit: id.slice(-1) }));
         });
       });
       var snd = $('h-sound'), mus = $('h-music');
@@ -184,6 +184,7 @@
       var mode = CT.getMode(modeId);
       var cfg = this.modeSettings(mode);
       this.show('setup');
+      var fixed = mode.players.min === mode.players.max;
       var opp = '';
       for (var n = mode.players.min - 1; n <= mode.players.max - 1; n++) {
         opp += '<button type="button" data-opp="' + n + '" aria-pressed="' + (n === cfg.opponents) + '">' + n + '</button>';
@@ -200,9 +201,10 @@
         '<header class="setup-head"><button class="icon-btn" id="s-back" type="button" aria-label="Back to games">' + UI.icon.back + '</button>' +
         '<span class="wordmark">' + UI.esc(mode.name.toUpperCase()) + '</span></header>' +
         '<div class="setup-body">' +
-          '<section class="field"><h3 id="lbl-opp">Opponents</h3><div class="seg" role="group" aria-labelledby="lbl-opp">' + opp + '</div>' +
+          '<section class="field"><h3 id="lbl-opp">' + (fixed ? 'Players' : 'Opponents') + '</h3>' +
+          (fixed ? '' : '<div class="seg" role="group" aria-labelledby="lbl-opp">' + opp + '</div>') +
           '<p class="help" id="help-opp"></p></section>' +
-          '<p class="eyebrow">Rule choices</p>' + opts +
+          (opts ? '<p class="eyebrow">Game choices</p>' + opts : '') +
         '</div>' +
         '<div class="setup-foot"><button class="btn btn-primary btn-wide" id="s-deal" type="button">Deal</button>' +
         '<button class="link-btn" id="s-rules" type="button">How to play</button></div>';
@@ -210,7 +212,9 @@
       var paint = function () {
         var c = self.modeSettings(mode);
         $('screen-setup').querySelectorAll('[data-opp]').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.dataset.opp === c.opponents)); });
-        $('help-opp').textContent = c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
+        $('help-opp').textContent = fixed
+          ? 'Always ' + (c.opponents + 1) + ' at the table: you and ' + c.opponents + ' computer players.'
+          : c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
         (mode.options || []).forEach(function (o) {
           $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });
           var choice = o.choices.filter(function (x) { return x.value === c.options[o.id]; })[0];
@@ -495,56 +499,32 @@
       UI.store.del(SAVE_KEY);
     },
 
+    /* The end-of-game sheet. The table screen fills in what's particular to
+       its game (result: { when, title, why, body, after(sheet) }). */
     showResult: function (v) {
       var self = this;
       if (this.tutorial) return;   // the tutorial explains the ending itself
       this.record(v);
       var me = 'p0';
-      var byId = {};
-      v.players.forEach(function (p, i) { byId[p.id] = { p: p, i: i }; });
+      var names = {};
+      v.players.forEach(function (p) { names[p.id] = p.id === me ? 'You' : p.name; });
       var winners = v.winners || [];
       var iWon = winners.indexOf(me) >= 0;
-      var raw = winners.map(function (id) { return id === me ? 'You' : byId[id].p.name; });
-      var names = raw.map(UI.esc);
-      var title;
-      if (winners.length > 1) title = iWon ? 'SHARED WIN' : raw.join(' & ').toUpperCase() + ' WIN';
-      else title = iWon ? 'YOU WIN' : raw[0].toUpperCase() + ' WINS';
-      title = UI.esc(title);
-
-      var why, cards = '';
-      if (v.winReason === 'flush') {
-        why = (winners.length > 1 ? names.join(' and ') + ' each held' : (iWon ? 'You held' : names[0] + ' held')) + ' one card of every suit on the deal: a Flush.';
-        winners.forEach(function (id) {
-          cards += '<div class="result-cards" aria-label="' + (id === me ? 'Your' : UI.esc(byId[id].p.name) + '’s') + ' Flush"></div>';
-        });
-      } else {
-        why = (iWon ? 'You played your last card' : names[0] + ' played their last card') + ' in set ' + v.setNo + '.';
-      }
-      var standings = v.players.slice().sort(function (a, b) {
-        var aw = winners.indexOf(a.id) >= 0 ? -1 : 0, bw = winners.indexOf(b.id) >= 0 ? -1 : 0;
-        return (aw - bw) || (a.handCount - b.handCount);
-      }).map(function (p) {
-        var paint = p.id === me ? 'var(--ink)' : PAINTS[(byId[p.id].i - 1 + PAINTS.length) % PAINTS.length];
-        return '<li class="' + (winners.indexOf(p.id) >= 0 ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc((p.id === me ? 'You' : p.name).charAt(0)) + '</span>' +
-          '<span>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</span><span class="left">' + p.handCount + (p.handCount === 1 ? ' card' : ' cards') + ' left</span></li>';
-      }).join('');
-
+      var raw = winners.map(function (id) { return names[id]; });
+      var title = winners.length > 1
+        ? (iWon ? 'SHARED WIN' : raw.join(' & ').toUpperCase() + ' WIN')
+        : (iWon ? 'YOU WIN' : String(raw[0] || '').toUpperCase() + ' WINS');
+      var r = (this.table && this.table.result) ? this.table.result(v) : {};
       var sheet = this.openSheet('result',
-        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + ' · ' + (v.winReason === 'flush' ? 'on the deal' : 'set ' + v.setNo) + '</p>' +
-        '<h2 class="wordmark">' + title + '</h2>' +
-        '<p class="result-why">' + why + '</p>' + cards +
-        '<div class="standings"><ul>' + standings + '</ul></div>' +
+        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
+        '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
+        (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
         '<div class="result-actions">' +
           '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
           '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
           '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
         '</div>', { cls: 'result', center: true, label: 'Game result' });
-      if (v.winReason === 'flush') {
-        var rows = sheet.querySelectorAll('.result-cards');
-        winners.forEach(function (id, k) {
-          (byId[id].p.hand || []).forEach(function (c) { rows[k].appendChild(UI.makeCard(c)); });
-        });
-      }
+      if (r.after) r.after(sheet);
       $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
       $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
       $('r-table').addEventListener('click', function () { self.closeSheet(); });

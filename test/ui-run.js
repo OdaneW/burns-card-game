@@ -166,6 +166,100 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (SCENARIO === 'donkey' || SCENARIO === 'donkey-tie') {
+      const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: SCENARIO === 'donkey' ? 21 : 8, speed: 2 });
+      if (SCENARIO === 'donkey') await shot(p, '50-home-two-games');
+      await p.tap('[data-play="donkey"]');
+      await sleep(300);
+      if (SCENARIO === 'donkey') await shot(p, '51-donkey-setup');
+      await p.tap('#s-deal');
+      await sleep(300);
+      const dview = () => p.evaluate(() => {
+        const s = CT.App.session; if (!s) return null;
+        const v = s.view('p0', { events: false });
+        const n = {}; v.hand.forEach(c => { n[c.rank] = (n[c.rank] || 0) + 1; });
+        let pick = null;
+        if (v.canPass) { const min = Math.min(...v.hand.map(c => n[c.rank])); pick = v.hand.filter(c => n[c.rank] === min)[0].id; }
+        const d = v.tiebreak && v.tiebreak.duel;
+        const call = d && d.myCard ? (CT.rankValue(d.myCard.rank, true) >= 7 ? 'higher' : 'lower') : null;
+        return { phase: v.phase, round: v.round, canPass: v.canPass, canDeclare: v.canDeclare, canReact: v.canReact,
+          canChallenge: v.canChallenge, canCall: v.canCall, pick, call, step: d ? d.step : null, sheet: CT.App.sheet,
+          letters: v.players.map(x => x.letters) };
+      });
+      if (SCENARIO === 'donkey-tie') {
+        // jump to the end with a three-way tie for 1st that includes you, as challenger
+        let v0 = await dview();
+        while (v0.phase !== 'pass') { await sleep(150); v0 = await dview(); }
+        await p.evaluate(() => {
+          const s = CT.App.session, st = s.state;
+          st.players.forEach((pl, i) => { pl.letters = [1, 1, 1, 6][i]; });
+          st.result = { round: st.round, declarer: 'p0', rank: 'K', order: [], late: [], losers: ['p3'] };
+          st.declare = null; st.race = null; st.turn = null; st.turnEndsAt = null;
+          st.phase = 'roundEnd'; st.phaseEndsAt = s.now();
+        });
+        await sleep(200);
+        await p.evaluate(() => {
+          const s = CT.App.session, d = s.state.tiebreak.duel;
+          d.challenger = 'p0';
+          s._changed({ type: 'test' });
+        });
+      }
+      const shots = {};
+      const once = async (key, name, wait) => { if (shots[key]) return; shots[key] = 1; if (wait) await sleep(wait); await shot(p, name); };
+      let guard = 0, v = await dview(), races = 0, lost = 0;
+      while (v && v.phase !== 'over' && guard++ < 8000) {
+        if (v.phase === 'dealing') await once('deal', '52-donkey-dealing', 450);
+        if (v.canDeclare) {
+          await once('four', '53-donkey-four-button', 150);
+          await p.tap('#d-declare'); await sleep(250);
+        } else if (v.canPass) {
+          await once('pass', '54-donkey-your-turn', 250);
+          await p.tap(`.hcard[data-id="${v.pick}"]`, { position: { x: 10, y: 24 } }); await sleep(120);
+          await once('sel', '55-donkey-selected', 0);
+          await p.tap(`.hcard[data-id="${v.pick}"]`, { position: { x: 10, y: 24 } }); await sleep(250);
+        } else if (v.canReact) {
+          races++;
+          await once('race', '56-donkey-race', 0);
+          await sleep(120 + Math.random() * 450);
+          try { await p.tap('#d-slap', { timeout: 1500 }); } catch (e) { /* the race may have ended */ }
+          await sleep(150);
+        } else if (v.canChallenge) {
+          await once('choose', '58-donkey-choose', 300);
+          await p.tap('#d-choices button'); await sleep(300);
+        } else if (v.canCall) {
+          await once('call', '59-donkey-call', 300);
+          await p.tap(`#d-choices [data-call="${v.call}"]`); await sleep(300);
+        } else {
+          if (v.phase === 'pass') await once('others', '54b-donkey-others-passing', 150);
+          if (v.phase === 'declared') await once('declared', '56a-donkey-four-down', 120);
+          if (v.phase === 'roundEnd') await once('roundEnd', '57-donkey-round-end', 650);
+          if (v.phase === 'tiebreak' && v.step === 'call') await once('duelCall', '59b-donkey-duel-waiting', 300);
+          if (v.phase === 'tiebreak' && v.step === 'reveal') await once('reveal', '60-donkey-duel-reveal', 350);
+          await sleep(90);
+        }
+        v = await dview();
+      }
+      if (!v || v.phase !== 'over') throw new Error('Donkey game did not finish');
+      const end = await p.evaluate(() => {
+        const st = CT.App.session.state;
+        return { rounds: st.round, letters: st.players.map(x => x.letters), standings: st.standings, ties: st.events.filter(e => e.type === 'duel').length };
+      });
+      console.log('  game over:', JSON.stringify(end), '· races you were in:', races);
+      await sleep(3000);
+      await shot(p, SCENARIO === 'donkey' ? '61-donkey-result' : '62-donkey-tie-result');
+      if (SCENARIO === 'donkey') {
+        await p.tap('#r-table'); await sleep(300);
+        await p.tap('#d-menu'); await sleep(300);
+        await p.tap('#m-log'); await sleep(300);
+        await shot(p, '63-donkey-log');
+        await p.tap('[data-close]'); await sleep(200);
+        await p.tap('#d-menu'); await sleep(200);
+        await p.tap('#m-rules'); await sleep(300);
+        await shot(p, '64-donkey-rules');
+      }
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (SCENARIO === 'settings') {
       // Settings saved by 0.3 stored every rule. After the update, rules left at the old
       // defaults follow the new ones; a real choice (15 seconds) survives.

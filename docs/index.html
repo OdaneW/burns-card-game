@@ -244,6 +244,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 }
 .mode-top { display: grid; grid-template-columns: minmax(0, 1fr) 118px; align-items: center; gap: 8px; min-height: 104px; }
 .mode-tile .wordmark { font-size: clamp(40px, 12vw, 56px); }
+.mode-tile .wordmark.long { font-size: clamp(30px, 8.6vw, 42px); line-height: 1.02; }
 .mode-tile .tag { font: 600 17px/1.35 var(--font-ui); max-width: 30ch; }
 .mode-tile .meta { color: var(--ink-soft); font-size: 14px; }
 .mode-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
@@ -658,6 +659,141 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 @keyframes dealIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
 .deal-in { animation: dealIn .35s ease-out both; }
 
+/* ---------- Pass-Roun Donkey: four seats round a table ---------- */
+.dk-table {
+  flex: 1 1 auto; min-height: 250px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: ". top ." "left center right";
+  column-gap: 4px; row-gap: 2px;
+  align-items: center;
+}
+.dk-top { grid-area: top; }
+.dk-left { grid-area: left; }
+.dk-right { grid-area: right; }
+.dk-center { grid-area: center; }
+.dk-seat {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  min-width: 0; padding: 6px 2px 5px;
+  border-radius: 14px;
+  transition: background-color .25s;
+}
+.dk-seat.is-turn, .dk-me.is-turn, .dk-seat.in-duel, .dk-me.in-duel { background: rgba(244, 185, 66, .1); }
+.dk-seat.is-loser, .dk-me.is-loser { background: rgba(240, 100, 60, .16); }
+.dk-avatar { position: relative; width: 36px; height: 36px; display: grid; place-items: center; flex: none; }
+.dk-initial {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  font: 400 12px/1 var(--font-display);
+  color: var(--ink-on-paint);
+  background: var(--paint, var(--marigold));
+}
+.dk-me .dk-initial { background: var(--ink); }
+.dk-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+.dk-ring circle { fill: none; stroke-width: 3; }
+.dk-ring .bg { stroke: rgba(238, 244, 234, .14); }
+.dk-ring .fg { stroke: var(--marigold); stroke-linecap: round; transition: stroke .3s; }
+.dk-ring.urgent .fg { stroke: var(--ember); }
+.dk-word { display: inline-flex; gap: 2px; font: 400 11px/1 var(--font-display); }
+.dk-word b { font-weight: 400; color: rgba(238, 244, 234, .2); }
+.dk-word b.on { color: var(--ember); }
+.dk-word b.fresh { animation: letterIn 1s ease-out; }
+.dk-word.small { font-size: 12px; }
+.dk-fan {
+  position: relative; flex: none;
+  width: calc(var(--seat-cw) + (var(--n, 4) - 1) * 9px);
+  height: calc(var(--seat-cw) * 1.4 + 4px);
+  transition: transform .25s, opacity .25s;
+}
+.dk-fan .card { --cw: var(--seat-cw); position: absolute; top: 2px; transform-origin: 50% 90%; }
+.dk-fan .card:nth-child(1) { left: 0; transform: rotate(-8deg); }
+.dk-fan .card:nth-child(2) { left: 9px; transform: rotate(-4deg); }
+.dk-fan .card:nth-child(3) { left: 18px; transform: rotate(0deg); }
+.dk-fan .card:nth-child(4) { left: 27px; transform: rotate(4deg); }
+.dk-fan .card:nth-child(5) { left: 36px; transform: rotate(8deg); }
+.dk-seat.is-down .dk-fan { transform: translateY(6px) scale(.9); opacity: .5; }
+.dk-seat .seat-chip { height: 14px; }
+.seat-chip.ember { color: var(--ember); font-weight: 800; }
+
+.dk-center {
+  position: relative; align-self: center;
+  width: 100%; aspect-ratio: 1; max-height: 100%; min-height: 150px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 42%, rgba(23, 82, 78, .95), rgba(6, 30, 29, .6) 72%);
+  box-shadow: inset 0 2px 14px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.dk-flow { position: absolute; left: 50%; top: 50%; width: 64%; aspect-ratio: 1; transform: translate(-50%, -50%); transition: opacity .3s; pointer-events: none; }
+.dk-flow path { fill: none; stroke: rgba(238, 244, 234, .16); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dk-flow path:first-child { stroke-dasharray: 3 6; }
+.dk-deck { --cw: var(--rail-cw); position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); visibility: hidden; pointer-events: none; }
+.dk-four { position: relative; width: calc(var(--rail-cw) * 2.35); height: calc(var(--rail-cw) * 1.45); display: none; }
+.dk-four .card { --cw: var(--rail-cw); position: absolute; top: 0; left: calc(var(--i) * var(--rail-cw) * .45); transform: rotate(calc((var(--i) - 1.5) * 7deg)); transform-origin: 50% 100%; }
+.dk-center.duel-on { aspect-ratio: auto; border-radius: 28px; max-height: none; }   /* the duel needs more room than a round table */
+.dk-center.has-four .dk-four { display: block; }
+.dk-center.has-four .dk-flow, .dk-center.duel-on .dk-flow { opacity: 0; }
+.dk-center.racing .dk-four { animation: thump .35s ease-out; }
+.dk-caption { position: relative; font: 800 11px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); text-align: center; min-height: 1.2em; padding: 0 8px; }
+.dk-center.has-four .dk-caption { color: var(--marigold); }
+.dk-center.duel-on .dk-four, .dk-center.duel-on .dk-caption { display: none; }
+
+.dk-duel { position: relative; display: grid; gap: 6px; justify-items: center; text-align: center; padding: 8px 4px; }
+.dk-duel-head { font: 800 10px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--marigold); }
+.dk-duel-tied { font: 500 11px/1.25 var(--font-ui); color: var(--ink-soft); max-width: 22ch; }
+.dk-duel-cards { display: flex; align-items: center; gap: 8px; }
+.dk-duel-side { display: grid; justify-items: center; gap: 3px; min-width: 0; }
+.dk-duel-card { width: var(--rail-cw); aspect-ratio: 5 / 7; position: relative; }
+.dk-duel-card .card { --cw: var(--rail-cw); }
+.dk-duel-card.empty { border: 1.5px dashed rgba(238, 244, 234, .25); border-radius: 6px; }
+.dk-duel-side .nm { font: 700 12px/1.1 var(--font-ui); max-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-duel-side .role { font: 700 9px/1 var(--font-ui); color: var(--ink-soft); text-transform: uppercase; letter-spacing: .08em; }
+.dk-duel .vs { font: 400 12px/1 var(--font-display); color: var(--ink-soft); }
+.dk-duel-call { font: 800 12px/1.2 var(--font-ui); }
+.dk-duel-call.right { color: var(--marigold); }
+.dk-duel-call.wrong { color: #FFB59B; }
+.dk-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; flex: none; }
+.dk-choices .btn { padding: 10px 16px; font-size: 15px; }
+
+.dk-me {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex: none; min-height: 48px; padding: 2px 6px 2px 2px;
+  border-radius: 14px;
+  transition: background-color .25s;
+}
+.dk-me-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dk-me-text { display: grid; gap: 4px; }
+.dk-me .dk-word { font-size: 13px; }
+.dk-actions { display: flex; gap: 8px; }
+.dk-four-btn { padding: 11px 16px; font-size: 15px; white-space: nowrap; animation: fourGlow .8s ease-in-out infinite alternate; }   /* glows in place: easy to hit */
+.dk-four-btn.shake { animation: shake .3s ease; }
+.hcard.four { box-shadow: 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .55); }
+.dk-handwrap .hcard { transition: transform .22s cubic-bezier(.3, .7, .3, 1), left .28s cubic-bezier(.3, .7, .3, 1), filter .2s, box-shadow .2s; }
+.dk-handwrap.is-down .hcard { transform: translateY(16px) scale(.94); filter: saturate(.4) brightness(.6); }
+.dk-slap {
+  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); top: 6px; bottom: 8px;
+  z-index: 6;
+  display: grid; place-items: center;
+  border: 0; border-radius: 22px;
+  background: var(--ember); color: #2A0E05;
+  font: 400 30px/1 var(--font-display);
+  box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45);
+  cursor: pointer; touch-action: manipulation;
+  animation: slapIn .16s ease-out, slapPulse .6s ease-in-out .16s infinite alternate;
+}
+.dk-slap:active { transform: scale(.97); }
+
+.dk-standings li { grid-template-columns: auto auto 1fr auto; }
+.dk-standings .place { font: 800 13px/1 var(--font-ui); color: var(--ink-soft); min-width: 2.3em; }
+.dk-standings .champ .place { color: var(--marigold); }
+.dk-standings small { display: block; font-size: 11px; color: var(--ink-soft); font-weight: 600; }
+
+@keyframes letterIn { 0% { transform: scale(2.4); color: var(--marigold); } 60% { transform: scale(1.1); } 100% { transform: none; } }
+@keyframes fourGlow { from { box-shadow: 0 0 0 0 rgba(244, 185, 66, .0), 0 4px 0 var(--marigold-deep); } to { box-shadow: 0 0 0 6px rgba(244, 185, 66, .35), 0 4px 0 var(--marigold-deep); } }
+@keyframes thump { 0% { transform: scale(1.12); } 100% { transform: none; } }
+@keyframes slapIn { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slapPulse { from { box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45); } to { box-shadow: 0 0 0 10px rgba(240, 100, 60, .18), 0 14px 30px rgba(0, 0, 0, .45); } }
+
 /* short screens (landscape phones): smaller cards, and the hand moves beside the table */
 @media (max-height: 560px) {
   :root { --hcw: 50px; --seat-cw: 32px; --me-cw: 40px; --rail-cw: 40px; }
@@ -678,6 +814,12 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .rail-zone { grid-column: 1; grid-row: 3 / span 2; justify-content: flex-start; }
   .me { grid-column: 2; grid-row: 2 / span 2; align-self: end; }
   .hand-wrap { grid-column: 2; grid-row: 4; margin: 0; padding: 0; }
+  .dk-table { grid-column: 1; grid-row: 2 / -1; min-height: 0; }
+  #screen-table:has(.dk-table) { grid-template-rows: auto auto auto auto minmax(0, 1fr); }
+  #screen-table:has(.dk-table) .status { grid-column: 2; grid-row: 2; }
+  .dk-choices { grid-column: 2; grid-row: 3; }
+  .dk-me { grid-column: 2; grid-row: 4; }
+  .dk-handwrap { grid-row: 5; align-self: end; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -713,7 +855,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
+CT.BUILD = {"version":"0.5.0","id":"c4024a5","target":"app"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -1610,6 +1752,13 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
     ];
   }
 
+  /* One line for the "game in progress" card on the home screen. */
+  function describe(state, pid) {
+    var me = player(state, pid);
+    return (state.setNo ? 'Set ' + state.setNo : 'Just dealt') + ' · you hold ' + (me ? me.hand.length : 0) +
+      ' cards · ' + (state.players.length - 1) + ' opponents';
+  }
+
   CT.registerMode({
     id: 'burns',
     name: 'Burns',
@@ -1620,6 +1769,7 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
     defaultTiming: DEFAULT_TIMING,
     handSize: HAND_SIZE,
     rules: rules,
+    describe: describe,
     createGame: createGame,
     act: act,
     tick: tick,
@@ -1796,6 +1946,694 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
   };
 
   CT.getMode('burns').bot = BurnsBot;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/modes/donkey/rules.js ---- */
+/* ==========================================================================
+   GAME MODE · PASS-ROUN DONKEY — rules
+   Exactly four players and sixteen cards: the Jacks, Queens, Kings and Aces.
+   One card at a time travels clockwise round the circle. Whoever gathers
+   four of a kind passes on their spare card and puts the four down; then
+   everyone else races to put their cards down too, and the slowest gets the
+   next letter of DONKEY. Spell the whole word and you lose. Players tied on
+   letters at the end settle their places with a higher-or-lower duel.
+
+   Flow
+     dealing ─► pass ─► declared (the four land) ─► race ─► roundEnd ─►
+     dealing … until someone has all six letters ─► tiebreak (only when
+     placings are tied) ─► over
+   Pure rules: every function takes the state and the game time; no timers,
+   no DOM. Seats run clockwise in the order of state.players.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  var ENGINE_VERSION = 1;
+  var SEATS = 4;
+  var HAND_SIZE = 4;
+  var RANKS = ['J', 'Q', 'K', 'A'];
+  var WORD = 'DONKEY';
+  var CALLS = ['lower', 'equal', 'higher'];
+
+  var DEFAULT_TIMING = {
+    dealHoldMs: 1700,     // look at the new hand before the first pass
+    raceDelayMs: 450,     // the four land on the table, then the race is on
+    raceMs: 6000,         // anyone whose cards aren't down by then counts as last
+    roundHoldMs: 4600,    // the round's result stays on screen
+    duelChoiceMs: 20000,  // tie-breaker: time to pick an opponent or make the call
+    duelHoldMs: 3600      // tie-breaker: the revealed cards stay on screen
+  };
+
+  /* Choices on the setup screen; the rules text and bots read them too. */
+  var OPTIONS = [
+    {
+      id: 'passTime',
+      label: 'Time to pass',
+      default: '15',
+      choices: [
+        { value: '10', label: '10 sec', help: 'You have 10 seconds to pass a card on. When time runs out, a random card is passed for you.' },
+        { value: '15', label: '15 sec', help: 'You have 15 seconds to pass a card on. When time runs out, a random card is passed for you.' },
+        { value: '30', label: '30 sec', help: 'You have 30 seconds to pass a card on. When time runs out, a random card is passed for you.' }
+      ]
+    },
+    {
+      id: 'reflexes',
+      label: 'Computer reflexes',
+      default: 'normal',
+      choices: [
+        { value: 'relaxed', label: 'Relaxed', help: 'The computer players are slow to put their cards down, so they’re easy to beat.' },
+        { value: 'normal', label: 'Normal', help: 'The computer players are about as quick as an alert person.' },
+        { value: 'sharp', label: 'Sharp', help: 'The computer players put their cards down very quickly. Hard to beat.' }
+      ]
+    }
+  ];
+
+  /* ---------- helpers ---------------------------------------------------- */
+
+  function player(state, pid) {
+    for (var i = 0; i < state.players.length; i++) if (state.players[i].id === pid) return state.players[i];
+    return null;
+  }
+
+  /* The next seat clockwise. */
+  function nextAfter(state, pid) {
+    var ps = state.players;
+    for (var i = 0; i < ps.length; i++) if (ps[i].id === pid) return ps[(i + 1) % ps.length].id;
+    return null;
+  }
+
+  function passMs(state) {
+    if (state.timing.passMs != null) return state.timing.passMs;   // tests and lessons
+    return (Number(state.options.passTime) || 15) * 1000;
+  }
+
+  /* The rank a hand holds four of, or null. */
+  function fourOf(hand) {
+    var n = {};
+    for (var i = 0; i < hand.length; i++) {
+      var r = hand[i].rank;
+      n[r] = (n[r] || 0) + 1;
+      if (n[r] === 4) return r;
+    }
+    return null;
+  }
+
+  function removeCard(hand, cardId) {
+    for (var i = 0; i < hand.length; i++) if (hand[i].id === cardId) return hand.splice(i, 1)[0];
+    return null;
+  }
+
+  function sixteen() {
+    return CT.standardDeck().filter(function (c) { return RANKS.indexOf(c.rank) >= 0; });
+  }
+
+  function letters(state) {
+    var out = {};
+    state.players.forEach(function (p) { out[p.id] = p.letters; });
+    return out;
+  }
+
+  function emit(state, now, ev, secret) {
+    state.seq += 1;
+    ev.seq = state.seq;
+    ev.t = Math.round(now);
+    if (secret) ev.secret = secret;
+    state.events.push(ev);
+    if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
+  }
+
+  /* Which call is most likely right for this card (aces high, 2 low). */
+  function bestCall(card, coin) {
+    var v = CT.rankValue(card.rank, true);   // 2 → 1 … A → 13
+    var iWin = (v - 1) * 4, iLose = (13 - v) * 4;   // of the other 51 cards
+    if (iWin === iLose) return coin < 0.5 ? 'lower' : 'higher';
+    return iWin > iLose ? 'higher' : 'lower';
+  }
+
+  /* ---------- setup ------------------------------------------------------ */
+
+  function createGame(config) {
+    var players = config.players || [];
+    if (players.length !== SEATS) throw new Error('Pass-Roun Donkey needs exactly four players');
+    var now = config.now || 0;
+    var timing = {};
+    for (var k in DEFAULT_TIMING) timing[k] = DEFAULT_TIMING[k];
+    if (config.timing) for (var t in config.timing) timing[t] = config.timing[t];
+
+    var state = {
+      mode: 'donkey',
+      engineVersion: ENGINE_VERSION,
+      rng: ((config.seed != null ? config.seed : Date.now()) >>> 0) || 1,
+      options: CT.resolveOptions(OPTIONS, config.options),
+      timing: timing,
+      players: players.map(function (p, i) {
+        return { id: p.id, name: p.name, isBot: !!p.isBot, seat: i, hand: [], letters: 0 };
+      }),
+      round: 0,
+      phase: 'dealing',
+      phaseEndsAt: 0,
+      starter: null,
+      turn: null,        // whose turn it is to pass
+      turnEndsAt: null,
+      passes: 0,
+      declare: null,     // { player, rank, cards, extraTo }
+      race: null,        // { startAt, endsAt, racers, order: [{ player, ms }] }
+      result: null,      // the round just finished
+      tiebreak: null,
+      standings: null,   // player ids by final place, best first
+      winners: null,
+      seq: 0,
+      events: []
+    };
+    deal(state, now);
+    return state;
+  }
+
+  function deal(state, now) {
+    state.round += 1;
+    var deck = CT.shuffle(sixteen(), state);
+    state.players.forEach(function (p) { p.hand = deck.splice(0, HAND_SIZE); });
+    state.starter = CT.pickRandom(state.players, state).id;
+    state.turn = null;
+    state.turnEndsAt = null;
+    state.passes = 0;
+    state.declare = null;
+    state.race = null;
+    state.result = null;
+    state.phase = 'dealing';
+    state.phaseEndsAt = now + state.timing.dealHoldMs;
+    var secret = {};
+    state.players.forEach(function (p) { secret[p.id] = { hand: p.hand.slice() }; });
+    emit(state, now, { type: 'deal', round: state.round, starter: state.starter, handSize: HAND_SIZE,
+      order: state.players.map(function (p) { return p.id; }) }, secret);
+  }
+
+  function startPassing(state, now) {
+    state.phase = 'pass';
+    state.turn = state.starter;
+    state.turnEndsAt = now + passMs(state);
+    emit(state, now, { type: 'passStart', round: state.round, player: state.starter });
+  }
+
+  /* ---------- passing ---------------------------------------------------- */
+
+  /* Hand a card to the next seat. The giver and receiver both know what it
+     was; everyone else only sees a card go by. A spare card passed on while
+     declaring doesn't move the turn. */
+  function passCard(state, p, card, now, auto, spare) {
+    var to = player(state, nextAfter(state, p.id));
+    to.hand.push(card);
+    state.passes += 1;
+    var secret = {};
+    secret[p.id] = { card: card };
+    secret[to.id] = { card: card };
+    emit(state, now, { type: 'pass', from: p.id, to: to.id, n: state.passes, auto: !!auto, spare: !!spare }, secret);
+    if (!spare) {
+      state.turn = to.id;
+      state.turnEndsAt = now + passMs(state);
+    }
+  }
+
+  function actPass(state, p, cardId, now) {
+    if (state.phase !== 'pass') return CT.fail('phase', 'It isn’t time to pass a card.');
+    if (state.turn !== p.id) return CT.fail('turn', 'Wait for your turn to pass.');
+    var card = removeCard(p.hand, cardId);
+    if (!card) return CT.fail('card', 'That card isn’t in your hand.');
+    passCard(state, p, card, now, false, false);
+    return CT.ok({ card: card });
+  }
+
+  /* Four of a kind: pass the spare card on (if there is one), then put the
+     four down. Anyone holding four may do it while cards are being passed,
+     including straight after the deal. */
+  function actDeclare(state, p, now, auto) {
+    if (state.phase !== 'pass') return CT.fail('phase', 'You can only put down four of a kind while cards are being passed.');
+    var rank = fourOf(p.hand);
+    if (!rank) return CT.fail('no-four', 'You need four cards of the same rank.');
+    var spare = p.hand.filter(function (c) { return c.rank !== rank; });
+    var four = p.hand.filter(function (c) { return c.rank === rank; });
+    p.hand = [];
+    spare.forEach(function (c) { passCard(state, p, c, now, auto, true); });
+    var extraTo = spare.length ? nextAfter(state, p.id) : null;
+    state.declare = { player: p.id, rank: rank, cards: four, extraTo: extraTo };
+    state.turn = null;
+    state.turnEndsAt = null;
+    state.race = {
+      startAt: null,
+      endsAt: null,
+      racers: state.players.filter(function (x) { return x.id !== p.id; }).map(function (x) { return x.id; }),
+      order: []
+    };
+    state.phase = 'declared';
+    state.phaseEndsAt = now + state.timing.raceDelayMs;
+    emit(state, now, { type: 'declare', player: p.id, rank: rank, cards: four.slice(), extraTo: extraTo, auto: !!auto });
+    return CT.ok({ rank: rank });
+  }
+
+  function passTimeout(state, now) {
+    var p = player(state, state.turn);
+    emit(state, now, { type: 'timeout', phase: 'pass', player: p.id });
+    if (fourOf(p.hand)) { actDeclare(state, p, now, true); return; }
+    var card = removeCard(p.hand, CT.pickRandom(p.hand, state).id);
+    passCard(state, p, card, now, true, false);
+  }
+
+  /* ---------- the race --------------------------------------------------- */
+
+  function startRace(state, now) {
+    state.phase = 'race';
+    state.race.startAt = now;
+    state.race.endsAt = now + state.timing.raceMs;
+    emit(state, now, { type: 'raceStart', racers: state.race.racers.slice() });
+  }
+
+  function reacted(race, pid) {
+    for (var i = 0; i < race.order.length; i++) if (race.order[i].player === pid) return true;
+    return false;
+  }
+
+  function actReact(state, p, now) {
+    var race = state.race;
+    if (state.declare && state.declare.player === p.id) return CT.fail('safe', 'You put the four down, so you’re safe this round.');
+    if (state.phase === 'declared') return CT.fail('early', 'Not yet!', { retryInMs: Math.max(0, state.phaseEndsAt - now) });
+    if (state.phase !== 'race' || !race) return CT.fail('phase', 'Nobody has put down four of a kind.');
+    if (race.racers.indexOf(p.id) < 0) return CT.fail('safe', 'You’re not in this race.');
+    if (reacted(race, p.id)) return CT.fail('done', 'Your cards are already down.');
+    var ms = Math.max(0, Math.round(now - race.startAt));
+    race.order.push({ player: p.id, ms: ms });
+    emit(state, now, { type: 'react', player: p.id, ms: ms, place: race.order.length });
+    if (race.order.length === race.racers.length) finishRace(state, now);
+    return CT.ok({ ms: ms, place: race.order.length });
+  }
+
+  /* The slowest gets the next letter. Anyone who never reacted counts as
+     slowest; if that's more than one player, each of them gets a letter. */
+  function finishRace(state, now) {
+    var race = state.race, d = state.declare;
+    var late = race.racers.filter(function (pid) { return !reacted(race, pid); });
+    var losers = late.length ? late : [race.order[race.order.length - 1].player];
+    losers.forEach(function (pid) { player(state, pid).letters += 1; });
+    state.result = { round: state.round, declarer: d.player, rank: d.rank, order: race.order.slice(), late: late, losers: losers };
+    state.phase = 'roundEnd';
+    state.phaseEndsAt = now + state.timing.roundHoldMs;
+    emit(state, now, { type: 'roundEnd', round: state.round, declarer: d.player, rank: d.rank,
+      order: race.order.slice(), late: late, losers: losers, letters: letters(state) });
+  }
+
+  /* ---------- the end and the tie-breaker -------------------------------- */
+
+  /* Rank by letters, fewest first. Groups with the same count go to the
+     tie-breaker, which fills their places from the bottom up. */
+  function startEnd(state, now) {
+    var byCount = {};
+    state.players.forEach(function (p) { (byCount[p.letters] = byCount[p.letters] || []).push(p.id); });
+    var counts = Object.keys(byCount).map(Number).sort(function (a, b) { return a - b; });
+    state.standings = [];
+    for (var i = 0; i < SEATS; i++) state.standings.push(null);
+    var place = 0, queue = [];
+    counts.forEach(function (n) {
+      var group = byCount[n];
+      if (group.length === 1) state.standings[place] = group[0];
+      else queue.push({ place: place, remaining: group.slice(), out: [] });
+      place += group.length;
+    });
+    emit(state, now, { type: 'gameEnd', letters: letters(state),
+      donkeys: state.players.filter(function (p) { return p.letters >= WORD.length; }).map(function (p) { return p.id; }) });
+    if (!queue.length) { finish(state, now); return; }
+    state.tiebreak = { queue: queue, group: null, duel: null, n: 0 };
+    state.phase = 'tiebreak';
+    emit(state, now, { type: 'tiebreakStart', groups: queue.map(function (g) { return { place: g.place, players: g.remaining.slice() }; }) });
+    nextGroup(state, now);
+  }
+
+  function nextGroup(state, now) {
+    var tb = state.tiebreak;
+    tb.group = tb.queue.shift() || null;
+    if (!tb.group) { finish(state, now); return; }
+    startDuel(state, now);
+  }
+
+  function startDuel(state, now) {
+    var tb = state.tiebreak, g = tb.group;
+    tb.n += 1;
+    var challenger = CT.pickRandom(g.remaining, state);
+    tb.duel = {
+      n: tb.n, place: g.place, players: g.remaining.slice(),
+      challenger: challenger, opponent: null, cards: null, call: null, result: null,
+      step: 'choose', endsAt: now + state.timing.duelChoiceMs
+    };
+    emit(state, now, { type: 'duelStart', n: tb.n, place: g.place, players: g.remaining.slice(), challenger: challenger });
+    var rivals = g.remaining.filter(function (pid) { return pid !== challenger; });
+    if (rivals.length === 1) setOpponent(state, rivals[0], now, false);   // only one to pick
+  }
+
+  /* Both draw from a freshly shuffled full deck; each sees only their own card. */
+  function setOpponent(state, target, now, auto) {
+    var d = state.tiebreak.duel;
+    var deck = CT.shuffle(CT.standardDeck(), state);
+    d.opponent = target;
+    d.cards = {};
+    d.cards[d.challenger] = deck[0];
+    d.cards[target] = deck[1];
+    d.step = 'call';
+    d.endsAt = now + state.timing.duelChoiceMs;
+    var secret = {};
+    secret[d.challenger] = { card: deck[0] };
+    secret[target] = { card: deck[1] };
+    emit(state, now, { type: 'duelDraw', n: d.n, challenger: d.challenger, opponent: target, auto: !!auto }, secret);
+  }
+
+  function duelOf(state) { return state.phase === 'tiebreak' && state.tiebreak ? state.tiebreak.duel : null; }
+
+  function actChallenge(state, p, target, now, auto) {
+    var d = duelOf(state);
+    if (!d || d.step !== 'choose') return CT.fail('phase', 'There’s nobody to challenge right now.');
+    if (d.challenger !== p.id) return CT.fail('turn', 'Only the challenger picks an opponent.');
+    if (target === p.id || d.players.indexOf(target) < 0) return CT.fail('target', 'Pick another player from the tie.');
+    setOpponent(state, target, now, auto);
+    return CT.ok();
+  }
+
+  /* Right call: the opponent is out. Wrong call: the challenger is out.
+     Whoever goes out takes the lowest place still open in the group. */
+  function actCall(state, p, call, now, auto) {
+    var d = duelOf(state);
+    if (!d || d.step !== 'call') return CT.fail('phase', 'There’s no call to make right now.');
+    if (d.challenger !== p.id) return CT.fail('turn', 'Only the challenger makes the call.');
+    if (CALLS.indexOf(call) < 0) return CT.fail('call', 'Call lower, equal or higher.');
+    var mine = CT.rankValue(d.cards[d.challenger].rank, true);
+    var theirs = CT.rankValue(d.cards[d.opponent].rank, true);
+    var truth = mine < theirs ? 'lower' : mine > theirs ? 'higher' : 'equal';
+    var right = call === truth;
+    var out = right ? d.opponent : d.challenger;
+    var g = state.tiebreak.group;
+    var place = g.place + g.remaining.length - 1;
+    state.standings[place] = out;
+    g.out.push(out);
+    g.remaining = g.remaining.filter(function (pid) { return pid !== out; });
+    d.call = call;
+    d.result = { truth: truth, right: right, out: out, place: place };
+    d.step = 'reveal';
+    d.endsAt = now + state.timing.duelHoldMs;
+    var cards = {};
+    cards[d.challenger] = d.cards[d.challenger];
+    cards[d.opponent] = d.cards[d.opponent];
+    emit(state, now, { type: 'duel', n: d.n, challenger: d.challenger, opponent: d.opponent, call: call, auto: !!auto,
+      cards: cards, truth: truth, right: right, out: out, place: place });
+    return CT.ok({ right: right });
+  }
+
+  function tickTiebreak(state, now) {
+    var tb = state.tiebreak, d = tb && tb.duel;
+    if (!d || now < d.endsAt) return false;
+    var challenger = player(state, d.challenger);
+    if (d.step === 'choose') {
+      emit(state, now, { type: 'timeout', phase: 'choose', player: d.challenger });
+      var rivals = d.players.filter(function (pid) { return pid !== d.challenger; });
+      actChallenge(state, challenger, CT.pickRandom(rivals, state), now, true);
+      return true;
+    }
+    if (d.step === 'call') {
+      emit(state, now, { type: 'timeout', phase: 'call', player: d.challenger });
+      actCall(state, challenger, bestCall(d.cards[d.challenger], CT.rand(state)), now, true);
+      return true;
+    }
+    // reveal is over: the next duel, the next tied group, or the end
+    var g = tb.group;
+    if (g.remaining.length === 1) {
+      state.standings[g.place] = g.remaining[0];
+      emit(state, now, { type: 'tieSettled', place: g.place, first: g.remaining[0], out: g.out.slice() });
+      nextGroup(state, now);
+    } else {
+      startDuel(state, now);
+    }
+    return true;
+  }
+
+  function finish(state, now) {
+    state.phase = 'over';
+    state.winners = [state.standings[0]];
+    emit(state, now, { type: 'gameOver', standings: state.standings.slice(), winners: state.winners.slice(), letters: letters(state) });
+  }
+
+  /* ---------- actions and time ------------------------------------------- */
+
+  function act(state, pid, type, payload, now) {
+    var p = player(state, pid);
+    if (!p) return CT.fail('no-player', 'You’re not in this game.');
+    payload = payload || {};
+    switch (type) {
+      case 'pass': return actPass(state, p, payload.cardId, now);
+      case 'declare': return actDeclare(state, p, now, false);
+      case 'react': return actReact(state, p, now);
+      case 'challenge': return actChallenge(state, p, payload.target, now, false);
+      case 'call': return actCall(state, p, payload.call, now, false);
+    }
+    return CT.fail('unknown', 'That move doesn’t exist in this game.');
+  }
+
+  function tick(state, now) {
+    switch (state.phase) {
+      case 'dealing':
+        if (now < state.phaseEndsAt) return false;
+        startPassing(state, now);
+        return true;
+      case 'pass':
+        if (state.turnEndsAt == null || now < state.turnEndsAt) return false;
+        passTimeout(state, now);
+        return true;
+      case 'declared':
+        if (now < state.phaseEndsAt) return false;
+        startRace(state, now);
+        return true;
+      case 'race':
+        if (now < state.race.endsAt) return false;
+        finishRace(state, now);
+        return true;
+      case 'roundEnd':
+        if (now < state.phaseEndsAt) return false;
+        var spelled = state.players.some(function (p) { return p.letters >= WORD.length; });
+        if (spelled) startEnd(state, now); else deal(state, now);
+        return true;
+      case 'tiebreak':
+        return tickTiebreak(state, now);
+    }
+    return false;
+  }
+
+  /* ---------- what one player may see ------------------------------------ */
+
+  function view(state, pid, opts) {
+    opts = opts || {};
+    var me = player(state, pid);
+    var race = state.race, d = state.tiebreak ? state.tiebreak.duel : null;
+    var v = {
+      mode: 'donkey',
+      engineVersion: state.engineVersion,
+      me: pid,
+      word: WORD,
+      phase: state.phase,
+      round: state.round,
+      options: state.options,
+      timing: {
+        passMs: passMs(state), raceDelayMs: state.timing.raceDelayMs, raceMs: state.timing.raceMs,
+        roundHoldMs: state.timing.roundHoldMs, duelChoiceMs: state.timing.duelChoiceMs, duelHoldMs: state.timing.duelHoldMs
+      },
+      phaseEndsAt: state.phaseEndsAt,
+      starter: state.starter,
+      turn: state.turn,
+      turnEndsAt: state.turnEndsAt,
+      passes: state.passes,
+      hand: me ? me.hand.slice() : [],
+      players: state.players.map(function (p) {
+        return {
+          id: p.id, name: p.name, isBot: p.isBot, seat: p.seat,
+          handCount: p.hand.length,
+          letters: p.letters,
+          isTurn: state.phase === 'pass' && state.turn === p.id,
+          down: !!(race && reacted(race, p.id)),
+          declared: !!(state.declare && state.declare.player === p.id)
+        };
+      }),
+      declare: state.declare ? {
+        player: state.declare.player, rank: state.declare.rank,
+        cards: state.declare.cards.slice(), extraTo: state.declare.extraTo
+      } : null,
+      race: race ? { startAt: race.startAt, endsAt: race.endsAt, racers: race.racers.slice(), order: race.order.slice() } : null,
+      result: state.result,
+      tiebreak: null,
+      standings: state.standings ? state.standings.slice() : null,
+      winners: state.winners,
+      seq: state.seq
+    };
+    if (state.tiebreak) {
+      v.tiebreak = {
+        groups: state.tiebreak.queue.map(function (g) { return { place: g.place, players: g.remaining.slice() }; }),
+        duel: d ? {
+          n: d.n, place: d.place, players: d.players.slice(),
+          challenger: d.challenger, opponent: d.opponent, step: d.step, endsAt: d.endsAt, call: d.call,
+          myCard: d.cards && d.cards[pid] ? d.cards[pid] : null,   // only your own card until the reveal
+          cards: d.step === 'reveal' ? JSON.parse(JSON.stringify(d.cards)) : null,
+          result: d.result
+        } : null
+      };
+    }
+    v.myFour = me ? fourOf(me.hand) : null;
+    v.canPass = !!me && state.phase === 'pass' && state.turn === pid;
+    v.canDeclare = !!me && state.phase === 'pass' && !!v.myFour;
+    v.canReact = !!me && state.phase === 'race' && race.racers.indexOf(pid) >= 0 && !reacted(race, pid);
+    v.canChallenge = !!(d && d.step === 'choose' && d.challenger === pid && state.phase === 'tiebreak');
+    v.canCall = !!(d && d.step === 'call' && d.challenger === pid && state.phase === 'tiebreak');
+
+    if (opts.events !== false) {
+      var since = opts.sinceSeq || 0;
+      v.events = state.events.filter(function (e) { return e.seq > since; }).map(function (e) {
+        var copy = {};
+        for (var k in e) if (k !== 'secret') copy[k] = e[k];
+        if (e.secret && e.secret[pid]) copy.mine = e.secret[pid];
+        return copy;
+      });
+    }
+    return v;
+  }
+
+  /* ---------- How to play ------------------------------------------------- */
+
+  function rules(options) {
+    var o = CT.resolveOptions(OPTIONS, options);
+    var secs = Number(o.passTime) || 15;
+    return [
+      { title: 'The cards', text: 'Four players sit in a circle. Only the Jacks, Queens, Kings and Aces are used, 16 cards in all, and everyone gets four.' },
+      { title: 'Passing', text: 'A random player starts by passing one card, face down, to the next player clockwise. Whoever receives it checks their hand. Without four of a kind, they pass one card on, and so a card keeps travelling round the circle. You have ' + secs + ' seconds to pass; when time runs out, a random card is passed for you.' },
+      { title: 'Four of a kind', text: 'Hold four Jacks, four Queens, four Kings or four Aces? Pass on your spare card, if you have one, and put the four down on the table.' },
+      { title: 'React quickly', text: 'The moment someone puts down four of a kind, everyone else must put their cards down as fast as they can. The last one to do it gets a letter. Anyone whose cards aren’t down after 6 seconds counts as last.' },
+      { title: 'DONKEY', text: 'Letters come in order: D, O, N, K, E, Y. Whoever spells DONKEY loses, and the game ends right there.' },
+      { title: 'Placings', text: 'Everyone else is ranked by letters: the fewer you have, the better you place. The player with the fewest letters wins.' },
+      { title: 'Tie-breaker', text: 'Players tied on letters settle it with a full 52-card deck. A random player from the tie is the challenger and picks someone else from the tie. Each draws a card and looks at it secretly, and the challenger calls whether their own card is lower, equal or higher. A right call knocks out the opponent; a wrong one knocks out the challenger. Aces are high and suits don’t matter, so equal ranks only count for a call of equal. The first one out takes the lowest place, and new duels follow, with a fresh deck and a new random challenger, until one player is left.' }
+    ];
+  }
+
+  /* One line for the "game in progress" card on the home screen. */
+  function describe(state, pid) {
+    var me = player(state, pid);
+    var mine = me && me.letters ? 'your letters: ' + WORD.slice(0, me.letters) : 'no letters yet';
+    return 'Round ' + state.round + ' · ' + mine;
+  }
+
+  CT.registerMode({
+    id: 'donkey',
+    name: 'Pass-Roun Donkey',
+    shortName: 'Donkey',
+    fan: ['JC', 'KH', 'AS'],
+    tagline: 'Pass one card round the circle, collect four of a kind, and never be last to put your cards down.',
+    engineVersion: ENGINE_VERSION,
+    players: { min: SEATS, max: SEATS, default: SEATS },
+    options: OPTIONS,
+    defaultTiming: DEFAULT_TIMING,
+    handSize: HAND_SIZE,
+    word: WORD,
+    bestCall: bestCall,
+    fourOf: fourOf,
+    rules: rules,
+    describe: describe,
+    createGame: createGame,
+    act: act,
+    tick: tick,
+    view: view,
+    presenter: 'donkey'
+  });
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/modes/donkey/bot.js ---- */
+/* ==========================================================================
+   GAME MODE · PASS-ROUN DONKEY — computer player
+   Sees only what a person in that seat would see (its view). Keeps the rank
+   it holds most of and passes on its loosest card; puts four of a kind down
+   after a short, human-looking pause; reacts to someone else's four with a
+   reflex drawn from the chosen speed; in a tie-breaker, makes the call most
+   likely to be right.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var Donkey = CT.getMode('donkey');
+
+  /* Reaction to someone putting four down, in ms after the race starts:
+     base + up to spread, and now and then a slow moment. */
+  var REFLEX = {
+    relaxed: { base: 560, spread: 420, slip: 0.12, slipBase: 500, slipSpread: 800 },   // ~0.8 s
+    normal: { base: 380, spread: 260, slip: 0.07, slipBase: 300, slipSpread: 600 },    // ~0.55 s, an alert person
+    sharp: { base: 280, spread: 160, slip: 0.04, slipBase: 250, slipSpread: 400 }      // ~0.4 s
+  };
+
+  function reflex(v, rnd) {
+    var r = REFLEX[v.options && v.options.reflexes] || REFLEX.normal;
+    var ms = r.base + rnd() * r.spread;
+    if (rnd() < r.slip) ms += r.slipBase + rnd() * r.slipSpread;
+    return ms;
+  }
+
+  function counts(hand) {
+    var n = {};
+    hand.forEach(function (c) { n[c.rank] = (n[c.rank] || 0) + 1; });
+    return n;
+  }
+
+  function pickOf(list, rnd) { return list[Math.floor(rnd() * list.length)]; }
+
+  /* Collect the rank held most (sticking with the current aim on a tie);
+     pass a card of the rank held least. */
+  function choosePass(v, memory, rnd) {
+    if (memory.round !== v.round) { memory.round = v.round; memory.target = null; }
+    var n = counts(v.hand);
+    var ranks = Object.keys(n);
+    var most = Math.max.apply(null, ranks.map(function (r) { return n[r]; }));
+    var top = ranks.filter(function (r) { return n[r] === most; });
+    var target = top.indexOf(memory.target) >= 0 ? memory.target : pickOf(top, rnd);
+    memory.target = target;
+    var others = v.hand.filter(function (c) { return c.rank !== target; });
+    if (!others.length) return pickOf(v.hand, rnd);
+    var fewest = Math.min.apply(null, others.map(function (c) { return n[c.rank]; }));
+    return pickOf(others.filter(function (c) { return n[c.rank] === fewest; }), rnd);
+  }
+
+  var bot = {
+    intent: function (v) {
+      if (v.canDeclare) return { key: 'declare:' + v.round, kind: 'declare' };
+      if (v.canPass) return { key: 'pass:' + v.round + ':' + v.passes, kind: 'pass' };
+      if (v.canReact) return { key: 'react:' + v.round, kind: 'react' };
+      if (v.canChallenge) return { key: 'challenge:' + v.tiebreak.duel.n, kind: 'challenge' };
+      if (v.canCall) return { key: 'call:' + v.tiebreak.duel.n, kind: 'call' };
+      return null;
+    },
+
+    delay: function (intent, v, rnd) {
+      switch (intent.kind) {
+        case 'declare': return 500 + rnd() * 700;
+        case 'pass': return 650 + rnd() * 850;
+        case 'react': return reflex(v, rnd);
+        case 'challenge': return 1100 + rnd() * 900;
+        case 'call': return 1300 + rnd() * 1100;
+      }
+      return 800;
+    },
+
+    decide: function (v, memory, rnd) {
+      if (v.canDeclare) return { type: 'declare' };
+      if (v.canPass) return { type: 'pass', payload: { cardId: choosePass(v, memory, rnd).id } };
+      if (v.canReact) return { type: 'react' };
+      if (v.canChallenge) {
+        var rivals = v.tiebreak.duel.players.filter(function (pid) { return pid !== v.me; });
+        return { type: 'challenge', payload: { target: pickOf(rivals, rnd) } };
+      }
+      if (v.canCall) return { type: 'call', payload: { call: Donkey.bestCall(v.tiebreak.duel.myCard, rnd()) } };
+      return null;
+    },
+
+    choosePass: choosePass,
+    reflex: reflex
+  };
+
+  Donkey.bot = bot;
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
 
 /* ---- src/ui/kit.js ---- */
@@ -1984,6 +2822,21 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
       o.connect(g); g.connect(this.out());
       o.start(t); o.stop(t + dur + 0.03);
     },
+    /* A tone that glides from one pitch to another. */
+    slide: function (from, to, dur, gain, type, when) {
+      var c = this.ctx;
+      var o = c.createOscillator();
+      var g = c.createGain();
+      var t = c.currentTime + (when || 0);
+      o.type = type || 'triangle';
+      o.frequency.setValueAtTime(from, t);
+      o.frequency.exponentialRampToValueAtTime(to, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.out());
+      o.start(t); o.stop(t + dur + 0.03);
+    },
     play: function (name) {
       if (!this.ready()) return;
       try {
@@ -1997,6 +2850,12 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
           case 'alert': this.tone(659, 0.13, 0.11, 'triangle'); this.tone(523, 0.18, 0.1, 'triangle', 0.11); break;
           case 'tick': this.tone(880, 0.06, 0.07, 'sine'); this.noise(0.02, 1200, 0.06); break;
           case 'nope': this.tone(330, 0.1, 0.09, 'triangle'); this.tone(262, 0.15, 0.09, 'triangle', 0.08); break;
+          case 'slap': this.tone(140, 0.12, 0.16, 'sine'); this.noise(0.09, 700, 0.32); break;
+          case 'thud': this.tone(120, 0.09, 0.08, 'sine'); this.noise(0.06, 600, 0.14); break;
+          case 'bray':   // a soft hee-haw
+            this.slide(560, 660, 0.22, 0.07, 'triangle', 0); this.slide(330, 280, 0.32, 0.08, 'triangle', 0.24);
+            this.slide(540, 640, 0.2, 0.05, 'triangle', 0.62); this.slide(320, 270, 0.3, 0.06, 'triangle', 0.84);
+            break;
           case 'victory': [523, 659, 784, 1046].forEach(function (f, i) { Sound.tone(f, 0.22, i === 3 ? 0.09 : 0.11, i === 3 ? 'sine' : 'triangle', i * 0.11); }); break;
         }
       } catch (e) { /* audio is optional */ }
@@ -3578,6 +4437,48 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
     if (e.type === 'setStart') this.lastSetNo = e.setNo;
   };
 
+  /* ---------- end of game ---------- */
+
+  /* What the end-of-game sheet shows for Burns: how it was won, any Flush,
+     and everyone's cards left. */
+  BurnsTable.prototype.result = function (v) {
+    var me = this.me;
+    var byId = {};
+    v.players.forEach(function (p, i) { byId[p.id] = { p: p, i: i }; });
+    var winners = v.winners || [];
+    var iWon = winners.indexOf(me) >= 0;
+    var names = winners.map(function (id) { return id === me ? 'You' : UI.esc(byId[id].p.name); });
+    var why, cards = '';
+    if (v.winReason === 'flush') {
+      why = (winners.length > 1 ? names.join(' and ') + ' each held' : (iWon ? 'You held' : names[0] + ' held')) + ' one card of every suit on the deal: a Flush.';
+      winners.forEach(function (id) {
+        cards += '<div class="result-cards" aria-label="' + (id === me ? 'Your' : UI.esc(byId[id].p.name) + '’s') + ' Flush"></div>';
+      });
+    } else {
+      why = (iWon ? 'You played your last card' : names[0] + ' played their last card') + ' in set ' + v.setNo + '.';
+    }
+    var standings = v.players.slice().sort(function (a, b) {
+      var aw = winners.indexOf(a.id) >= 0 ? -1 : 0, bw = winners.indexOf(b.id) >= 0 ? -1 : 0;
+      return (aw - bw) || (a.handCount - b.handCount);
+    }).map(function (p) {
+      var paint = p.id === me ? 'var(--ink)' : PAINTS[(byId[p.id].i - 1 + PAINTS.length) % PAINTS.length];
+      return '<li class="' + (winners.indexOf(p.id) >= 0 ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc((p.id === me ? 'You' : p.name).charAt(0)) + '</span>' +
+        '<span>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</span><span class="left">' + p.handCount + (p.handCount === 1 ? ' card' : ' cards') + ' left</span></li>';
+    }).join('');
+    return {
+      when: v.winReason === 'flush' ? 'on the deal' : 'set ' + v.setNo,
+      why: why,
+      body: cards + '<div class="standings"><ul>' + standings + '</ul></div>',
+      after: function (sheet) {
+        if (v.winReason !== 'flush') return;
+        var rows = sheet.querySelectorAll('.result-cards');
+        winners.forEach(function (id, k) {
+          (byId[id].p.hand || []).forEach(function (c) { rows[k].appendChild(UI.makeCard(c)); });
+        });
+      }
+    };
+  };
+
   CT.UI.presenters = CT.UI.presenters || {};
   CT.UI.presenters.burns = BurnsTable;
 })(window.CT);
@@ -3984,6 +4885,852 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
   UI.tutorials.burns = Tutorial;
 })(window.CT);
 
+/* ---- src/modes/donkey/ui.js ---- */
+/* ==========================================================================
+   GAME MODE · PASS-ROUN DONKEY — table screen
+   Four seats round a table: you at the bottom, then clockwise the players
+   on your left, across and on your right. A card travels round; four of a
+   kind lands in the middle; everyone races to put their cards down; the
+   slowest collects a letter of DONKEY. Everything drawn comes from
+   session.view(me), so nothing hidden can leak onto the screen.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
+  var RANK_ORDER = { J: 0, Q: 1, K: 2, A: 3 };
+  var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  var RANKS = { J: 'Jacks', Q: 'Queens', K: 'Kings', A: 'Aces' };
+  var PLACES = ['1st', '2nd', '3rd', '4th'];
+  var RING = 113.1;   // circumference of the avatar timer ring (r = 18)
+
+  function sortHand(hand) {
+    return hand.slice().sort(function (a, b) {
+      return (RANK_ORDER[a.rank] - RANK_ORDER[b.rank]) || (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]);
+    });
+  }
+  function list(names) {
+    if (names.length <= 1) return names.join('');
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+  function secs(ms) { return (ms / 1000).toFixed(2) + 's'; }
+  function an(letter) { return /[AEFHILMNORSX]/.test(letter) ? 'an' : 'a'; }
+
+  function avatarHtml(initial) {
+    return '<span class="dk-avatar"><svg class="dk-ring" viewBox="0 0 40 40" aria-hidden="true" hidden>' +
+      '<circle class="bg" cx="20" cy="20" r="18"/><circle class="fg" cx="20" cy="20" r="18" stroke-dasharray="' + RING + '" stroke-dashoffset="0"/></svg>' +
+      '<span class="dk-initial">' + UI.esc(initial) + '</span></span>';
+  }
+  function wordHtml(word) {
+    return '<span class="dk-word">' + word.split('').map(function (l) { return '<b>' + l + '</b>'; }).join('') + '</span>';
+  }
+
+  function DonkeyTable(app, session, me, opts) {
+    opts = opts || {};
+    this.app = app;
+    this.session = session;
+    this.me = me;
+    this.lastSeq = 0;
+    this.selected = null;
+    this.hidden = {};
+    this.handEls = {};
+    this.seatEls = {};
+    this.logItems = [];
+    this.v = null;
+    this.first = true;
+    this.quiet = !!opts.restored;
+    this.root = document.getElementById('screen-table');
+    this.build();
+    var self = this;
+    this.unsub = session.on(function () { self.update(); });
+    this.onResize = function () { if (self.v) self.layoutHand(sortHand(self.v.hand)); };
+    window.addEventListener('resize', this.onResize);
+    this.update();
+  }
+
+  DonkeyTable.prototype.destroy = function () {
+    if (this.unsub) this.unsub();
+    window.removeEventListener('resize', this.onResize);
+    clearTimeout(this.overTimer);
+    this.root.innerHTML = '';
+    var fx = document.getElementById('fx');
+    if (fx) fx.innerHTML = '';
+  };
+
+  DonkeyTable.prototype.name = function (pid) {
+    if (pid === this.me) return 'You';
+    var p = this.session.state.players.filter(function (x) { return x.id === pid; })[0];
+    return p ? UI.esc(p.name) : 'Someone';
+  };
+  /* "you" in the middle of a sentence */
+  DonkeyTable.prototype.lname = function (pid) { return pid === this.me ? 'you' : this.name(pid); };
+
+  DonkeyTable.prototype.player = function (v, pid) {
+    return v.players.filter(function (p) { return p.id === pid; })[0];
+  };
+
+  /* Where a seat sits on screen, counted clockwise from you. */
+  DonkeyTable.prototype.where = function (v, pid) {
+    var ids = v.players.map(function (p) { return p.id; });
+    var off = (ids.indexOf(pid) - ids.indexOf(this.me) + ids.length) % ids.length;
+    return ['me', 'left', 'top', 'right'][off];
+  };
+
+  DonkeyTable.prototype.nextOf = function (v, pid) {
+    var ids = v.players.map(function (p) { return p.id; });
+    return ids[(ids.indexOf(pid) + 1) % ids.length];
+  };
+
+  /* ---------- static layout ---------- */
+
+  DonkeyTable.prototype.build = function () {
+    var v = this.session.view(this.me, { events: false });
+    var self = this;
+    this.root.innerHTML =
+      '<header class="topbar">' +
+        '<button class="icon-btn" id="d-menu" type="button" aria-label="Game menu">' + UI.icon.menu + '</button>' +
+        '<span class="wordmark">DONKEY</span>' +
+        '<span class="chip" id="d-round"></span>' +
+        '<span class="spacer"></span>' +
+        '<button class="icon-btn" id="d-music" type="button"></button>' +
+        '<button class="icon-btn" id="d-sound" type="button"></button>' +
+      '</header>' +
+      '<div class="dk-table" id="d-table">' +
+        '<div class="dk-center" id="d-center">' +
+          // dashed ring with an arrowhead: passing goes clockwise
+          '<svg class="dk-flow" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 8A42 42 0 1 1 20.3 20.3"/><path class="tip" d="M16.4 19.2L23.1 17.5L21.4 24.2"/></svg>' +
+          '<span class="dk-deck card back" id="d-deck" aria-hidden="true"></span>' +
+          '<div class="dk-four" id="d-four"></div>' +
+          '<p class="dk-caption" id="d-caption"></p>' +
+          '<div class="dk-duel" id="d-duel" hidden></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="status" id="d-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
+      '<div class="dk-choices" id="d-choices" hidden></div>' +
+      '<div class="dk-me" id="d-me">' +
+        '<div class="dk-me-info">' + avatarHtml('Y') + '<div class="dk-me-text"><span class="me-name">You</span>' + wordHtml(v.word) + '</div></div>' +
+        '<div class="dk-actions">' +
+          '<button class="btn btn-primary dk-four-btn" id="d-declare" type="button" hidden>Four of a kind!</button>' +
+          '<button class="btn btn-primary btn-play" id="d-pass" type="button" hidden></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hand-wrap dk-handwrap" id="d-handwrap"><div class="hand" id="d-hand"></div>' +
+        '<button class="dk-slap" id="d-slap" type="button" hidden><span>Put down!</span></button>' +
+      '</div>';
+
+    var table = this.root.querySelector('#d-table');
+    v.players.forEach(function (p, i) {
+      if (p.id === self.me) return;
+      var seat = document.createElement('div');
+      seat.className = 'dk-seat dk-' + self.where(v, p.id);
+      seat.dataset.pid = p.id;
+      seat.style.setProperty('--paint', PAINTS[(i - 1 + PAINTS.length) % PAINTS.length]);
+      seat.innerHTML = avatarHtml(p.name.charAt(0)) +
+        '<span class="seat-name">' + UI.esc(p.name) + '</span>' + wordHtml(v.word) +
+        '<div class="dk-fan"></div><span class="seat-chip"></span>';
+      table.appendChild(seat);
+      self.seatEls[p.id] = {
+        seat: seat,
+        ring: seat.querySelector('.dk-ring'),
+        ringFg: seat.querySelector('.dk-ring .fg'),
+        word: seat.querySelector('.dk-word'),
+        fan: seat.querySelector('.dk-fan'),
+        chip: seat.querySelector('.seat-chip')
+      };
+    });
+
+    var meEl = this.root.querySelector('#d-me');
+    this.seatEls[this.me] = {
+      seat: meEl,
+      ring: meEl.querySelector('.dk-ring'),
+      ringFg: meEl.querySelector('.dk-ring .fg'),
+      word: meEl.querySelector('.dk-word'),
+      fan: null,
+      chip: null
+    };
+
+    this.el = {
+      round: this.root.querySelector('#d-round'),
+      music: this.root.querySelector('#d-music'),
+      sound: this.root.querySelector('#d-sound'),
+      center: this.root.querySelector('#d-center'),
+      deck: this.root.querySelector('#d-deck'),
+      meAvatar: this.root.querySelector('#d-me .dk-avatar'),
+      four: this.root.querySelector('#d-four'),
+      caption: this.root.querySelector('#d-caption'),
+      duel: this.root.querySelector('#d-duel'),
+      choices: this.root.querySelector('#d-choices'),
+      statusMain: this.root.querySelector('#d-status .status-main'),
+      statusSub: this.root.querySelector('#d-status .status-sub'),
+      declare: this.root.querySelector('#d-declare'),
+      pass: this.root.querySelector('#d-pass'),
+      handWrap: this.root.querySelector('#d-handwrap'),
+      hand: this.root.querySelector('#d-hand'),
+      slap: this.root.querySelector('#d-slap')
+    };
+    this.renderAudio();
+
+    this.root.querySelector('#d-menu').addEventListener('click', function () { self.app.openMenu(); });
+    this.el.music.addEventListener('click', function () { self.app.toggleMusic(); self.renderAudio(); });
+    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderAudio(); });
+    this.el.hand.addEventListener('click', function (e) {
+      var btn = e.target.closest('.hcard');
+      if (btn) self.tapCard(btn.dataset.id, btn);
+    });
+    this.el.pass.addEventListener('click', function () { if (self.selected) self.pass(self.selected); });
+    this.el.declare.addEventListener('click', function () { self.declare(); });
+    // the race is won on the press, not the release
+    this.el.slap.addEventListener('pointerdown', function (e) { e.preventDefault(); self.slap(); });
+    this.el.slap.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self.slap(); }
+    });
+    this.el.choices.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.target) self.challenge(b.dataset.target);
+      if (b.dataset.call) self.call(b.dataset.call);
+    });
+  };
+
+  DonkeyTable.prototype.renderAudio = function () {
+    var m = UI.Music.on, s = UI.Sound.on;
+    this.el.music.innerHTML = m ? UI.icon.musicOn : UI.icon.musicOff;
+    this.el.music.setAttribute('aria-label', m ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+    this.el.music.classList.toggle('off', !m);
+    this.el.sound.innerHTML = s ? UI.icon.soundOn : UI.icon.soundOff;
+    this.el.sound.setAttribute('aria-label', s ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+    this.el.sound.classList.toggle('off', !s);
+  };
+
+  /* ---------- update cycle ---------- */
+
+  DonkeyTable.prototype.update = function () {
+    var v = this.session.view(this.me, { sinceSeq: this.lastSeq });
+    var events = v.events || [];
+    var prev = this.v;
+    this.v = v;
+    var pre = (events.length && prev && !this.quiet) ? this.capture() : null;
+    var plan = (!this.quiet && events.length) ? this.plan(events, pre, v) : { flights: [] };
+    this.render(v);
+    if (plan.flights.length) this.run(plan);
+    if (!this.quiet) this.react(events, v);
+    var self = this;
+    events.forEach(function (e) { self.logEvent(e, v); });
+    if (events.length) this.lastSeq = events[events.length - 1].seq;
+    this.first = false;
+    this.quiet = false;
+    if (this.app.logOpen) this.app.renderLog();
+
+    if (v.phase === 'over' && !this.overShown) {
+      this.overShown = true;
+      this.overTimer = setTimeout(function () { self.app.showResult(self.v); }, events.length ? 2400 : 200);
+    }
+  };
+
+  /* Where things are on screen before the DOM changes. */
+  DonkeyTable.prototype.capture = function () {
+    var pre = { hand: {} };
+    for (var id in this.handEls) pre.hand[id] = this.handEls[id].getBoundingClientRect();
+    return pre;
+  };
+
+  /* Card flights for a batch of events. */
+  DonkeyTable.prototype.plan = function (events, pre, v) {
+    var me = this.me, self = this;
+    var flights = [];
+    function add(f) { if (f.hide) self.hide(f.hide); flights.push(f); }
+    events.forEach(function (e) {
+      if (e.type === 'deal') {
+        var k = 0;
+        for (var r = 0; r < e.handSize; r++) {
+          e.order.forEach(function (pid) {
+            var delay = 120 + k * 55;
+            k++;
+            if (pid === me && e.mine) {
+              var c = e.mine.hand[r];
+              add({ from: 'center', to: 'h:' + c.id, card: c, delay: delay, duration: 320, hide: 'h:' + c.id, sound: 'deal' });
+            } else {
+              add({ from: 'center', to: 'seat:' + pid, card: null, delay: delay, duration: 300, sound: k % 2 ? 'deal' : null });
+            }
+          });
+        }
+      } else if (e.type === 'pass') {
+        if (e.from === me && e.mine) {
+          add({ fromRect: pre && pre.hand[e.mine.card.id], from: 'seat:' + me, to: 'seat:' + e.to, card: e.mine.card, duration: 380 });
+        } else if (e.to === me && e.mine) {
+          add({ from: 'seat:' + e.from, to: 'h:' + e.mine.card.id, card: e.mine.card, duration: 420, hide: 'h:' + e.mine.card.id });
+        } else {
+          add({ from: 'seat:' + e.from, to: 'seat:' + e.to, card: null, duration: 380 });
+        }
+      } else if (e.type === 'declare') {
+        e.cards.forEach(function (c, i) {
+          var fromRect = e.player === me && pre ? pre.hand[c.id] : null;
+          add({ fromRect: fromRect, from: 'seat:' + e.player, to: 'four:' + i, card: c, delay: 70 + i * 55, duration: 340, hide: 'four:' + i });
+        });
+      }
+    });
+    return { flights: flights };
+  };
+
+  DonkeyTable.prototype.target = function (key) {
+    if (key === 'center') return this.el.deck;   // a card-sized spot in the middle of the table
+    if (key.indexOf('h:') === 0) return this.handEls[key.slice(2)] || null;
+    if (key.indexOf('four:') === 0) return this.el.four.children[+key.slice(5)] || null;
+    if (key.indexOf('seat:') === 0) {
+      var pid = key.slice(5);
+      if (pid === this.me) {
+        var cards = this.el.hand.children;
+        return cards.length ? cards[Math.floor(cards.length / 2)] : this.el.meAvatar;
+      }
+      var s = this.seatEls[pid];
+      return s ? (s.fan.lastElementChild || s.fan) : null;
+    }
+    return null;
+  };
+
+  DonkeyTable.prototype.run = function (plan) {
+    var self = this;
+    plan.flights.forEach(function (f) {
+      var from = f.fromRect ? null : self.target(f.from);
+      var to = self.target(f.to);
+      if (f.sound) setTimeout(function () { UI.Sound.play(f.sound); }, f.delay || 0);
+      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration })
+        .then(function () { if (f.hide) self.unhide(f.hide); });
+    });
+  };
+
+  DonkeyTable.prototype.hide = function (key) { this.hidden[key] = (this.hidden[key] || 0) + 1; };
+  DonkeyTable.prototype.unhide = function (key) {
+    this.hidden[key] = Math.max(0, (this.hidden[key] || 0) - 1);
+    if (this.hidden[key]) return;
+    delete this.hidden[key];
+    var el = this.target(key);
+    if (el) el.style.visibility = '';
+  };
+
+  /* ---------- rendering ---------- */
+
+  DonkeyTable.prototype.render = function (v) {
+    this.el.round.textContent = 'Round ' + v.round;
+    this.renderSeats(v);
+    this.renderCenter(v);
+    this.renderStatus(v);
+    this.renderChoices(v);
+    this.renderMe(v);
+    this.renderHand(v);
+  };
+
+  DonkeyTable.prototype.raceEntry = function (v, pid) {
+    if (!v.race) return null;
+    for (var i = 0; i < v.race.order.length; i++) if (v.race.order[i].player === pid) return { place: i + 1, ms: v.race.order[i].ms };
+    return null;
+  };
+
+  DonkeyTable.prototype.renderWord = function (el, n, fresh) {
+    var bs = el.children;
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].classList.toggle('on', i < n);
+      bs[i].classList.toggle('fresh', !!fresh && i === n - 1);
+    }
+    el.setAttribute('aria-label', n ? 'Letters: ' + this.v.word.slice(0, n) : 'No letters');
+  };
+
+  DonkeyTable.prototype.renderSeats = function (v) {
+    var self = this;
+    var losers = (v.phase === 'roundEnd' && v.result) ? v.result.losers : [];
+    v.players.forEach(function (p) {
+      var s = self.seatEls[p.id];
+      if (!s) return;
+      s.seat.classList.toggle('is-turn', p.isTurn);
+      s.seat.classList.toggle('is-down', p.down);
+      s.seat.classList.toggle('is-safe', p.declared && (v.phase === 'declared' || v.phase === 'race' || v.phase === 'roundEnd'));
+      s.seat.classList.toggle('is-loser', losers.indexOf(p.id) >= 0);
+      var inDuel = v.tiebreak && v.tiebreak.duel && (v.tiebreak.duel.challenger === p.id || v.tiebreak.duel.opponent === p.id);
+      s.seat.classList.toggle('in-duel', !!inDuel && v.phase === 'tiebreak');
+      self.renderWord(s.word, p.letters, losers.indexOf(p.id) >= 0);
+      if (p.id === self.me) return;
+      // a small fan of card backs
+      var n = Math.min(p.handCount, 5);
+      while (s.fan.children.length < n) s.fan.appendChild(UI.makeCard(null));
+      while (s.fan.children.length > n) s.fan.removeChild(s.fan.lastElementChild);
+      s.fan.style.setProperty('--n', n);
+      s.seat.setAttribute('aria-label', p.name + ', ' + p.handCount + ' cards, ' + (p.letters ? 'letters ' + v.word.slice(0, p.letters) : 'no letters'));
+      var chip = self.chipFor(v, p);
+      s.chip.textContent = chip.text;
+      s.chip.className = 'seat-chip' + (chip.tone ? ' ' + chip.tone : '');
+    });
+  };
+
+  DonkeyTable.prototype.chipFor = function (v, p) {
+    var r = this.raceEntry(v, p.id);
+    switch (v.phase) {
+      case 'dealing': return { text: p.id === v.starter ? 'starts' : '' };
+      case 'pass': return p.isTurn ? { text: 'passing…', tone: 'hot' } : { text: '' };
+      case 'declared':
+      case 'race':
+        if (p.declared) return { text: 'four ' + RANKS[v.declare.rank] + '!', tone: 'hot' };
+        if (r) return { text: PLACES[r.place - 1] + ' · ' + secs(r.ms) };
+        return { text: '' };
+      case 'roundEnd': {
+        var res = v.result;
+        if (res.losers.indexOf(p.id) >= 0) return { text: '+' + v.word.charAt(p.letters - 1), tone: 'ember' };
+        if (p.id === res.declarer) return { text: 'safe' };
+        return { text: r ? secs(r.ms) : '' };
+      }
+      case 'tiebreak':
+      case 'over': {
+        var place = v.standings ? v.standings.indexOf(p.id) : -1;
+        var d = v.tiebreak && v.tiebreak.duel;
+        if (v.phase === 'tiebreak' && d && d.step !== 'reveal' && d.challenger === p.id) return { text: 'challenger', tone: 'hot' };
+        if (v.phase === 'tiebreak' && d && d.step !== 'reveal' && d.opponent === p.id) return { text: 'challenged' };
+        return { text: place >= 0 ? PLACES[place] : 'in a tie', tone: place === 0 ? 'hot' : '' };
+      }
+    }
+    return { text: '' };
+  };
+
+  DonkeyTable.prototype.renderCenter = function (v) {
+    var duel = v.tiebreak && v.tiebreak.duel;
+    var showDuel = (v.phase === 'tiebreak' || v.phase === 'over') && duel;
+    this.el.center.classList.toggle('duel-on', !!showDuel);
+    this.el.duel.hidden = !showDuel;
+    if (showDuel) { this.renderDuel(v, duel); return; }
+
+    var d = v.declare;
+    var key = d ? v.round + ':' + d.player : '';
+    if (this.el.four.dataset.key !== key) {
+      this.el.four.dataset.key = key;
+      this.el.four.innerHTML = '';
+      if (d) {
+        var self = this;
+        d.cards.forEach(function (c, i) {
+          var el = UI.makeCard(c);
+          el.style.setProperty('--i', i);
+          if (self.hidden['four:' + i]) el.style.visibility = 'hidden';
+          self.el.four.appendChild(el);
+        });
+      }
+    }
+    this.el.center.classList.toggle('has-four', !!d);
+    this.el.center.classList.toggle('racing', v.phase === 'race');
+    this.el.caption.innerHTML = d
+      ? (d.player === this.me ? 'Your' : this.name(d.player) + '’s') + ' four ' + RANKS[d.rank]
+      : (v.phase === 'pass' ? 'Passing to the left' : '');
+  };
+
+  DonkeyTable.prototype.renderDuel = function (v, d) {
+    var me = this.me, self = this;
+    var tied = d.players.map(function (pid) { return self.name(pid); });
+    var head = 'Tie-breaker for ' + PLACES[d.place] + ' place';
+    var cardEl = function (pid) {
+      var drawn = d.step !== 'choose';
+      if (!pid || !drawn) return '<div class="dk-duel-card empty"></div>';
+      var c = d.cards ? d.cards[pid] : (pid === me ? d.myCard : null);
+      return '<div class="dk-duel-card" data-card="' + (c ? c.id : '') + '"></div>';
+    };
+    var side = function (pid, role) {
+      return '<div class="dk-duel-side">' + cardEl(pid) +
+        '<span class="nm">' + (pid ? self.name(pid) : '…') + '</span><span class="role">' + role + '</span></div>';
+    };
+    var html = '<p class="dk-duel-head">' + head + '</p>' +
+      '<p class="dk-duel-tied">' + list(tied) + ' have ' + this.lettersWord(v, d.players[0]) + '</p>' +
+      '<div class="dk-duel-cards">' + side(d.challenger, 'challenger') + '<span class="vs">vs</span>' + side(d.opponent, d.opponent ? 'opponent' : 'being picked') + '</div>';
+    if (d.step === 'reveal' && d.result) {
+      html += '<p class="dk-duel-call ' + (d.result.right ? 'right' : 'wrong') + '">Called ' + d.call + ' · ' + (d.result.right ? 'right' : 'wrong') + '</p>';
+    }
+    var key = JSON.stringify([d.n, d.step, d.opponent, !!d.cards, v.canChallenge, v.canCall]);
+    if (this.el.duel.dataset.key !== key) {
+      this.el.duel.dataset.key = key;
+      this.el.duel.innerHTML = html;
+      this.el.duel.querySelectorAll('.dk-duel-card[data-card]').forEach(function (el) {
+        var id = el.dataset.card;
+        var c = null;
+        if (id) {
+          var all = [d.myCard].concat(d.cards ? Object.keys(d.cards).map(function (k) { return d.cards[k]; }) : []);
+          c = all.filter(function (x) { return x && x.id === id; })[0] || null;
+        }
+        el.appendChild(UI.makeCard(c));
+      });
+    }
+  };
+
+  /* The challenger's buttons, in a full-width row under the status. */
+  DonkeyTable.prototype.renderChoices = function (v) {
+    var d = v.tiebreak && v.tiebreak.duel, me = this.me, self = this;
+    var html = '';
+    if (d && v.canChallenge) {
+      html = d.players.filter(function (pid) { return pid !== me; }).map(function (pid) {
+        return '<button class="btn btn-ghost" type="button" data-target="' + pid + '">Challenge ' + self.name(pid) + '</button>';
+      }).join('');
+    } else if (d && v.canCall) {
+      html = '<button class="btn btn-ghost" type="button" data-call="lower">Lower</button>' +
+        '<button class="btn btn-ghost" type="button" data-call="equal">Equal</button>' +
+        '<button class="btn btn-ghost" type="button" data-call="higher">Higher</button>';
+    }
+    if (this.el.choices.dataset.html !== html) {
+      this.el.choices.dataset.html = html;
+      this.el.choices.innerHTML = html;
+    }
+    this.el.choices.hidden = !html;
+  };
+
+  DonkeyTable.prototype.lettersWord = function (v, pid) {
+    var p = this.player(v, pid);
+    if (!p || !p.letters) return 'no letters';
+    return p.letters === 1 ? '1 letter' : p.letters + ' letters';
+  };
+
+  DonkeyTable.prototype.statusFor = function (v) {
+    var me = this.me, self = this;
+    var timer = ' <span class="secs"></span>';
+    var four = v.myFour ? 'four ' + RANKS[v.myFour] : '';
+    switch (v.phase) {
+      case 'dealing':
+        return { main: 'Round ' + v.round + ' · dealing…', sub: (v.starter === me ? 'You start' : this.name(v.starter) + ' starts') + ' the passing.' };
+      case 'pass': {
+        var to = this.name(this.nextOf(v, v.turn));
+        if (v.canDeclare) return { main: '<span class="hl">You have ' + four + '!</span> Put them down.', sub: 'Tap Four of a kind before anyone else gets there.' };
+        if (v.canPass) return { main: '<span class="hl">Your turn.</span> Pass a card to ' + to + '.' + timer, sub: 'Keep the cards you’re collecting. Tap a card, then tap it again.' };
+        return { main: this.name(v.turn) + ' is passing to ' + (to === 'You' ? 'you' : to) + '…', sub: 'Watch for four of a kind, and be quick to put your cards down.' };
+      }
+      case 'declared':
+        return { main: (v.declare.player === me ? 'You put down four ' : this.name(v.declare.player) + ' has four ') + RANKS[v.declare.rank] + '!', sub: v.declare.player === me ? 'You’re safe this round.' : 'Get ready…' };
+      case 'race': {
+        var mine = this.raceEntry(v, me);
+        var waiting = v.race.racers.filter(function (pid) { return !self.raceEntry(v, pid); }).map(function (pid) { return self.lname(pid); });
+        if (v.canReact) return { main: '<span class="hl">Put your cards down!</span>', sub: 'The last one gets a letter.' };
+        if (v.declare.player === me) return { main: 'You’re safe. Who’s slowest?', sub: waiting.length ? 'Waiting for ' + list(waiting) + '.' : '' };
+        if (mine) return { main: 'Down in ' + secs(mine.ms) + '.', sub: waiting.length ? 'Waiting for ' + list(waiting) + '.' : '' };
+        return { main: '', sub: '' };
+      }
+      case 'roundEnd': {
+        var r = v.result;
+        var who = r.losers.map(function (pid) { return self.lname(pid); });
+        var gets = r.losers.map(function (pid) {
+          var p = self.player(v, pid);
+          return v.word.charAt(p.letters - 1);
+        });
+        var iLost = r.losers.indexOf(me) >= 0;
+        var main;
+        if (r.losers.length === 1) {
+          main = iLost
+            ? '<span class="em">You were ' + (r.late.length ? 'too slow' : 'last') + '.</span> You get ' + an(gets[0]) + ' ' + gets[0] + '.'
+            : this.name(r.losers[0]) + ' was ' + (r.late.length ? 'too slow' : 'last') + ' and gets ' + an(gets[0]) + ' ' + gets[0] + '.';
+        } else {
+          main = list(who) + ' never put their cards down: a letter each.';
+        }
+        var times = r.order.map(function (o) { return self.name(o.player) + ' ' + secs(o.ms); }).join(' · ');
+        var anyDonkey = v.players.some(function (p) { return p.letters >= v.word.length; });
+        return { main: main, sub: anyDonkey ? 'That spells DONKEY. Game over!' : times };
+      }
+      case 'tiebreak': {
+        var d = v.tiebreak.duel;
+        if (!d) return { main: 'Tie-breaker', sub: '' };
+        var opp = d.opponent ? this.lname(d.opponent) : '';
+        if (d.step === 'choose') {
+          if (v.canChallenge) return { main: '<span class="hl">You’re the challenger.</span> Pick who to duel.' + timer, sub: 'You’ll each draw a card from a full deck.' };
+          return { main: this.name(d.challenger) + ' is picking who to challenge…', sub: 'Tied players settle their places with a duel.' };
+        }
+        if (d.step === 'call') {
+          var my = d.myCard ? UI.cardText(d.myCard) : '';
+          if (v.canCall) return { main: 'Your card is ' + my + '. Is it lower, equal or higher than ' + opp + '’s?' + timer, sub: 'A right call knocks ' + opp + ' out; a wrong one knocks you out. Aces are high.' };
+          if (d.opponent === me) return { main: this.name(d.challenger) + ' is making the call…', sub: 'Your card is ' + my + '.' };
+          return { main: this.name(d.challenger) + ' is making the call against ' + opp + '…', sub: '' };
+        }
+        var res = d.result;
+        return {
+          main: (d.challenger === me ? 'You' : this.name(d.challenger)) + ' called ' + d.call + ': ' + (res.right ? 'right' : 'wrong') + '.',
+          sub: (res.out === me ? 'You take ' : this.name(res.out) + ' takes ') + PLACES[res.place] + ' place.'
+        };
+      }
+      case 'over': {
+        var w = v.winners && v.winners[0];
+        return { main: w === me ? '<span class="hl">You win!</span>' : this.name(w) + ' wins.', sub: 'Fewest letters when DONKEY was spelled.' };
+      }
+    }
+    return { main: '', sub: '' };
+  };
+
+  DonkeyTable.prototype.renderStatus = function (v) {
+    var st = this.statusFor(v);
+    this.el.statusMain.innerHTML = st.main;
+    this.el.statusSub.innerHTML = st.sub || '';
+  };
+
+  DonkeyTable.prototype.renderMe = function (v) {
+    this.el.declare.hidden = !v.canDeclare;
+    var sel = v.canPass && this.selected ? v.hand.filter(function (c) { return c.id === this.selected; }, this)[0] : null;
+    if (sel && !v.canDeclare) {
+      this.el.pass.hidden = false;
+      this.el.pass.innerHTML = 'Pass ' + sel.rank + UI.suitSvg(sel.suit);
+      this.el.pass.setAttribute('aria-label', 'Pass the ' + CT.cardName(sel));
+    } else {
+      this.el.pass.hidden = true;
+    }
+    this.el.slap.hidden = !v.canReact;
+    this.el.handWrap.classList.toggle('is-down', !!this.raceEntry(v, this.me) && (v.phase === 'race' || v.phase === 'roundEnd'));
+  };
+
+  DonkeyTable.prototype.renderHand = function (v) {
+    var cards = sortHand(v.hand);
+    var self = this;
+    if (this.selected && !v.hand.some(function (c) { return c.id === self.selected; })) this.selected = null;
+    if (!v.canPass) this.selected = null;
+    var keep = {};
+    var fourRank = v.myFour;
+    cards.forEach(function (c, i) {
+      keep[c.id] = true;
+      var el = self.handEls[c.id];
+      if (!el) {
+        el = UI.makeCard(c, 'button');
+        el.type = 'button';
+        el.classList.add('hcard');
+        el.dataset.id = c.id;
+        if (!self.first && !self.hidden['h:' + c.id]) el.classList.add('new');
+        self.el.hand.appendChild(el);
+        self.handEls[c.id] = el;
+      }
+      el.classList.toggle('playable', !!v.canPass && !v.canDeclare);
+      el.classList.toggle('four', !!fourRank && c.rank === fourRank);
+      el.classList.toggle('selected', self.selected === c.id);
+      el.classList.remove('dim');
+      el.style.visibility = self.hidden['h:' + c.id] ? 'hidden' : '';
+      el.style.zIndex = String(i + 1);
+    });
+    for (var id in this.handEls) {
+      if (!keep[id]) { this.handEls[id].parentNode.removeChild(this.handEls[id]); delete this.handEls[id]; }
+    }
+    this.layoutHand(cards);
+  };
+
+  DonkeyTable.prototype.layoutHand = function (cards) {
+    var wrap = this.el.handWrap;
+    var cs = getComputedStyle(wrap);
+    var W = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var cw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hcw')) || 58;
+    var n = cards.length;
+    var step = n > 1 ? Math.min(cw + 8, (W - cw) / (n - 1)) : 0;
+    var total = n ? (n - 1) * step + cw : 0;
+    var offset = Math.max(0, (W - total) / 2);
+    this.el.hand.style.width = W + 'px';
+    var self = this;
+    cards.forEach(function (c, i) {
+      var el = self.handEls[c.id];
+      if (el) el.style.left = (offset + i * step) + 'px';
+    });
+  };
+
+  /* ~20×/s from the app loop: pass and tie-breaker countdowns. */
+  DonkeyTable.prototype.frame = function () {
+    var v = this.v;
+    if (!v) return;
+    var now = this.session.now();
+    var self = this;
+    var endsAt = null, total = 0, who = null;
+    if (v.phase === 'pass' && v.turnEndsAt) { endsAt = v.turnEndsAt; total = v.timing.passMs; who = v.turn; }
+    if (v.phase === 'tiebreak' && v.tiebreak.duel && v.tiebreak.duel.step !== 'reveal') {
+      endsAt = v.tiebreak.duel.endsAt; total = v.timing.duelChoiceMs; who = v.tiebreak.duel.challenger;
+    }
+    Object.keys(this.seatEls).forEach(function (pid) {
+      var s = self.seatEls[pid];
+      if (!s.ring) return;
+      if (pid === who && endsAt) {
+        s.ring.removeAttribute('hidden');
+        var left = Math.max(0, endsAt - now);
+        s.ringFg.setAttribute('stroke-dashoffset', String(RING * (1 - (total ? left / total : 0))));
+        s.ring.classList.toggle('urgent', left <= 5000);
+      } else s.ring.setAttribute('hidden', '');
+    });
+    var span = this.el.statusMain.querySelector('.secs');
+    if (who === this.me && endsAt) {
+      var left = Math.max(0, endsAt - now);
+      var sec = Math.ceil(left / 1000);
+      if (span) span.textContent = left <= 10000 ? '· ' + sec + 's' : '';
+      if (sec !== this.lastSecs) {
+        this.lastSecs = sec;
+        if (left <= 5000 && sec > 0) UI.Sound.play('tick');
+      }
+    } else if (span) span.textContent = '';
+  };
+
+  /* ---------- input ---------- */
+
+  DonkeyTable.prototype.tapCard = function (id, el) {
+    var v = this.v;
+    if (!v) return;
+    UI.Sound.unlock();
+    if (v.canDeclare) { this.shake(this.el.declare); UI.toast('You have four of a kind. Put them down!'); return; }
+    if (!v.canPass) {
+      if (v.phase === 'pass') UI.toast('Wait for your turn. ' + this.name(v.turn) + ' is passing.');
+      return;
+    }
+    if (this.selected === id) { this.pass(id); return; }
+    this.selected = id;
+    UI.buzz(8);
+    this.renderHand(v);
+    this.renderMe(v);
+  };
+
+  DonkeyTable.prototype.shake = function (el) {
+    if (!el) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+  };
+
+  DonkeyTable.prototype.pass = function (id) {
+    var res = this.session.act(this.me, 'pass', { cardId: id });
+    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+    this.selected = null;
+    UI.Sound.play('play');
+    UI.buzz(10);
+  };
+
+  DonkeyTable.prototype.declare = function () {
+    UI.Sound.unlock();
+    var res = this.session.act(this.me, 'declare');
+    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+    UI.buzz(20);
+  };
+
+  DonkeyTable.prototype.slap = function () {
+    var v = this.v;
+    if (!v || !v.canReact) return;
+    var res = this.session.act(this.me, 'react');
+    if (!res.ok) return;
+    UI.Sound.play('slap');
+    UI.buzz(25);
+  };
+
+  DonkeyTable.prototype.challenge = function (pid) {
+    var res = this.session.act(this.me, 'challenge', { target: pid });
+    if (!res.ok) UI.toast(UI.esc(res.message));
+  };
+
+  DonkeyTable.prototype.call = function (call) {
+    var res = this.session.act(this.me, 'call', { call: call });
+    if (!res.ok) UI.toast(UI.esc(res.message));
+  };
+
+  /* ---------- sounds and notices ---------- */
+
+  DonkeyTable.prototype.react = function (events, v) {
+    var me = this.me, self = this;
+    events.forEach(function (e) {
+      switch (e.type) {
+        case 'pass':
+          if (e.to === me) UI.Sound.play('draw');
+          else if (e.from !== me) UI.Sound.play('deal');
+          break;
+        case 'declare':
+          setTimeout(function () { UI.Sound.play('slap'); }, 380);
+          break;
+        case 'react':
+          if (e.player !== me) UI.Sound.play('thud');
+          break;
+        case 'roundEnd':
+          if (e.losers.indexOf(me) >= 0) setTimeout(function () { UI.Sound.play('bray'); }, 250);
+          else setTimeout(function () { UI.Sound.play('win'); }, 250);
+          break;
+        case 'timeout':
+          if (e.player === me) {
+            UI.toast(e.phase === 'pass' ? 'Time’s up. A card was passed for you.' : e.phase === 'choose' ? 'Time’s up. An opponent was picked for you.' : 'Time’s up. The likeliest call was made for you.');
+            UI.Sound.play('nope');
+          }
+          break;
+        case 'duelDraw':
+        case 'duel':
+          UI.Sound.play('flip');
+          break;
+        case 'gameOver':
+          setTimeout(function () { UI.Sound.play(e.winners.indexOf(me) >= 0 ? 'victory' : 'lose'); }, 900);
+          break;
+      }
+    });
+  };
+
+  /* ---------- play-by-play ---------- */
+
+  DonkeyTable.prototype.pushLog = function (html, cls) {
+    var item = { html: html, cls: cls || '' };
+    this.logItems.push(item);
+    if (this.logItems.length > 600) this.logItems.shift();
+    return item;
+  };
+
+  DonkeyTable.prototype.logEvent = function (e, v) {
+    var me = this.me, self = this;
+    var N = function (pid) { return self.name(pid); };
+    switch (e.type) {
+      case 'deal':
+        this.pushLog('Round ' + e.round + ' · ' + (e.starter === me ? 'you start' : N(e.starter) + ' starts') + '.', 'set');
+        if (e.mine) this.pushLog('Your hand: ' + sortHand(e.mine.hand).map(UI.cardText).join(' '));
+        break;
+      case 'pass':
+        if (e.from === me && e.mine) this.pushLog('You passed ' + UI.cardText(e.mine.card) + ' to ' + N(e.to) + (e.auto ? ' (time ran out)' : e.spare ? ' (your spare card)' : '') + '.');
+        else if (e.to === me && e.mine) this.pushLog(N(e.from) + ' passed you ' + UI.cardText(e.mine.card) + (e.spare ? ' (their spare card)' : '') + '.');
+        break;
+      case 'declare':
+        this.pushLog((e.player === me ? 'You' : N(e.player)) + ' put down four ' + RANKS[e.rank] + (e.auto ? ' (time ran out)' : '') + '!', 'win');
+        break;
+      case 'react':
+        this.pushLog((e.player === me ? 'You' : N(e.player)) + ' put ' + (e.player === me ? 'your' : 'their') + ' cards down in ' + secs(e.ms) + '.');
+        break;
+      case 'roundEnd':
+        e.losers.forEach(function (pid) {
+          var n = e.letters[pid];
+          self.pushLog((pid === me ? 'You get ' : N(pid) + ' gets ') + an(v.word.charAt(n - 1)) + ' ' + v.word.charAt(n - 1) + ': ' + v.word.slice(0, n) + '.', 'win');
+        });
+        break;
+      case 'gameEnd':
+        this.pushLog(list(e.donkeys.map(function (pid) { return pid === me ? 'You' : N(pid); })) + (e.donkeys.length > 1 ? ' spell' : (e.donkeys[0] === me ? ' spell' : ' spells')) + ' DONKEY.', 'set');
+        break;
+      case 'tiebreakStart':
+        e.groups.forEach(function (g) {
+          self.pushLog('Tie-breaker for ' + PLACES[g.place] + ' place: ' + list(g.players.map(N)) + '.', 'set');
+        });
+        break;
+      case 'duel':
+        this.pushLog(N(e.challenger) + ' (' + UI.cardText(e.cards[e.challenger]) + ') called ' + e.call + ' against ' + N(e.opponent) + ' (' + UI.cardText(e.cards[e.opponent]) + '): ' +
+          (e.right ? 'right' : 'wrong') + '. ' + N(e.out) + ' takes ' + PLACES[e.place] + '.');
+        break;
+      case 'gameOver':
+        this.pushLog('Final placings: ' + e.standings.map(function (pid, i) { return PLACES[i] + ' ' + N(pid); }).join(', ') + '.', 'win');
+        break;
+    }
+  };
+
+  /* ---------- end of game ---------- */
+
+  DonkeyTable.prototype.result = function (v) {
+    var me = this.me, self = this;
+    var donkeys = v.players.filter(function (p) { return p.letters >= v.word.length; }).map(function (p) { return p.id; });
+    var who = donkeys.map(function (pid) { return pid === me ? 'You' : self.name(pid); });
+    var settled = {};
+    this.session.state.events.forEach(function (e) {
+      if (e.type === 'tieSettled') settled[e.first] = e.place;
+    });
+    var rows = (v.standings || []).map(function (pid, i) {
+      var p = self.player(v, pid);
+      var idx = v.players.indexOf(p);
+      var paint = pid === me ? 'var(--ink)' : PAINTS[(idx - 1 + PAINTS.length) % PAINTS.length];
+      var word = v.word.split('').map(function (l, k) { return '<b class="' + (k < p.letters ? 'on' : '') + '">' + l + '</b>'; }).join('');
+      var note = settled[pid] != null ? ' <small>won the tie-breaker</small>' : '';
+      return '<li class="' + (i === 0 ? 'champ' : '') + '"><span class="place">' + PLACES[i] + '</span>' +
+        '<span class="avatar" style="--paint:' + paint + '">' + UI.esc((pid === me ? 'You' : p.name).charAt(0)) + '</span>' +
+        '<span>' + (pid === me ? 'You' : UI.esc(p.name)) + note + '</span><span class="dk-word small">' + word + '</span></li>';
+    }).join('');
+    return {
+      when: 'round ' + v.round,
+      why: list(who) + ' spelled DONKEY.',
+      body: '<div class="standings dk-standings"><ul>' + rows + '</ul></div>'
+    };
+  };
+
+  CT.UI.presenters = CT.UI.presenters || {};
+  CT.UI.presenters.donkey = DonkeyTable;
+})(window.CT);
+
 /* ---- src/ui/app.js ---- */
 /* ==========================================================================
    APP SHELL — menu, setup, sheets, saving, and the game loop.
@@ -3998,7 +5745,6 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
   var SETTINGS_KEY = 'cardtable.settings.v1';
   var STATS_KEY = 'cardtable.stats.v1';
   var BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
-  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
 
   function $(id) { return document.getElementById(id); }
 
@@ -4100,20 +5846,21 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
         '<h1 class="home-title">Pick a game</h1>';
       if (save) {
         var st = save.session.state;
-        var mine = st.players.filter(function (p) { return p.id === save.me; })[0];
         var mode = CT.getMode(save.session.modeId);
+        var line = mode && mode.describe ? mode.describe(st, save.me) : '';
         html += '<div class="resume"><p>' + UI.esc(mode ? mode.name : 'Game') + ' in progress' +
-          '<small>' + (st.setNo ? 'Set ' + st.setNo : 'Just dealt') + ' · you hold ' + (mine ? mine.hand.length : 0) + ' cards · ' + (st.players.length - 1) + ' opponents</small></p>' +
+          (line ? '<small>' + UI.esc(line) + '</small>' : '') + '</p>' +
           '<button class="btn btn-primary" id="h-resume" type="button">Resume</button></div>';
       }
       html += '<section class="modes">';
       modes.forEach(function (m) {
         var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
         html += '<article class="mode-tile" data-mode="' + m.id + '">' +
-          '<div class="mode-top"><h2 class="wordmark">' + UI.esc(m.name.toUpperCase()) + '</h2><div class="fan" aria-hidden="true"></div></div>' +
+          '<div class="mode-top"><h2 class="wordmark' + (m.name.length > 10 ? ' long' : '') + '">' + UI.esc(m.name.toUpperCase()) + '</h2>' +
+          '<div class="fan" aria-hidden="true" data-cards="' + (m.fan || ['QS', '9D', 'AH']).join(' ') + '"></div></div>' +
           '<p class="tag">' + UI.esc(m.tagline || '') + '</p>' +
-          '<p class="meta">' + m.players.min + '–' + m.players.max + ' players' + hand + ' · you vs computer players</p>' +
-          '<div class="mode-actions"><button class="btn btn-primary" type="button" data-play="' + m.id + '">Play ' + UI.esc(m.name) + '</button>' +
+          '<p class="meta">' + (m.players.min === m.players.max ? m.players.min : m.players.min + '–' + m.players.max) + ' players' + hand + ' · you vs computer players</p>' +
+          '<div class="mode-actions"><button class="btn btn-primary" type="button" data-play="' + m.id + '">Play ' + UI.esc(m.shortName || m.name) + '</button>' +
           '<button class="btn btn-ghost" type="button" data-rules="' + m.id + '">How to play</button></div>' +
           '</article>';
       });
@@ -4128,10 +5875,10 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
       var home = $('screen-home');
       home.innerHTML = html;
 
-      // decorative fan of cards on each tile
+      // decorative fan of cards on each tile (a mode can pick its own three)
       home.querySelectorAll('.fan').forEach(function (fan) {
-        [{ id: 'QS', rank: 'Q', suit: 'S' }, { id: '9D', rank: '9', suit: 'D' }, { id: 'AH', rank: 'A', suit: 'H' }].forEach(function (c) {
-          fan.appendChild(UI.makeCard(c));
+        fan.dataset.cards.split(' ').forEach(function (id) {
+          fan.appendChild(UI.makeCard({ id: id, rank: id.slice(0, -1), suit: id.slice(-1) }));
         });
       });
       var snd = $('h-sound'), mus = $('h-music');
@@ -4171,6 +5918,7 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
       var mode = CT.getMode(modeId);
       var cfg = this.modeSettings(mode);
       this.show('setup');
+      var fixed = mode.players.min === mode.players.max;
       var opp = '';
       for (var n = mode.players.min - 1; n <= mode.players.max - 1; n++) {
         opp += '<button type="button" data-opp="' + n + '" aria-pressed="' + (n === cfg.opponents) + '">' + n + '</button>';
@@ -4187,9 +5935,10 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
         '<header class="setup-head"><button class="icon-btn" id="s-back" type="button" aria-label="Back to games">' + UI.icon.back + '</button>' +
         '<span class="wordmark">' + UI.esc(mode.name.toUpperCase()) + '</span></header>' +
         '<div class="setup-body">' +
-          '<section class="field"><h3 id="lbl-opp">Opponents</h3><div class="seg" role="group" aria-labelledby="lbl-opp">' + opp + '</div>' +
+          '<section class="field"><h3 id="lbl-opp">' + (fixed ? 'Players' : 'Opponents') + '</h3>' +
+          (fixed ? '' : '<div class="seg" role="group" aria-labelledby="lbl-opp">' + opp + '</div>') +
           '<p class="help" id="help-opp"></p></section>' +
-          '<p class="eyebrow">Rule choices</p>' + opts +
+          (opts ? '<p class="eyebrow">Game choices</p>' + opts : '') +
         '</div>' +
         '<div class="setup-foot"><button class="btn btn-primary btn-wide" id="s-deal" type="button">Deal</button>' +
         '<button class="link-btn" id="s-rules" type="button">How to play</button></div>';
@@ -4197,7 +5946,9 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
       var paint = function () {
         var c = self.modeSettings(mode);
         $('screen-setup').querySelectorAll('[data-opp]').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.dataset.opp === c.opponents)); });
-        $('help-opp').textContent = c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
+        $('help-opp').textContent = fixed
+          ? 'Always ' + (c.opponents + 1) + ' at the table: you and ' + c.opponents + ' computer players.'
+          : c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
         (mode.options || []).forEach(function (o) {
           $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });
           var choice = o.choices.filter(function (x) { return x.value === c.options[o.id]; })[0];
@@ -4482,56 +6233,32 @@ CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
       UI.store.del(SAVE_KEY);
     },
 
+    /* The end-of-game sheet. The table screen fills in what's particular to
+       its game (result: { when, title, why, body, after(sheet) }). */
     showResult: function (v) {
       var self = this;
       if (this.tutorial) return;   // the tutorial explains the ending itself
       this.record(v);
       var me = 'p0';
-      var byId = {};
-      v.players.forEach(function (p, i) { byId[p.id] = { p: p, i: i }; });
+      var names = {};
+      v.players.forEach(function (p) { names[p.id] = p.id === me ? 'You' : p.name; });
       var winners = v.winners || [];
       var iWon = winners.indexOf(me) >= 0;
-      var raw = winners.map(function (id) { return id === me ? 'You' : byId[id].p.name; });
-      var names = raw.map(UI.esc);
-      var title;
-      if (winners.length > 1) title = iWon ? 'SHARED WIN' : raw.join(' & ').toUpperCase() + ' WIN';
-      else title = iWon ? 'YOU WIN' : raw[0].toUpperCase() + ' WINS';
-      title = UI.esc(title);
-
-      var why, cards = '';
-      if (v.winReason === 'flush') {
-        why = (winners.length > 1 ? names.join(' and ') + ' each held' : (iWon ? 'You held' : names[0] + ' held')) + ' one card of every suit on the deal: a Flush.';
-        winners.forEach(function (id) {
-          cards += '<div class="result-cards" aria-label="' + (id === me ? 'Your' : UI.esc(byId[id].p.name) + '’s') + ' Flush"></div>';
-        });
-      } else {
-        why = (iWon ? 'You played your last card' : names[0] + ' played their last card') + ' in set ' + v.setNo + '.';
-      }
-      var standings = v.players.slice().sort(function (a, b) {
-        var aw = winners.indexOf(a.id) >= 0 ? -1 : 0, bw = winners.indexOf(b.id) >= 0 ? -1 : 0;
-        return (aw - bw) || (a.handCount - b.handCount);
-      }).map(function (p) {
-        var paint = p.id === me ? 'var(--ink)' : PAINTS[(byId[p.id].i - 1 + PAINTS.length) % PAINTS.length];
-        return '<li class="' + (winners.indexOf(p.id) >= 0 ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc((p.id === me ? 'You' : p.name).charAt(0)) + '</span>' +
-          '<span>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</span><span class="left">' + p.handCount + (p.handCount === 1 ? ' card' : ' cards') + ' left</span></li>';
-      }).join('');
-
+      var raw = winners.map(function (id) { return names[id]; });
+      var title = winners.length > 1
+        ? (iWon ? 'SHARED WIN' : raw.join(' & ').toUpperCase() + ' WIN')
+        : (iWon ? 'YOU WIN' : String(raw[0] || '').toUpperCase() + ' WINS');
+      var r = (this.table && this.table.result) ? this.table.result(v) : {};
       var sheet = this.openSheet('result',
-        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + ' · ' + (v.winReason === 'flush' ? 'on the deal' : 'set ' + v.setNo) + '</p>' +
-        '<h2 class="wordmark">' + title + '</h2>' +
-        '<p class="result-why">' + why + '</p>' + cards +
-        '<div class="standings"><ul>' + standings + '</ul></div>' +
+        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
+        '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
+        (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
         '<div class="result-actions">' +
           '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
           '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
           '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
         '</div>', { cls: 'result', center: true, label: 'Game result' });
-      if (v.winReason === 'flush') {
-        var rows = sheet.querySelectorAll('.result-cards');
-        winners.forEach(function (id, k) {
-          (byId[id].p.hand || []).forEach(function (c) { rows[k].appendChild(UI.makeCard(c)); });
-        });
-      }
+      if (r.after) r.after(sheet);
       $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
       $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
       $('r-table').addEventListener('click', function () { self.closeSheet(); });

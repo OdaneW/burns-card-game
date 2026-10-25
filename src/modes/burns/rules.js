@@ -583,6 +583,13 @@
     ];
   }
 
+  /* One line for the "game in progress" card on the home screen. */
+  function describe(state, pid) {
+    var me = player(state, pid);
+    return (state.setNo ? 'Set ' + state.setNo : 'Just dealt') + ' · you hold ' + (me ? me.hand.length : 0) +
+      ' cards · ' + (state.players.length - 1) + ' opponents';
+  }
+
   CT.registerMode({
     id: 'burns',
     name: 'Burns',
@@ -593,6 +600,7 @@
     defaultTiming: DEFAULT_TIMING,
     handSize: HAND_SIZE,
     rules: rules,
+    describe: describe,
     createGame: createGame,
     act: act,
     tick: tick,

@@ -12,8 +12,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Rule scenarios and simulated games
+      - name: Burns rules and simulated games
         run: node test/burns.test.js
+      - name: Pass-Roun Donkey rules and simulated games
+        run: node test/donkey.test.js
       - name: Built app matches the source
         run: |
           node build.js

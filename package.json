@@ -1,11 +1,11 @@
 {
   "name": "burns-card-game",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "private": true,
-  "description": "A phone-first card game with several game modes. First mode: Burns.",
+  "description": "A phone-first card game with several game modes: Burns and Pass-Roun Donkey.",
   "scripts": {
     "build": "node build.js",
-    "test": "node test/burns.test.js",
+    "test": "node test/burns.test.js && node test/donkey.test.js",
     "icons": "node tools/make-icons.js",
     "ui-test": "node test/ui-run.js test/shots phone"
   },

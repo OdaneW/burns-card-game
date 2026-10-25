@@ -981,6 +981,48 @@
     if (e.type === 'setStart') this.lastSetNo = e.setNo;
   };
 
+  /* ---------- end of game ---------- */
+
+  /* What the end-of-game sheet shows for Burns: how it was won, any Flush,
+     and everyone's cards left. */
+  BurnsTable.prototype.result = function (v) {
+    var me = this.me;
+    var byId = {};
+    v.players.forEach(function (p, i) { byId[p.id] = { p: p, i: i }; });
+    var winners = v.winners || [];
+    var iWon = winners.indexOf(me) >= 0;
+    var names = winners.map(function (id) { return id === me ? 'You' : UI.esc(byId[id].p.name); });
+    var why, cards = '';
+    if (v.winReason === 'flush') {
+      why = (winners.length > 1 ? names.join(' and ') + ' each held' : (iWon ? 'You held' : names[0] + ' held')) + ' one card of every suit on the deal: a Flush.';
+      winners.forEach(function (id) {
+        cards += '<div class="result-cards" aria-label="' + (id === me ? 'Your' : UI.esc(byId[id].p.name) + '’s') + ' Flush"></div>';
+      });
+    } else {
+      why = (iWon ? 'You played your last card' : names[0] + ' played their last card') + ' in set ' + v.setNo + '.';
+    }
+    var standings = v.players.slice().sort(function (a, b) {
+      var aw = winners.indexOf(a.id) >= 0 ? -1 : 0, bw = winners.indexOf(b.id) >= 0 ? -1 : 0;
+      return (aw - bw) || (a.handCount - b.handCount);
+    }).map(function (p) {
+      var paint = p.id === me ? 'var(--ink)' : PAINTS[(byId[p.id].i - 1 + PAINTS.length) % PAINTS.length];
+      return '<li class="' + (winners.indexOf(p.id) >= 0 ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc((p.id === me ? 'You' : p.name).charAt(0)) + '</span>' +
+        '<span>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</span><span class="left">' + p.handCount + (p.handCount === 1 ? ' card' : ' cards') + ' left</span></li>';
+    }).join('');
+    return {
+      when: v.winReason === 'flush' ? 'on the deal' : 'set ' + v.setNo,
+      why: why,
+      body: cards + '<div class="standings"><ul>' + standings + '</ul></div>',
+      after: function (sheet) {
+        if (v.winReason !== 'flush') return;
+        var rows = sheet.querySelectorAll('.result-cards');
+        winners.forEach(function (id, k) {
+          (byId[id].p.hand || []).forEach(function (c) { rows[k].appendChild(UI.makeCard(c)); });
+        });
+      }
+    };
+  };
+
   CT.UI.presenters = CT.UI.presenters || {};
   CT.UI.presenters.burns = BurnsTable;
 })(window.CT);

@@ -16,11 +16,14 @@ const SOURCES = [
   'src/engine/session.js',
   'src/modes/burns/rules.js',
   'src/modes/burns/bot.js',
+  'src/modes/donkey/rules.js',
+  'src/modes/donkey/bot.js',
   'src/ui/kit.js',
   'src/ui/music.js',
   'src/ui/coach.js',
   'src/modes/burns/ui.js',
   'src/modes/burns/tutorial.js',
+  'src/modes/donkey/ui.js',
   'src/ui/app.js'
 ];
 const FONTS = [
