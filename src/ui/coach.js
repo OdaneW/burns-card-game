@@ -47,8 +47,22 @@
     this.titleEl.textContent = o.title || '';
     this.titleEl.hidden = !o.title;
     this.textEl.innerHTML = o.text || '';
+    this.getTarget = o.target || null;
+    this.where = o.place || 'auto';
+    this.useDim = o.dim !== false;
+    this.spot.classList.toggle('plain', !this.useDim);
+    this.bubble.classList.remove('enter');
+    void this.bubble.offsetWidth;
+    this.bubble.classList.add('enter');
+    this.setActions(o.actions);
+    this.loop();
+  };
+
+  /* Swap the buttons without re-showing the bubble (e.g. add Next to a note
+     the table has already caught up with). */
+  Coach.prototype.setActions = function (actions) {
+    actions = actions || [];
     this.actionsEl.innerHTML = '';
-    var actions = o.actions || [];
     actions.forEach(function (a) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -58,16 +72,8 @@
       this.actionsEl.appendChild(b);
     }, this);
     this.actionsEl.hidden = !actions.length;
-    this.getTarget = o.target || null;
-    this.where = o.place || 'auto';
-    this.useDim = o.dim !== false;
-    this.spot.classList.toggle('plain', !this.useDim);
-    this.bubble.classList.remove('enter');
-    void this.bubble.offsetWidth;
-    this.bubble.classList.add('enter');
     var primary = this.actionsEl.querySelector('.btn-primary');
     if (primary) try { primary.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
-    this.loop();
   };
 
   Coach.prototype.setText = function (html) {

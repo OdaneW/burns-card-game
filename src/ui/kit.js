@@ -108,7 +108,9 @@
     el.innerHTML = html;
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.classList.remove('show'); }, ms || 1900);
+    // up for at least as long as it takes to read; longer messages stay longer
+    var read = 1200 + 55 * (el.textContent || '').length;
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, Math.max(ms || 1900, read));
   };
 
   /* ---------- storage (per device; may be unavailable) ---------- */

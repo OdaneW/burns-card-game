@@ -9,6 +9,11 @@
   var UI = CT.UI;
   var Burns = CT.getMode('burns');
 
+  // A watch note that reads in this long or less just stays up a little longer;
+  // anything longer waits for Next.
+  var SHORT_NOTE_MS = 5500;
+
+  function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
   function C(id) { return { id: id, rank: id.slice(0, -1), suit: id.slice(-1) }; }
   function val(c) { return CT.rankValue(c.rank, true); }
   function S(suit) { return UI.suit(suit); }
@@ -52,7 +57,7 @@
         { next: true, target: 'lead', text: 'Everyone gets 4 cards, then one more is turned face up: the starter. Its suit, ' + S('D') + ' diamonds, is the suit everyone must play in the first set.' },
         { next: true, title: 'Lucky deal?', text: 'There’s an optional Flush rule you can switch on before a game: if your 4 starting cards are all different suits, you win on the spot. It’s off here, so let’s play.' },
         { target: 'card:KD', text: 'Play a diamond. Tap your ' + K('KD') + ' once to pick it, then tap it again, or press Play.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
-        { target: 'seats', text: 'Your card lies face down, so Mia and Dex can’t see it. When everyone has played, all the cards are turned over together.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { target: 'seats', watch: true, text: 'Your card lies face down, so Mia and Dex can’t see it. When everyone has played, all the cards are turned over together.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
         { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
           return 'The highest card wins the set. Cards rank from 2 (lowest) up to 10, Jack, Queen, King and Ace (highest). ' + winText(ctx);
         } }
@@ -66,7 +71,7 @@
       steps: [
         { next: true, target: 'hand', title: 'Leading', text: 'The winner of a set leads the next one. This time that’s you: play any card you like, and its suit becomes the suit everyone must follow.' },
         { target: 'hand', text: 'Lead one of your hearts.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
-        { target: 'seats', text: 'The leader’s card is played face up, so Mia and Dex can see what they have to beat. Neither has a heart, so they must draw from the deck until one turns up.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { target: 'seats', watch: true, text: 'The leader’s card is played face up, so Mia and Dex can see what they have to beat. Neither has a heart, so they must draw from the deck until one turns up.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
         { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
           return 'Every card they drew stays in their hand. That’s the price of not having the suit. ' + winText(ctx);
         } }
@@ -79,7 +84,7 @@
       deck: ['10H', '4S', 'AS', '5D'],
       bots: { p2: { lead: 'KS' } },
       steps: [
-        { target: 'lead', title: 'Drawing', text: 'Dex won the last set, so Dex leads. Watch what he plays.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'lead', watch: true, title: 'Drawing', text: 'Dex won the last set, so Dex leads. Watch what he plays.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
         { target: 'deck', text: 'Dex led the ' + K('KS') + ', and you don’t have any spades. Tap the deck to draw, and keep going until a spade turns up.', done: function (ctx) { return ctx.v.canFollow || ctx.me.committed; } },
         { text: function (ctx) {
           var best = bestOfSuit(ctx);
@@ -87,7 +92,7 @@
           if (val(best) > val(C('KS'))) return 'You found the ' + UI.cardText(best) + ', and it beats Dex’s ' + K('KS') + '. Play it!';
           return 'You found the ' + UI.cardText(best) + ', but Dex’s ' + K('KS') + ' beats it. Play it anyway, or tap the deck again to look for a higher spade. Every card you draw stays in your hand, so it’s a gamble.';
         }, done: function (ctx) { return ctx.me.committed; }, after: 400 },
-        { target: 'seats', text: 'Now everyone’s card is in…', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { target: 'seats', watch: true, text: 'Now everyone’s card is in…', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
         { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
           var mine = myPlayed(ctx);
           var lead = mine && mine.id === 'AS'
@@ -104,7 +109,7 @@
       deck: ['7C'], fillDeck: false,
       bots: { p1: { lead: 'JH' } },
       steps: [
-        { target: 'deck', title: 'When the deck runs out', text: 'Mia leads this set. Look at the deck: only one card is left.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'deck', watch: true, title: 'When the deck runs out', text: 'Mia leads this set. Look at the deck: only one card is left.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
         { target: 'deck', text: 'Mia led the ' + K('JH') + ' and you have no hearts. Draw the last card.', done: function (ctx) { return ctx.v.deckCount === 0 || ctx.me.committed; } },
         { target: 'seats', text: 'The deck is empty and you still have no hearts, so you can’t play this set. Instead, pick up one card from the set into your hand. In a real game you have 10 seconds. Tap a glowing card.', done: function (ctx) { return !!ctx.me.took || ctx.v.phase === 'reveal'; }, after: 900 },
         { next: true, target: 'slot:p1', text: function (ctx) {
@@ -119,8 +124,10 @@
       leader: 'p0', setNo: 5,
       timing: { turnMs: 8000 },
       steps: [
+        // Explain first with the clock stopped; the countdown starts on Next.
+        { next: true, target: 'lead', place: 'top', dim: false, title: 'The time limit', text: 'Each set has a time limit, and the ring around the middle counts it down. You lead this set. When you tap Next, you’ll have 8 seconds.' },
         // The ring is outlined but the hand stays bright: that's where the tap happens.
-        { target: 'lead', place: 'top', dim: false, title: 'The time limit', text: 'Each set has a time limit, and the ring around the middle counts it down. You lead this set and have 8 seconds. Lead a card, or wait and see what happens when time runs out.', done: function (ctx) { return ctx.me.committed; }, after: 900 },
+        { target: 'lead', place: 'top', dim: false, text: 'Lead a card, or wait and see what happens when time runs out.', done: function (ctx) { return ctx.me.committed; }, after: 900 },
         { next: true, text: function (ctx) {
           var first = saw(ctx, 'timeout') ? 'Time ran out, so a random card was led for you.' : 'You led in time. If you hadn’t, a random card would have been led for you.';
           return first + ' Real games give 30 seconds by default, and you can change that on the setup screen. If you can’t follow when time runs out, the game draws for you until the suit turns up.';
@@ -133,7 +140,7 @@
       leader: 'p0', setNo: 6,
       steps: [
         { target: 'card:AC', title: 'Winning', text: 'You have one card left. Lead it. If nobody else runs out of cards this set, you win the game.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
-        { target: 'seats', text: 'Mia and Dex play their clubs…', done: function (ctx) { return ctx.v.phase === 'over'; }, after: 1800 },
+        { target: 'seats', watch: true, text: 'Mia and Dex play their clubs…', done: function (ctx) { return ctx.v.phase === 'over'; }, after: 1800 },
         { final: true, title: 'You win!', text: 'You emptied your hand first. That’s Burns: follow the suit, draw when you can’t (or when you want a better card), pick up when the deck runs out, and be the first to empty your hand.' }
       ]
     }
@@ -298,6 +305,7 @@
     var read = !!(s.next || s.final);
     // Reading: dim the table. Doing: keep the hand, deck and Play button clear.
     var place = s.place || (!target ? (read ? 'center' : 'top') : (/^(card:|hand)/.test(target) ? 'top' : 'auto'));
+    this.shownAt = now();
     this.coach.show({
       step: 'Lesson ' + (this.index + 1) + ' of ' + LESSONS.length + ' · ' + lesson.title,
       title: s.title,
@@ -309,7 +317,16 @@
     });
   };
 
-  /* After every change at the table: has the player done what this step asks? */
+  /* Roughly how long the note on screen takes to read, at an unhurried pace. */
+  Tutorial.prototype.readingTime = function () {
+    return 1500 + 60 * (this.coach.textEl.textContent || '').length;
+  };
+
+  /* After every change at the table: has the player done what this step asks?
+     A step the player completes moves on right away: they've read it. A
+     "watch" note explains what Mia and Dex are doing, and the table can get
+     there before the reader does, so then the table waits: a short note stays
+     up until it has had time to be read, and a longer one gets a Next button. */
   Tutorial.prototype.check = function () {
     var s = this.current();
     if (!s || s.next || s.final || this.advancing) return;
@@ -317,8 +334,16 @@
     if (typeof s.text === 'function') this.coach.setText(s.text(ctx));
     if (!s.done(ctx)) return;
     this.advancing = true;
-    var self = this;
-    this.timer = setTimeout(function () { self.nextStep(); }, s.after || 400);
+    var self = this, after = s.after || 400;
+    var owed = this.readingTime() - (now() - this.shownAt);
+    if (!s.watch || owed <= after) {
+      this.timer = setTimeout(function () { self.nextStep(); }, after);
+      return;
+    }
+    this.holding = true;
+    this.session.pause();
+    if (this.readingTime() <= SHORT_NOTE_MS) this.timer = setTimeout(function () { self.nextStep(); }, owed);
+    else this.coach.setActions([{ label: 'Next', primary: true, onClick: function () { self.nextStep(); } }]);
   };
 
   Tutorial.prototype.exit = function (to) {

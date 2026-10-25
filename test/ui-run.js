@@ -197,6 +197,26 @@ async function playGame(p, tag, want) {
       await p.tap('[data-rules="burns"]');
       await sleep(350);
       await shot(p, '30-how-to-play');
+      // Log each note: when it appeared, how it was meant to end, and its reading time.
+      await p.evaluate(() => {
+        const T = CT.UI.tutorials.burns.prototype;
+        const log = window.__tut = [];
+        const render = T.render, check = T.check;
+        T.render = function () {
+          render.call(this);
+          const s = this.current();
+          log.push({ key: 'L' + (this.index + 1) + '-S' + (this.step + 1), t: performance.now(), reading: this.readingTime(),
+            kind: s.next || s.final ? 'read' : s.watch ? 'watch' : 'act', how: s.next || s.final ? 'next' : 'player' });
+        };
+        T.check = function () {
+          const was = this.advancing;
+          check.call(this);
+          const s = this.current(), last = log[log.length - 1];
+          if (!was && this.advancing && s && s.watch && last) {
+            last.how = !this.holding ? 'auto' : document.querySelector('.coach-actions:not([hidden]) .btn-primary') ? 'next' : 'held-auto';
+          }
+        };
+      });
       await p.tap('#r-tutorial');
       await sleep(500);
       const seen = [];
@@ -205,14 +225,15 @@ async function playGame(p, tag, want) {
         const st = await p.evaluate(() => {
           const t = CT.App.tutorial; if (!t) return { done: true };
           const s = t.current(); const v = CT.App.session.view('p0', { events: false });
-          return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final,
+          const held = !s.next && !s.final && !!document.querySelector('.coach-actions:not([hidden]) .btn-primary');
+          return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final, held,
             canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake, playable: v.playable };
         });
         if (st.done) break;
         const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
         if (!seen.includes(key)) { seen.push(key); await sleep(500); await shot(p, '31-tut-' + key); }
         if (st.final) break;
-        if (st.next) { await p.tap('.coach-actions .btn-primary'); await sleep(300); continue; }
+        if (st.next || st.held) { await p.tap('.coach-actions .btn-primary'); await sleep(300); continue; }
         if (st.canTake) { const t = await p.$('[data-take]'); if (t) await t.tap(); await sleep(300); continue; }
         if (st.mustDraw) { await p.tap('#t-deck'); await sleep(620); continue; }
         if (st.lesson === 2 && st.mayDraw && !drewExtra) { drewExtra = true; await sleep(600); await p.tap('#t-deck'); await sleep(620); continue; }
@@ -230,6 +251,11 @@ async function playGame(p, tag, want) {
       await sleep(400);
       const after = await p.evaluate(() => ({ screen: CT.App.screen, tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1') }));
       console.log('  steps:', seen.join(' '));
+      // Notes that left on their own must have stayed up for their reading time.
+      const notes = await p.evaluate(() => window.__tut.map((e, i, a) => Object.assign({}, e, { shown: a[i + 1] ? Math.round(a[i + 1].t - e.t) : null })));
+      notes.filter(n => n.kind === 'watch').forEach(n => console.log('  watch note ' + n.key + ': ' + n.how + ', up ' + n.shown + ' ms, reading time ' + n.reading + ' ms'));
+      const rushed = notes.filter(n => (n.how === 'auto' || n.how === 'held-auto') && n.shown != null && n.shown < n.reading);
+      console.log('  notes that left before their reading time:', rushed.length ? rushed.map(n => n.key + ' (' + n.shown + '/' + n.reading + ' ms)') : 'none');
       console.log('  final title:', finalText, '· after leaving:', after);
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
