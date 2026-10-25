@@ -566,6 +566,54 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .toast .suit-red { color: var(--suit-red); }
 .toast .suit-black { color: var(--suit-black); }
 
+/* ---------- tutorial ---------- */
+.tut-card {
+  display: grid; gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(244, 185, 66, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(244, 185, 66, .45);
+}
+.tut-card h3 { font: 800 17px/1.2 var(--font-ui); color: var(--marigold); }
+.tut-card p { margin-top: 3px; font-size: 14px; color: var(--ink); }
+.coach { position: fixed; inset: 0; z-index: 55; pointer-events: none; }
+.coach-dim { position: fixed; inset: 0; background: rgba(4, 20, 19, .5); transition: opacity .25s; }
+.coach-spot {
+  position: fixed; display: none;
+  border-radius: 16px;
+  box-shadow: 0 0 0 200vmax rgba(4, 20, 19, .5);
+  outline: 2.5px solid var(--marigold);
+  transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease;
+  animation: spot 1.6s ease-in-out infinite;
+}
+.coach-spot.plain { box-shadow: none; }
+.coach-bubble {
+  position: fixed; left: 12px; right: 12px; margin-inline: auto;
+  width: auto; max-width: 380px; box-sizing: border-box;
+  pointer-events: auto;
+  display: grid; gap: 8px;
+  padding: 12px 16px 14px;
+  border-radius: 16px;
+  background: var(--card); color: var(--ink-on-paint);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .45);
+}
+.coach-bubble.enter { animation: rise .26s cubic-bezier(.2, .8, .2, 1); }
+.coach-arrow { position: absolute; width: 14px; height: 14px; background: var(--card); transform: rotate(45deg); display: none; }
+.coach-arrow.top { display: block; top: -6px; }
+.coach-arrow.bottom { display: block; bottom: -6px; }
+.coach-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coach-step { font: 800 11px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: #8A5D0C; }
+.coach-skip { border: 0; background: none; padding: 4px 0 4px 8px; font: 600 13px var(--font-ui); color: #4E605B; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; }
+.coach-title { font: 800 19px/1.2 var(--font-ui); }
+.coach-text { font: 500 15px/1.45 var(--font-ui); text-wrap: pretty; }
+.coach-text .suit-red, .coach-text .ct.suit-red { color: var(--suit-red); }
+.coach-text .suit-black, .coach-text .ct.suit-black { color: var(--suit-black); }
+.coach-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.coach-actions .btn { padding: 11px 18px; font-size: 15px; }
+.btn-plain { background: transparent; color: var(--ink-on-paint); box-shadow: inset 0 0 0 1.5px rgba(14, 43, 41, .3); }
+.btn-plain:active { background: rgba(14, 43, 41, .06); }
+@keyframes spot { 0%, 100% { outline-color: var(--marigold); } 50% { outline-color: rgba(244, 185, 66, .35); } }
+
 /* ---------- motion ---------- */
 @keyframes ring { 0%, 100% { box-shadow: 0 0 0 2px var(--board), 0 0 0 3px rgba(244, 185, 66, .25); } 50% { box-shadow: 0 0 0 2px var(--board), 0 0 0 5px rgba(244, 185, 66, .9); } }
 @keyframes burn {

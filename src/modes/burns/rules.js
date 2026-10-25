@@ -65,7 +65,13 @@
 
   function suitName(suit) { return CT.SUIT_INFO[suit].single; }
 
-  function turnMs(state) { return (Number(state.options.turnTime) || 30) * 1000; }
+  /* Time limit per lead and per follow, in ms. timing.turnMs overrides the rule
+     choice (the tutorial uses it); 0 means no limit. */
+  function turnMs(state) {
+    if (state.timing.turnMs != null) return state.timing.turnMs;
+    return (Number(state.options.turnTime) || 30) * 1000;
+  }
+  function deadline(state, now) { var ms = turnMs(state); return ms ? now + ms : null; }
 
   function secretFor(pid, data) { var s = {}; s[pid] = data; return s; }
 
@@ -168,7 +174,7 @@
       state.leader = leaderId;
       state.suit = null;
       state.phase = 'lead';
-      state.turnEndsAt = now + turnMs(state);
+      state.turnEndsAt = deadline(state, now);
       emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId, turnEndsAt: state.turnEndsAt });
     }
   }
@@ -176,7 +182,7 @@
   /* The suit is known: start the clock. Anyone who can't follow while the
      deck is already empty is stuck straight away. */
   function beginFollow(state, now) {
-    state.turnEndsAt = now + turnMs(state);
+    state.turnEndsAt = deadline(state, now);
     if (state.deck.length === 0) markStuck(state, now);
     checkFollowComplete(state, now);
   }

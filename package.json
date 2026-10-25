@@ -1,6 +1,6 @@
 {
   "name": "burns-card-game",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "A phone-first card game with several game modes. First mode: Burns.",
   "scripts": {

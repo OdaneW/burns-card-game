@@ -18,7 +18,9 @@ const SOURCES = [
   'src/modes/burns/bot.js',
   'src/ui/kit.js',
   'src/ui/music.js',
+  'src/ui/coach.js',
   'src/modes/burns/ui.js',
+  'src/modes/burns/tutorial.js',
   'src/ui/app.js'
 ];
 const FONTS = [

@@ -247,6 +247,42 @@
       this.save();
     },
 
+    /* ---------- tutorial ---------- */
+
+    startTutorial: function (modeId) {
+      var Tutorial = UI.tutorials && UI.tutorials[modeId];
+      if (!Tutorial) return;
+      if (this.session && !this.tutorial) this.save();   // a game in progress stays resumable
+      this.closeSheet(true);
+      this.tutorial = new Tutorial(this);
+      this.tutorial.start();
+    },
+
+    attachTutorial: function (session) {
+      if (this.table) this.table.destroy();
+      this.session = session;
+      this.show('table');
+      var Presenter = UI.presenters[session.mode.presenter];
+      this.table = new Presenter(this, session, 'p0', { restored: true });
+    },
+
+    endTutorial: function (to) {
+      this.tutorial = null;
+      this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.table = null;
+      this.session = null;
+      if (to === 'setup') this.openSetup('burns');
+      else this.showHome();
+    },
+
+    /* Let the game clock run, unless something is in the way. */
+    resumePlay: function () {
+      if (!this.session || this.screen !== 'table' || this.sheet || document.hidden) return;
+      if (this.tutorial && this.tutorial.holding) return;
+      this.session.resume();
+    },
+
     resume: function (save) {
       var session = CT.Session.restore(save.session);
       if (!session) { UI.store.del(SAVE_KEY); return false; }
@@ -256,12 +292,12 @@
     },
 
     currentSave: function () {
-      if (!this.session || this.session.state.phase === 'over') return null;
+      if (!this.session || this.tutorial || this.session.state.phase === 'over') return null;
       return { session: this.session.serialize(), game: this.game, me: 'p0', savedAt: Date.now() };
     },
 
     save: function () {
-      if (!this.session) return;
+      if (!this.session || this.tutorial) return;
       if (this.session.state.phase === 'over') { UI.store.del(SAVE_KEY); return; }
       var s = this.currentSave();
       if (s) UI.store.set(SAVE_KEY, s);
@@ -287,7 +323,7 @@
         return;
       }
       if (UI.Music.on) UI.Music.start();
-      if (this.session && !this.sheet && this.screen === 'table') this.session.resume();
+      this.resumePlay();
     },
 
     toggleMusic: function () {
@@ -324,7 +360,7 @@
       ov.innerHTML = '';
       this.sheet = null;
       this.logOpen = false;
-      if (!silent && this.session && this.screen === 'table' && !document.hidden) this.session.resume();
+      if (!silent) this.resumePlay();
     },
 
     sheetHead: function (title) {
@@ -345,14 +381,34 @@
         var c = o.choices.filter(function (x) { return x.value === options[o.id]; })[0];
         return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
       }).join(' · ');
-      var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) +
+      var self = this;
+      var Tutorial = !this.tutorial && UI.tutorials && UI.tutorials[modeId];
+      var inGame = this.session && this.session.state.phase !== 'over';
+      var tutorial = Tutorial
+        ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.lessons.length +
+          ' quick lessons, about three minutes.' + (inGame ? ' Your current game is saved, so you can resume it afterwards.' : '') + '</p></div>' +
+          '<button class="btn btn-primary" type="button" id="r-tutorial">Start the tutorial</button></div>' +
+          '<p class="eyebrow">Or read the rules</p>'
+        : '';
+      var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) + tutorial +
         '<div class="rules">' + sections + (chosen ? '<p class="house">Rule choices for this table · ' + chosen + '</p>' : '') + '</div>' +
-        '<button class="btn btn-primary" type="button" data-close>Got it</button>', { label: 'How to play' });
+        '<button class="btn ' + (Tutorial ? 'btn-ghost' : 'btn-primary') + '" type="button" data-close>Got it</button>', { label: 'How to play' });
       this.wireClose(sheet);
+      if (Tutorial) $('r-tutorial').addEventListener('click', function () { self.startTutorial(modeId); });
     },
 
     openMenu: function () {
       var self = this;
+      if (this.tutorial) {
+        var t = this.openSheet('menu', this.sheetHead('Tutorial') +
+          '<div class="menu-list">' +
+            '<button class="btn btn-primary" type="button" data-close>Keep going</button>' +
+            '<button class="btn btn-ghost" type="button" id="m-leave">Leave tutorial</button>' +
+          '</div>', { label: 'Tutorial menu' });
+        this.wireClose(t);
+        $('m-leave').addEventListener('click', function () { self.tutorial.exit(); });
+        return;
+      }
       var sheet = this.openSheet('menu', this.sheetHead('Game menu') +
         '<div class="menu-list">' +
           '<button class="btn btn-primary" type="button" data-close>Keep playing</button>' +
@@ -416,6 +472,7 @@
 
     showResult: function (v) {
       var self = this;
+      if (this.tutorial) return;   // the tutorial explains the ending itself
       this.record(v);
       var me = 'p0';
       var byId = {};

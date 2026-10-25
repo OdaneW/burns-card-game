@@ -166,6 +166,49 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (SCENARIO === 'tutorial') {
+      // Follow the tutorial's instructions from How to play to the end.
+      const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 3 });
+      await p.tap('[data-rules="burns"]');
+      await sleep(350);
+      await shot(p, '30-how-to-play');
+      await p.tap('#r-tutorial');
+      await sleep(500);
+      const seen = [];
+      let guard = 0, drewExtra = false;
+      while (guard++ < 800) {
+        const st = await p.evaluate(() => {
+          const t = CT.App.tutorial; if (!t) return { done: true };
+          const s = t.current(); const v = CT.App.session.view('p0', { events: false });
+          return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final,
+            canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake, playable: v.playable };
+        });
+        if (st.done) break;
+        const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
+        if (!seen.includes(key)) { seen.push(key); await sleep(500); await shot(p, '31-tut-' + key); }
+        if (st.final) break;
+        if (st.next) { await p.tap('.coach-actions .btn-primary'); await sleep(300); continue; }
+        if (st.canTake) { const t = await p.$('[data-take]'); if (t) await t.tap(); await sleep(300); continue; }
+        if (st.mustDraw) { await p.tap('#t-deck'); await sleep(620); continue; }
+        if (st.lesson === 2 && st.mayDraw && !drewExtra) { drewExtra = true; await sleep(600); await p.tap('#t-deck'); await sleep(620); continue; }
+        if (st.lesson === 4 && st.canLead) { await sleep(400); continue; }      // let the 8-second limit run out
+        if (st.canLead || st.canFollow) {
+          const id = st.playable[st.playable.length - 1];
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(200);
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(300);
+          continue;
+        }
+        await sleep(250);
+      }
+      const finalText = await p.evaluate(() => document.querySelector('.coach-title').textContent);
+      await p.tap('.coach-actions .btn-plain');
+      await sleep(400);
+      const after = await p.evaluate(() => ({ screen: CT.App.screen, tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1') }));
+      console.log('  steps:', seen.join(' '));
+      console.log('  final title:', finalText, '· after leaving:', after);
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (SCENARIO === 'timer') {
       // Sit idle with a 15-second limit: the countdown appears, then a card is played for you.
       const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 31,

@@ -589,6 +589,54 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .toast .suit-red { color: var(--suit-red); }
 .toast .suit-black { color: var(--suit-black); }
 
+/* ---------- tutorial ---------- */
+.tut-card {
+  display: grid; gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(244, 185, 66, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(244, 185, 66, .45);
+}
+.tut-card h3 { font: 800 17px/1.2 var(--font-ui); color: var(--marigold); }
+.tut-card p { margin-top: 3px; font-size: 14px; color: var(--ink); }
+.coach { position: fixed; inset: 0; z-index: 55; pointer-events: none; }
+.coach-dim { position: fixed; inset: 0; background: rgba(4, 20, 19, .5); transition: opacity .25s; }
+.coach-spot {
+  position: fixed; display: none;
+  border-radius: 16px;
+  box-shadow: 0 0 0 200vmax rgba(4, 20, 19, .5);
+  outline: 2.5px solid var(--marigold);
+  transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease;
+  animation: spot 1.6s ease-in-out infinite;
+}
+.coach-spot.plain { box-shadow: none; }
+.coach-bubble {
+  position: fixed; left: 12px; right: 12px; margin-inline: auto;
+  width: auto; max-width: 380px; box-sizing: border-box;
+  pointer-events: auto;
+  display: grid; gap: 8px;
+  padding: 12px 16px 14px;
+  border-radius: 16px;
+  background: var(--card); color: var(--ink-on-paint);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .45);
+}
+.coach-bubble.enter { animation: rise .26s cubic-bezier(.2, .8, .2, 1); }
+.coach-arrow { position: absolute; width: 14px; height: 14px; background: var(--card); transform: rotate(45deg); display: none; }
+.coach-arrow.top { display: block; top: -6px; }
+.coach-arrow.bottom { display: block; bottom: -6px; }
+.coach-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coach-step { font: 800 11px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: #8A5D0C; }
+.coach-skip { border: 0; background: none; padding: 4px 0 4px 8px; font: 600 13px var(--font-ui); color: #4E605B; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; }
+.coach-title { font: 800 19px/1.2 var(--font-ui); }
+.coach-text { font: 500 15px/1.45 var(--font-ui); text-wrap: pretty; }
+.coach-text .suit-red, .coach-text .ct.suit-red { color: var(--suit-red); }
+.coach-text .suit-black, .coach-text .ct.suit-black { color: var(--suit-black); }
+.coach-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.coach-actions .btn { padding: 11px 18px; font-size: 15px; }
+.btn-plain { background: transparent; color: var(--ink-on-paint); box-shadow: inset 0 0 0 1.5px rgba(14, 43, 41, .3); }
+.btn-plain:active { background: rgba(14, 43, 41, .06); }
+@keyframes spot { 0%, 100% { outline-color: var(--marigold); } 50% { outline-color: rgba(244, 185, 66, .35); } }
+
 /* ---------- motion ---------- */
 @keyframes ring { 0%, 100% { box-shadow: 0 0 0 2px var(--board), 0 0 0 3px rgba(244, 185, 66, .25); } 50% { box-shadow: 0 0 0 2px var(--board), 0 0 0 5px rgba(244, 185, 66, .9); } }
 @keyframes burn {
@@ -661,7 +709,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
+CT.BUILD = {"version":"0.3.0","id":"f1c24b7","target":"app"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -866,7 +914,9 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
    * or Session.restore(saved)
    */
   function Session(config) {
-    this.mode = CT.getMode(config.modeId);
+    // `mode` lets a caller pass a variant of a registered mode (the tutorial
+    // uses Burns with scripted computer players).
+    this.mode = config.mode || CT.getMode(config.modeId);
     if (!this.mode) throw new Error('Unknown game mode: ' + config.modeId);
     this.clock = config.clock || new Clock(0);
     this.state = config.state || this.mode.createGame({
@@ -1038,7 +1088,13 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
 
   function suitName(suit) { return CT.SUIT_INFO[suit].single; }
 
-  function turnMs(state) { return (Number(state.options.turnTime) || 30) * 1000; }
+  /* Time limit per lead and per follow, in ms. timing.turnMs overrides the rule
+     choice (the tutorial uses it); 0 means no limit. */
+  function turnMs(state) {
+    if (state.timing.turnMs != null) return state.timing.turnMs;
+    return (Number(state.options.turnTime) || 30) * 1000;
+  }
+  function deadline(state, now) { var ms = turnMs(state); return ms ? now + ms : null; }
 
   function secretFor(pid, data) { var s = {}; s[pid] = data; return s; }
 
@@ -1141,7 +1197,7 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
       state.leader = leaderId;
       state.suit = null;
       state.phase = 'lead';
-      state.turnEndsAt = now + turnMs(state);
+      state.turnEndsAt = deadline(state, now);
       emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId, turnEndsAt: state.turnEndsAt });
     }
   }
@@ -1149,7 +1205,7 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
   /* The suit is known: start the clock. Anyone who can't follow while the
      deck is already empty is stuck straight away. */
   function beginFollow(state, now) {
-    state.turnEndsAt = now + turnMs(state);
+    state.turnEndsAt = deadline(state, now);
     if (state.deck.length === 0) markStuck(state, now);
     checkFollowComplete(state, now);
   }
@@ -2148,6 +2204,142 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
   };
 })(window.CT);
 
+/* ---- src/ui/coach.js ---- */
+/* ==========================================================================
+   COACH — the tutorial's speech bubble and spotlight, usable by any mode.
+   It sits above the table without blocking it: only the bubble takes taps,
+   so the player uses the real cards and deck while it explains.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+
+  function Coach() {
+    var el = this.el = document.createElement('div');
+    el.className = 'coach';
+    el.hidden = true;
+    el.innerHTML =
+      '<div class="coach-dim"></div>' +
+      '<div class="coach-spot"></div>' +
+      '<div class="coach-bubble" role="dialog" aria-live="polite" aria-label="Tutorial">' +
+        '<span class="coach-arrow" aria-hidden="true"></span>' +
+        '<div class="coach-top"><span class="coach-step"></span>' +
+        '<button type="button" class="coach-skip">Leave tutorial</button></div>' +
+        '<p class="coach-title"></p>' +
+        '<p class="coach-text"></p>' +
+        '<div class="coach-actions"></div>' +
+      '</div>';
+    document.body.appendChild(el);
+    this.dim = el.querySelector('.coach-dim');
+    this.spot = el.querySelector('.coach-spot');
+    this.bubble = el.querySelector('.coach-bubble');
+    this.arrow = el.querySelector('.coach-arrow');
+    this.stepEl = el.querySelector('.coach-step');
+    this.titleEl = el.querySelector('.coach-title');
+    this.textEl = el.querySelector('.coach-text');
+    this.actionsEl = el.querySelector('.coach-actions');
+    this.getTarget = null;
+    this.raf = null;
+    this.onSkip = null;
+    var self = this;
+    el.querySelector('.coach-skip').addEventListener('click', function () { if (self.onSkip) self.onSkip(); });
+  }
+
+  /* o: { step, title, text (HTML), target: fn → element|null,
+          place: 'auto' | 'top' | 'center', dim: true|false,
+          actions: [{ label, primary, onClick }] } */
+  Coach.prototype.show = function (o) {
+    this.el.hidden = false;
+    this.stepEl.textContent = o.step || '';
+    this.titleEl.textContent = o.title || '';
+    this.titleEl.hidden = !o.title;
+    this.textEl.innerHTML = o.text || '';
+    this.actionsEl.innerHTML = '';
+    var actions = o.actions || [];
+    actions.forEach(function (a) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn ' + (a.primary ? 'btn-primary' : 'btn-plain');
+      b.textContent = a.label;
+      b.addEventListener('click', a.onClick);
+      this.actionsEl.appendChild(b);
+    }, this);
+    this.actionsEl.hidden = !actions.length;
+    this.getTarget = o.target || null;
+    this.where = o.place || 'auto';
+    this.useDim = o.dim !== false;
+    this.spot.classList.toggle('plain', !this.useDim);
+    this.bubble.classList.remove('enter');
+    void this.bubble.offsetWidth;
+    this.bubble.classList.add('enter');
+    var primary = this.actionsEl.querySelector('.btn-primary');
+    if (primary) try { primary.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    this.loop();
+  };
+
+  Coach.prototype.setText = function (html) {
+    if (this.textEl.innerHTML !== html) this.textEl.innerHTML = html;
+  };
+
+  Coach.prototype.hide = function () {
+    this.el.hidden = true;
+    cancelAnimationFrame(this.raf);
+    this.raf = null;
+  };
+
+  /* Follow the target every frame: cards move as the hand re-lays out. */
+  Coach.prototype.loop = function () {
+    var self = this;
+    cancelAnimationFrame(this.raf);
+    var frame = function () {
+      if (self.el.hidden) return;
+      self.place();
+      self.raf = requestAnimationFrame(frame);
+    };
+    frame();
+  };
+
+  Coach.prototype.place = function () {
+    var t = this.getTarget ? this.getTarget() : null;
+    var r = t && t.getBoundingClientRect ? t.getBoundingClientRect() : null;
+    if (r && !(r.width && r.height)) r = null;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var bh = this.bubble.offsetHeight;
+    var bw = this.bubble.offsetWidth;
+    var bl = (vw - bw) / 2;
+    var gap = 14, pad = 8, top, arrowAt = null;
+
+    this.dim.style.opacity = !r && this.useDim ? '1' : '0';
+    this.spot.style.display = r ? 'block' : 'none';
+    if (r) {
+      this.spot.style.left = (r.left - pad) + 'px';
+      this.spot.style.top = (r.top - pad) + 'px';
+      this.spot.style.width = (r.width + pad * 2) + 'px';
+      this.spot.style.height = (r.height + pad * 2) + 'px';
+    }
+
+    if (this.where === 'top') {
+      // out of the way of the hand, the deck and the Play button
+      top = 12;
+      if (r && r.top - pad > top + bh + 6) arrowAt = 'bottom-far';
+    } else if (this.where === 'center' || !r) {
+      top = (vh - bh) * 0.42;
+    } else {
+      var below = vh - (r.bottom + pad);
+      var above = r.top - pad;
+      if (below >= bh + gap + 12) { top = r.bottom + pad + gap; arrowAt = 'top'; }
+      else if (above >= bh + gap + 12) { top = r.top - pad - gap - bh; arrowAt = 'bottom'; }
+      else top = below > above ? vh - bh - 12 : 12;
+    }
+    top = Math.max(12, Math.min(vh - bh - 12, top));
+    this.bubble.style.top = top + 'px';
+    if (r) this.arrow.style.left = Math.max(18, Math.min(bw - 32, r.left + r.width / 2 - bl - 7)) + 'px';
+    this.arrow.className = 'coach-arrow' + (arrowAt === 'bottom-far' ? ' bottom' : arrowAt ? ' ' + arrowAt : '');
+  };
+
+  UI.Coach = Coach;
+})(window.CT);
+
 /* ---- src/modes/burns/ui.js ---- */
 /* ==========================================================================
    GAME MODE · BURNS — table screen
@@ -3131,6 +3323,341 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
   CT.UI.presenters.burns = BurnsTable;
 })(window.CT);
 
+/* ---- src/modes/burns/tutorial.js ---- */
+/* ==========================================================================
+   GAME MODE · BURNS — interactive tutorial
+   Six short lessons, each a hand-arranged deal played on the real table
+   against scripted computer players. A coach bubble explains each step and
+   waits for the player to do it. Nothing here is saved or counted in stats.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var Burns = CT.getMode('burns');
+
+  function C(id) { return { id: id, rank: id.slice(0, -1), suit: id.slice(-1) }; }
+  function val(c) { return CT.rankValue(c.rank, true); }
+  function S(suit) { return UI.suit(suit); }
+  function K(id) { return UI.cardText(C(id)); }
+
+  var PLAYERS = [
+    { id: 'p0', name: 'You', isBot: false },
+    { id: 'p1', name: 'Mia', isBot: true },
+    { id: 'p2', name: 'Dex', isBot: true }
+  ];
+  var NAMES = { p0: 'You', p1: 'Mia', p2: 'Dex' };
+
+  /* ---------- helpers the lesson text uses ---------- */
+
+  function winner(ctx) { return ctx.v.setResult ? ctx.v.setResult.player : null; }
+  function winText(ctx) {
+    var r = ctx.v.setResult;
+    if (!r || !r.card) return '';
+    return r.player === 'p0' ? 'Your ' + UI.cardText(r.card) + ' wins the set.' : NAMES[r.player] + '’s ' + UI.cardText(r.card) + ' wins the set.';
+  }
+  function myPlayed(ctx) {
+    var e = ctx.v.table.filter(function (x) { return x.owner === 'p0'; })[0];
+    return e && e.card;
+  }
+  function bestOfSuit(ctx) {
+    var mine = ctx.v.hand.filter(function (c) { return c.suit === ctx.v.suit; }).sort(function (a, b) { return val(b) - val(a); });
+    return mine[0];
+  }
+  function saw(ctx, type) { return ctx.events.some(function (e) { return e.type === type; }); }
+
+  /* ---------- the lessons ---------- */
+
+  var LESSONS = [
+    {
+      title: 'Following suit',
+      hands: [['KD', '4C', '7S', '9S'], ['5D', '3C', '10H', 'JH'], ['9D', '6C', 'QC', '2S']],
+      starter: '8D',
+      steps: [
+        { next: true, title: 'Welcome to Burns', text: 'You’re playing against Mia and Dex. The goal is simple: be the first to get rid of all your cards.' },
+        { next: true, target: 'hand', text: 'These are your cards. Only you can see them.' },
+        { next: true, target: 'lead', text: 'Everyone gets 4 cards, then one more is turned face up: the starter. Its suit, ' + S('D') + ' diamonds, is the suit everyone must play in the first set.' },
+        { next: true, title: 'Lucky deal?', text: 'If your 4 starting cards are all different suits, that’s a Flush and you win on the spot. No Flush this time, so let’s play.' },
+        { target: 'card:KD', text: 'Play a diamond. Tap your ' + K('KD') + ' once to pick it, then tap it again, or press Play.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
+        { target: 'seats', text: 'Your card lies face down, so Mia and Dex can’t see it. When everyone has played, all the cards are turned over together.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
+          return 'The highest card wins the set. Cards rank from 2 (lowest) up to 10, Jack, Queen, King and Ace (highest). ' + winText(ctx);
+        } }
+      ]
+    },
+    {
+      title: 'Leading',
+      hands: [['QH', '6H', '9H'], ['3C', '7C', '2D'], ['4S', '8D', 'JC']],
+      leader: 'p0', setNo: 2,
+      deck: ['5C', '2H', '10S', '7H'],
+      steps: [
+        { next: true, target: 'hand', title: 'Leading', text: 'The winner of a set leads the next one. This time that’s you: play any card you like, and its suit becomes the suit everyone must follow.' },
+        { target: 'hand', text: 'Lead one of your hearts.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
+        { target: 'seats', text: 'The others only see the suit you led, not the card. Mia and Dex have no hearts, so they must draw from the deck until a heart turns up.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
+          return 'Every card they drew stays in their hand. That’s the price of not having the suit. ' + winText(ctx);
+        } }
+      ]
+    },
+    {
+      title: 'Drawing',
+      hands: [['3H', '8C', 'JD'], ['6S', '2C', '9H'], ['KS', '4D', '5H']],
+      leader: 'p2', setNo: 3,
+      deck: ['10H', '4S', 'AS', '5D'],
+      bots: { p2: { lead: 'KS' } },
+      steps: [
+        { target: 'lead', title: 'Drawing', text: 'Dex won the last set, so Dex leads. Watch which suit he picks.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'deck', text: 'Dex led ' + S('S') + ' spades, and you don’t have any. Tap the deck to draw, and keep going until a spade turns up.', done: function (ctx) { return ctx.v.canFollow || ctx.me.committed; } },
+        { text: function (ctx) {
+          var best = bestOfSuit(ctx);
+          return 'You found ' + (best ? 'the ' + UI.cardText(best) : 'a spade') + '. Play it now, or tap the deck again to look for a higher spade. Every card you draw stays in your hand, so it’s a gamble.';
+        }, done: function (ctx) { return ctx.me.committed; }, after: 400 },
+        { target: 'seats', text: 'Now everyone’s card is in…', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
+          var mine = myPlayed(ctx);
+          var lead = mine && mine.id === 'AS'
+            ? 'Your ' + K('AS') + ' beats Dex’s ' + K('KS') + '. Drawing paid off this time, but the extra cards are still in your hand.'
+            : 'Dex’s ' + K('KS') + ' wins. Drawing more might have found a higher spade, at the cost of more cards in your hand.';
+          return lead + ' You can also draw for a better card when you already have the suit.';
+        } }
+      ]
+    },
+    {
+      title: 'When the deck runs out',
+      hands: [['2S', '10C'], ['JH', '5S'], ['8H', '3D']],
+      leader: 'p1', setNo: 4,
+      deck: ['7C'], fillDeck: false,
+      bots: { p1: { lead: 'JH' } },
+      steps: [
+        { target: 'deck', title: 'When the deck runs out', text: 'Mia leads this set. Look at the deck: only one card is left.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'deck', text: 'Mia led ' + S('H') + ' hearts and you have none. Draw the last card.', done: function (ctx) { return ctx.v.deckCount === 0 || ctx.me.committed; } },
+        { target: 'seats', text: 'The deck is empty and you still have no hearts, so you can’t play this set. Instead, pick up one card from the set into your hand. In a real game you have 10 seconds. Tap a glowing card.', done: function (ctx) { return !!ctx.me.took || ctx.v.phase === 'reveal'; }, after: 900 },
+        { next: true, target: 'slot:p1', text: function (ctx) {
+          var took = ctx.me.took ? K(ctx.me.took) : 'a card';
+          return 'You picked up ' + took + '. A picked-up card still counts for whoever played it, so Mia wins the set with the ' + K('JH') + '. At least you now hold a heart for later.';
+        } }
+      ]
+    },
+    {
+      title: 'The time limit',
+      hands: [['5C', 'QD', '2S'], ['9C', '6D', '3S'], ['KC', '7D', '4S']],
+      leader: 'p0', setNo: 5,
+      timing: { turnMs: 8000 },
+      steps: [
+        // The ring is outlined but the hand stays bright: that's where the tap happens.
+        { target: 'lead', place: 'top', dim: false, title: 'The time limit', text: 'Each set has a time limit, and the ring around the middle counts it down. You lead this set and have 8 seconds. Lead a card, or wait and see what happens when time runs out.', done: function (ctx) { return ctx.me.committed; }, after: 900 },
+        { next: true, text: function (ctx) {
+          var first = saw(ctx, 'timeout') ? 'Time ran out, so a random card was led for you.' : 'You led in time. If you hadn’t, a random card would have been led for you.';
+          return first + ' Real games give 30 seconds by default, and you can change that on the setup screen. If you can’t follow when time runs out, the game draws for you until the suit turns up.';
+        } }
+      ]
+    },
+    {
+      title: 'Winning',
+      hands: [['AC'], ['4C', '9D'], ['KC', '6H']],
+      leader: 'p0', setNo: 6,
+      steps: [
+        { target: 'card:AC', title: 'Winning', text: 'You have one card left. Lead it. If nobody else runs out of cards this set, you win the game.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
+        { target: 'seats', text: 'Mia and Dex play their clubs…', done: function (ctx) { return ctx.v.phase === 'over'; }, after: 1800 },
+        { final: true, title: 'You win!', text: 'You emptied your hand first. That’s Burns: follow the suit, draw when you can’t (or when you want a better card), pick up when the deck runs out, and be the first to empty your hand.' }
+      ]
+    }
+  ];
+
+  /* ---------- scripted computer players: predictable, so lessons play out as written ---------- */
+
+  function scriptedBot(lesson) {
+    var script = lesson.bots || {};
+    return {
+      intent: Burns.bot.intent,
+      delay: function (intent, v) {
+        if (intent.kind === 'lead') return 1300;
+        if (intent.kind === 'draw') return v.timing.drawCooldownMs + 350;
+        if (intent.kind === 'take') return 1800;
+        return 1100;
+      },
+      decide: function (v) {
+        var mine = script[v.me] || {};
+        var byId = function (id) { return v.hand.filter(function (c) { return c.id === id; })[0]; };
+        var low = function (cards) { return cards.slice().sort(function (a, b) { return val(a) - val(b); })[0]; };
+        if (v.canLead) return { type: 'lead', payload: { cardId: (byId(mine.lead) || low(v.hand)).id } };
+        if (v.mustDraw) return { type: 'draw', payload: {} };
+        if (v.canFollow) {
+          var suited = v.hand.filter(function (c) { return c.suit === v.suit; });
+          return { type: 'follow', payload: { cardId: (byId(mine.follow) || low(suited)).id } };
+        }
+        if (v.canTake) {
+          var open = v.table.filter(function (e) { return e.card && !e.takenBy; }).sort(function (a, b) { return val(b.card) - val(a.card); });
+          return open.length ? { type: 'take', payload: { cardId: open[0].card.id } } : null;
+        }
+        return null;
+      }
+    };
+  }
+
+  /* Lay out the lesson's cards. Cards not named go under the named deck
+     cards (or aside, with fillDeck: false), in a fixed shuffled order. */
+  function rig(state, lesson, now) {
+    var used = {};
+    state.players.forEach(function (p, i) {
+      p.hand = lesson.hands[i].map(C);
+      lesson.hands[i].forEach(function (id) { used[id] = true; });
+    });
+    var top = (lesson.deck || []).map(C);
+    top.forEach(function (c) { used[c.id] = true; });
+    if (lesson.starter) used[lesson.starter] = true;
+    var rest = CT.shuffle(CT.standardDeck().filter(function (c) { return !used[c.id]; }), { rng: 2026 });
+    if (lesson.fillDeck === false) { state.deck = top.slice().reverse(); state.discard = rest; }
+    else { state.deck = rest.concat(top.slice().reverse()); state.discard = []; }
+    state.events = [];
+    state.seq = 0;
+    if (lesson.starter) {
+      state.starter = C(lesson.starter);
+      state.phase = 'dealing';
+      state.phaseEndsAt = now;
+    } else {
+      // jump straight to the lead of the given set
+      state.starter = null;
+      state.setNo = lesson.setNo - 1;
+      state.phase = 'reveal';
+      state.setResult = { player: lesson.leader, card: null };
+      state.phaseEndsAt = now;
+    }
+  }
+
+  function makeSession(lesson) {
+    var mode = Object.assign({}, Burns, { bot: scriptedBot(lesson) });
+    var timing = Object.assign({ dealHoldMs: 0, revealHoldMs: 2600, takeWindowMs: 60000, turnMs: 0 }, lesson.timing || {});
+    var session = new CT.Session({ mode: mode, players: PLAYERS, options: { leadCard: 'suitOnly', turnTime: '30' }, seed: 7, timing: timing });
+    rig(session.state, lesson, session.now());
+    mode.tick(session.state, session.now());   // start the set right away
+    return session;
+  }
+
+  function targetFn(key) {
+    if (!key) return null;
+    return function () {
+      if (key === 'hand') return document.getElementById('t-handwrap');
+      if (key === 'deck') return document.getElementById('t-deck');
+      if (key === 'lead') return document.getElementById('t-lead');
+      if (key === 'seats') return document.getElementById('t-seats');
+      if (key === 'me') return document.getElementById('t-me');
+      if (key.indexOf('slot:') === 0) return document.getElementById('slot-' + key.slice(5));
+      if (key.indexOf('card:') === 0) return document.querySelector('.hcard[data-id="' + key.slice(5) + '"]');
+      return null;
+    };
+  }
+
+  /* ---------- the controller ---------- */
+
+  function Tutorial(app) {
+    this.app = app;
+    this.coach = UI.coach || (UI.coach = new UI.Coach());
+    this.holding = false;
+    this.index = 0;
+    this.step = -1;
+  }
+
+  Tutorial.prototype.lessons = LESSONS;
+
+  Tutorial.prototype.start = function () {
+    var self = this;
+    this.coach.onSkip = function () { self.exit(); };
+    this.index = 0;
+    this.begin();
+  };
+
+  Tutorial.prototype.begin = function () {
+    var lesson = LESSONS[this.index];
+    if (this.unsub) this.unsub();
+    this.session = makeSession(lesson);
+    this.session.pause();
+    this.app.attachTutorial(this.session);
+    var self = this;
+    this.unsub = this.session.on(function () { self.check(); });
+    this.step = -1;
+    this.nextStep();
+  };
+
+  Tutorial.prototype.ctx = function () {
+    var v = this.session.view('p0', { sinceSeq: this.stepSeq || 0 });
+    var me = v.players.filter(function (p) { return p.id === 'p0'; })[0];
+    return { v: v, me: me, events: v.events || [] };
+  };
+
+  Tutorial.prototype.current = function () { return LESSONS[this.index].steps[this.step]; };
+
+  Tutorial.prototype.nextStep = function () {
+    clearTimeout(this.timer);
+    this.step++;
+    var lesson = LESSONS[this.index];
+    if (this.step >= lesson.steps.length) {
+      this.index++;
+      if (this.index >= LESSONS.length) { this.exit(); return; }
+      this.begin();
+      return;
+    }
+    var s = this.current();
+    this.stepSeq = this.session.state.seq;
+    this.advancing = false;
+    var read = !!(s.next || s.final);
+    this.holding = read;            // the table waits while you read
+    if (read) this.session.pause(); else this.app.resumePlay();
+    this.render();
+    if (!read) this.check();
+  };
+
+  Tutorial.prototype.render = function () {
+    var self = this, s = this.current(), ctx = this.ctx();
+    var lesson = LESSONS[this.index];
+    var actions = [];
+    if (s.final) {
+      actions = [
+        { label: 'Back to games', onClick: function () { self.exit(); } },
+        { label: 'Play Burns', primary: true, onClick: function () { self.exit('setup'); } }
+      ];
+    } else if (s.next) {
+      actions = [{ label: 'Next', primary: true, onClick: function () { self.nextStep(); } }];
+    }
+    var target = typeof s.target === 'function' ? s.target(ctx) : s.target;
+    var read = !!(s.next || s.final);
+    // Reading: dim the table. Doing: keep the hand, deck and Play button clear.
+    var place = s.place || (!target ? (read ? 'center' : 'top') : (/^(card:|hand)/.test(target) ? 'top' : 'auto'));
+    this.coach.show({
+      step: 'Lesson ' + (this.index + 1) + ' of ' + LESSONS.length + ' · ' + lesson.title,
+      title: s.title,
+      text: typeof s.text === 'function' ? s.text(ctx) : s.text,
+      target: targetFn(target),
+      place: place,
+      dim: s.dim != null ? s.dim : (target ? true : read),
+      actions: actions
+    });
+  };
+
+  /* After every change at the table: has the player done what this step asks? */
+  Tutorial.prototype.check = function () {
+    var s = this.current();
+    if (!s || s.next || s.final || this.advancing) return;
+    var ctx = this.ctx();
+    if (typeof s.text === 'function') this.coach.setText(s.text(ctx));
+    if (!s.done(ctx)) return;
+    this.advancing = true;
+    var self = this;
+    this.timer = setTimeout(function () { self.nextStep(); }, s.after || 400);
+  };
+
+  Tutorial.prototype.exit = function (to) {
+    clearTimeout(this.timer);
+    if (this.unsub) this.unsub();
+    this.unsub = null;
+    this.holding = false;
+    this.coach.hide();
+    this.app.endTutorial(to);
+  };
+
+  UI.tutorials = UI.tutorials || {};
+  UI.tutorials.burns = Tutorial;
+})(window.CT);
+
 /* ---- src/ui/app.js ---- */
 /* ==========================================================================
    APP SHELL — menu, setup, sheets, saving, and the game loop.
@@ -3381,6 +3908,42 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
       this.save();
     },
 
+    /* ---------- tutorial ---------- */
+
+    startTutorial: function (modeId) {
+      var Tutorial = UI.tutorials && UI.tutorials[modeId];
+      if (!Tutorial) return;
+      if (this.session && !this.tutorial) this.save();   // a game in progress stays resumable
+      this.closeSheet(true);
+      this.tutorial = new Tutorial(this);
+      this.tutorial.start();
+    },
+
+    attachTutorial: function (session) {
+      if (this.table) this.table.destroy();
+      this.session = session;
+      this.show('table');
+      var Presenter = UI.presenters[session.mode.presenter];
+      this.table = new Presenter(this, session, 'p0', { restored: true });
+    },
+
+    endTutorial: function (to) {
+      this.tutorial = null;
+      this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.table = null;
+      this.session = null;
+      if (to === 'setup') this.openSetup('burns');
+      else this.showHome();
+    },
+
+    /* Let the game clock run, unless something is in the way. */
+    resumePlay: function () {
+      if (!this.session || this.screen !== 'table' || this.sheet || document.hidden) return;
+      if (this.tutorial && this.tutorial.holding) return;
+      this.session.resume();
+    },
+
     resume: function (save) {
       var session = CT.Session.restore(save.session);
       if (!session) { UI.store.del(SAVE_KEY); return false; }
@@ -3390,12 +3953,12 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
     },
 
     currentSave: function () {
-      if (!this.session || this.session.state.phase === 'over') return null;
+      if (!this.session || this.tutorial || this.session.state.phase === 'over') return null;
       return { session: this.session.serialize(), game: this.game, me: 'p0', savedAt: Date.now() };
     },
 
     save: function () {
-      if (!this.session) return;
+      if (!this.session || this.tutorial) return;
       if (this.session.state.phase === 'over') { UI.store.del(SAVE_KEY); return; }
       var s = this.currentSave();
       if (s) UI.store.set(SAVE_KEY, s);
@@ -3421,7 +3984,7 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
         return;
       }
       if (UI.Music.on) UI.Music.start();
-      if (this.session && !this.sheet && this.screen === 'table') this.session.resume();
+      this.resumePlay();
     },
 
     toggleMusic: function () {
@@ -3458,7 +4021,7 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
       ov.innerHTML = '';
       this.sheet = null;
       this.logOpen = false;
-      if (!silent && this.session && this.screen === 'table' && !document.hidden) this.session.resume();
+      if (!silent) this.resumePlay();
     },
 
     sheetHead: function (title) {
@@ -3479,14 +4042,34 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
         var c = o.choices.filter(function (x) { return x.value === options[o.id]; })[0];
         return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
       }).join(' · ');
-      var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) +
+      var self = this;
+      var Tutorial = !this.tutorial && UI.tutorials && UI.tutorials[modeId];
+      var inGame = this.session && this.session.state.phase !== 'over';
+      var tutorial = Tutorial
+        ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.lessons.length +
+          ' quick lessons, about three minutes.' + (inGame ? ' Your current game is saved, so you can resume it afterwards.' : '') + '</p></div>' +
+          '<button class="btn btn-primary" type="button" id="r-tutorial">Start the tutorial</button></div>' +
+          '<p class="eyebrow">Or read the rules</p>'
+        : '';
+      var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) + tutorial +
         '<div class="rules">' + sections + (chosen ? '<p class="house">Rule choices for this table · ' + chosen + '</p>' : '') + '</div>' +
-        '<button class="btn btn-primary" type="button" data-close>Got it</button>', { label: 'How to play' });
+        '<button class="btn ' + (Tutorial ? 'btn-ghost' : 'btn-primary') + '" type="button" data-close>Got it</button>', { label: 'How to play' });
       this.wireClose(sheet);
+      if (Tutorial) $('r-tutorial').addEventListener('click', function () { self.startTutorial(modeId); });
     },
 
     openMenu: function () {
       var self = this;
+      if (this.tutorial) {
+        var t = this.openSheet('menu', this.sheetHead('Tutorial') +
+          '<div class="menu-list">' +
+            '<button class="btn btn-primary" type="button" data-close>Keep going</button>' +
+            '<button class="btn btn-ghost" type="button" id="m-leave">Leave tutorial</button>' +
+          '</div>', { label: 'Tutorial menu' });
+        this.wireClose(t);
+        $('m-leave').addEventListener('click', function () { self.tutorial.exit(); });
+        return;
+      }
       var sheet = this.openSheet('menu', this.sheetHead('Game menu') +
         '<div class="menu-list">' +
           '<button class="btn btn-primary" type="button" data-close>Keep playing</button>' +
@@ -3550,6 +4133,7 @@ CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
 
     showResult: function (v) {
       var self = this;
+      if (this.tutorial) return;   // the tutorial explains the ending itself
       this.record(v);
       var me = 'p0';
       var byId = {};

@@ -44,7 +44,9 @@
    * or Session.restore(saved)
    */
   function Session(config) {
-    this.mode = CT.getMode(config.modeId);
+    // `mode` lets a caller pass a variant of a registered mode (the tutorial
+    // uses Burns with scripted computer players).
+    this.mode = config.mode || CT.getMode(config.modeId);
     if (!this.mode) throw new Error('Unknown game mode: ' + config.modeId);
     this.clock = config.clock || new Clock(0);
     this.state = config.state || this.mode.createGame({
