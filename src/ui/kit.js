@@ -112,6 +112,12 @@
     var read = 1200 + 55 * (el.textContent || '').length;
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, Math.max(ms || 1900, read));
   };
+  /* Take a toast down early, e.g. when the tutorial moves on to a new note. */
+  UI.toastHide = function () {
+    var el = document.getElementById('toast');
+    clearTimeout(toastTimer);
+    if (el) el.classList.remove('show');
+  };
 
   /* ---------- storage (per device; may be unavailable) ---------- */
   UI.store = {

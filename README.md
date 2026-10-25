@@ -31,9 +31,11 @@ at the bottom of the menu screen.
 | `src/modes/donkey/rules.js` | The Pass-Roun Donkey rules: passing, four of a kind, the race, letters and the tie-breaker |
 | `src/modes/donkey/bot.js` | The Donkey computer player, with three reflex speeds for the race |
 | `src/modes/donkey/ui.js` | The Donkey table screen: four seats round a table |
+| `src/modes/donkey/tutorial.js` | The interactive Donkey tutorial: five rigged lessons on the real table |
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |
+| `src/ui/tutorial.js` | The lesson runner every tutorial uses: steps, waiting for the player, notes held until read, Previous |
 | `src/ui/app.js` | Menu, setup screen, sheets, saving and the game loop |
 | `src/ui/styles.css` | Look and layout |
 | `src/shell/body.html` | Page markup and the suit icons |
@@ -47,7 +49,9 @@ at the bottom of the menu screen.
    Burns shows the shape: `createGame`, `act`, `tick`, `view`, `rules`, and an `options` list
    for rule choices.
 2. Add a computer player (`bot.js`) and a table screen (`ui.js`), reusing pieces from Burns where they fit.
-3. Add the new files to `SOURCES` in `build.js`.
+3. Optionally, add an interactive tutorial (`tutorial.js`): lessons for `UI.makeTutorial`, registered in
+   `UI.tutorials`. How to play then offers it automatically.
+4. Add the new files to `SOURCES` in `build.js`.
 
 The menu lists every registered mode, and each mode's rule choices appear on its setup screen automatically.
 The setup screen saves only the choices a player actually taps, so changing an option's `default` in an

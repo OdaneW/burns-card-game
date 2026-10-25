@@ -295,13 +295,13 @@
       this.table = new Presenter(this, session, 'p0', { restored: true });
     },
 
-    endTutorial: function (to) {
+    endTutorial: function (to, modeId) {
       this.tutorial = null;
       this.closeSheet(true);
       if (this.table) this.table.destroy();
       this.table = null;
       this.session = null;
-      if (to === 'setup') this.openSetup('burns');
+      if (to === 'setup') this.openSetup(modeId || 'burns');
       else this.showHome();
     },
 

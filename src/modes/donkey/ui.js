@@ -692,8 +692,14 @@
 
   DonkeyTable.prototype.pass = function (id) {
     var res = this.session.act(this.me, 'pass', { cardId: id });
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
     this.selected = null;
+    if (!res.ok) {
+      // put the card back so it's clear nothing was passed
+      if (this.v) { this.renderHand(this.v); this.renderMe(this.v); }
+      UI.toast(UI.esc(res.message));
+      UI.Sound.play('nope');
+      return;
+    }
     UI.Sound.play('play');
     UI.buzz(10);
   };

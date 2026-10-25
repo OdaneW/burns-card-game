@@ -21,9 +21,11 @@ const SOURCES = [
   'src/ui/kit.js',
   'src/ui/music.js',
   'src/ui/coach.js',
+  'src/ui/tutorial.js',
   'src/modes/burns/ui.js',
   'src/modes/burns/tutorial.js',
   'src/modes/donkey/ui.js',
+  'src/modes/donkey/tutorial.js',
   'src/ui/app.js'
 ];
 const FONTS = [

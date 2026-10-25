@@ -75,6 +75,8 @@
     if (state.timing.passMs != null) return state.timing.passMs;   // tests and lessons
     return (Number(state.options.passTime) || 15) * 1000;
   }
+  /* When the current pass must happen by; 0 ms means no limit (the tutorial). */
+  function passDeadline(state, now) { var ms = passMs(state); return ms ? now + ms : null; }
 
   /* The rank a hand holds four of, or null. */
   function fourOf(hand) {
@@ -180,7 +182,7 @@
   function startPassing(state, now) {
     state.phase = 'pass';
     state.turn = state.starter;
-    state.turnEndsAt = now + passMs(state);
+    state.turnEndsAt = passDeadline(state, now);
     emit(state, now, { type: 'passStart', round: state.round, player: state.starter });
   }
 
@@ -199,7 +201,7 @@
     emit(state, now, { type: 'pass', from: p.id, to: to.id, n: state.passes, auto: !!auto, spare: !!spare }, secret);
     if (!spare) {
       state.turn = to.id;
-      state.turnEndsAt = now + passMs(state);
+      state.turnEndsAt = passDeadline(state, now);
     }
   }
 

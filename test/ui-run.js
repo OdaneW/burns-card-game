@@ -260,6 +260,101 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (/^donkey-tutorial/.test(SCENARIO)) {
+      // Follow the Pass-Roun Donkey tutorial from How to play to the end,
+      // on a phone (default), a small phone, a phone on its side, or a desktop.
+      const size = {
+        'donkey-tutorial': { viewport: { width: 390, height: 844 } },
+        'donkey-tutorial-small': { viewport: { width: 360, height: 640 } },
+        'donkey-tutorial-landscape': { viewport: { width: 844, height: 390 } },
+        'donkey-tutorial-wide': { viewport: { width: 1280, height: 820 }, isMobile: false, deviceScaleFactor: 1 }
+      }[SCENARIO];
+      const p = await open(browser, { ctx: size, seed: 4 });
+      await p.tap('[data-rules="donkey"]');
+      await sleep(350);
+      await shot(p, '70-donkey-how-to-play');
+      await p.evaluate(() => {
+        const T = CT.UI.tutorials.donkey.prototype;
+        const log = window.__tut = [];
+        const render = T.render, check = T.check;
+        T.render = function () {
+          render.call(this);
+          const s = this.current();
+          log.push({ key: 'L' + (this.index + 1) + '-S' + (this.step + 1), t: performance.now(), reading: this.readingTime(),
+            kind: s.next || s.final ? 'read' : s.watch ? 'watch' : 'act', how: s.next || s.final ? 'next' : 'player' });
+        };
+        T.check = function () {
+          const was = this.advancing;
+          check.call(this);
+          const s = this.current(), last = log[log.length - 1];
+          if (!was && this.advancing && s && s.watch && last) {
+            last.how = !this.holding ? 'auto' : document.querySelector('.coach-actions:not([hidden]) .btn-primary') ? 'next' : 'held-auto';
+          }
+        };
+      });
+      await p.tap('#r-tutorial');
+      await sleep(500);
+      const seen = [], checks = [], back = {};
+      let guard = 0, triedKing = false;
+      const state = () => p.evaluate(() => {
+        const t = CT.App.tutorial; if (!t) return { done: true };
+        const s = t.current(); const v = CT.App.session.view('p0', { events: false });
+        const held = !s.next && !s.final && !!document.querySelector('.coach-actions:not([hidden]) .btn-primary');
+        const spare = v.hand.filter(c => c.rank !== 'K').map(c => c.id);
+        return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final, held, phase: v.phase,
+          canPass: v.canPass, canDeclare: v.canDeclare, canReact: v.canReact, canCall: v.canCall, spare, king: (v.hand.find(c => c.rank === 'K') || {}).id,
+          hand: v.hand.map(c => c.id).join(' '), letters: v.players.map(x => x.letters).join(''), toast: (document.querySelector('#toast.show') || {}).textContent || '' };
+      });
+      while (guard++ < 900) {
+        const st = await state();
+        if (st.done) break;
+        const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
+        if (!seen.includes(key)) { seen.push(key); await sleep(450); await shot(p, '71-dtut-' + key); }
+        if (st.final) break;
+        // Previous: from the four-of-a-kind step, and from the start of the DONKEY lesson
+        const tryBack = { 'L2-S3': 'a', 'L4-S1': 'b' }[key];
+        if (tryBack && !back[tryBack] && (st.canDeclare || st.next)) {
+          back[tryBack] = true;
+          await p.tap('[data-act="prev"]'); await sleep(600);
+          const w = await state();
+          checks.push('Previous from ' + key + ' → L' + (w.lesson + 1) + '-S' + (w.step + 1) + ' (' + w.phase + ', hand ' + w.hand + ', letters ' + w.letters + ')');
+          continue;
+        }
+        if (st.next || st.held) { await p.tap('.coach-actions [data-act="next"]'); await sleep(300); continue; }
+        if (st.canDeclare) { await p.tap('#d-declare', { force: true }); await sleep(300); continue; }
+        if (st.canPass) {
+          if (!triedKing && st.lesson === 0 && st.king) {
+            triedKing = true;
+            await p.tap(`.hcard[data-id="${st.king}"]`, { position: { x: 10, y: 24 } }); await sleep(150);
+            await p.tap(`.hcard[data-id="${st.king}"]`, { position: { x: 10, y: 24 } }); await sleep(250);
+            const after = await state();
+            checks.push('Passing a King in lesson 1: still your turn = ' + after.canPass + ', toast = "' + after.toast + '"');
+            await shot(p, '72-dtut-keep-kings');
+            continue;
+          }
+          const id = st.spare[0];
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(150);
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(250);
+          continue;
+        }
+        if (st.canReact) { await sleep(300); try { await p.tap('#d-slap', { timeout: 1500 }); } catch (e) { /* race over */ } await sleep(200); continue; }
+        if (st.canCall) { await p.tap('#d-choices [data-call="higher"]'); await sleep(300); continue; }
+        await sleep(200);
+      }
+      const finalText = await p.evaluate(() => document.querySelector('.coach-title').textContent);
+      await p.tap('[data-act="home"]');
+      await sleep(400);
+      const after = await p.evaluate(() => ({ screen: CT.App.screen, tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1') }));
+      console.log('  steps:', seen.join(' '));
+      checks.forEach(c => console.log('  ' + c));
+      const notes = await p.evaluate(() => window.__tut.map((e, i, a) => Object.assign({}, e, { shown: a[i + 1] ? Math.round(a[i + 1].t - e.t) : null })));
+      notes.filter(n => n.kind === 'watch').forEach(n => console.log('  watch note ' + n.key + ': ' + n.how + ', up ' + n.shown + ' ms, reading time ' + n.reading + ' ms'));
+      const rushed = notes.filter(n => (n.how === 'auto' || n.how === 'held-auto') && n.shown != null && n.shown < n.reading);
+      console.log('  notes that left before their reading time:', rushed.length ? rushed.map(n => n.key + ' (' + n.shown + '/' + n.reading + ' ms)') : 'none');
+      console.log('  final title:', finalText, '· after leaving:', after);
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (SCENARIO === 'settings') {
       // Settings saved by 0.3 stored every rule. After the update, rules left at the old
       // defaults follow the new ones; a real choice (15 seconds) survives.
@@ -285,9 +380,15 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
-    if (SCENARIO === 'tutorial') {
-      // Follow the tutorial's instructions from How to play to the end.
-      const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 3 });
+    if (/^tutorial/.test(SCENARIO)) {
+      // Follow the tutorial's instructions from How to play to the end
+      // (on a phone, a phone on its side, or a desktop).
+      const size = {
+        'tutorial': { viewport: { width: 390, height: 844 } },
+        'tutorial-landscape': { viewport: { width: 844, height: 390 } },
+        'tutorial-wide': { viewport: { width: 1280, height: 820 }, isMobile: false, deviceScaleFactor: 1 }
+      }[SCENARIO];
+      const p = await open(browser, { ctx: size, seed: 3 });
       await p.tap('[data-rules="burns"]');
       await sleep(350);
       await shot(p, '30-how-to-play');

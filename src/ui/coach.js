@@ -42,6 +42,8 @@
           place: 'auto' | 'top' | 'center', dim: true|false,
           actions: [{ id, label, primary, cls, onClick }] } */
   Coach.prototype.show = function (o) {
+    // a message about the last step shouldn't sit over the new note
+    if (UI.toastHide) UI.toastHide();
     this.el.hidden = false;
     this.stepEl.textContent = o.step || '';
     this.titleEl.textContent = o.title || '';
@@ -133,6 +135,26 @@
       else top = below > above ? vh - bh - 12 : 12;
     }
     top = Math.max(12, Math.min(vh - bh - 12, top));
+
+    // Still on top of what it points at (a wide screen, or a phone on its
+    // side)? Then move beside it, if there's room, so nothing it asks you to
+    // tap is covered.
+    var left = null;
+    if (r && this.where !== 'center') {
+      var L = r.left - pad, R = r.right + pad, T = r.top - pad, B = r.bottom + pad;
+      if (top < B && top + bh > T && bl < R && bl + bw > L) {
+        var toLeft = L - gap - bw, toRight = R + gap;
+        var okLeft = toLeft >= 12, okRight = toRight + bw <= vw - 12;
+        if (okLeft || okRight) {
+          left = okLeft && (!okRight || L > vw - R) ? toLeft : toRight;
+          if (this.where !== 'top') top = Math.max(12, Math.min(vh - bh - 12, r.top + r.height / 2 - bh / 2));
+          arrowAt = null;
+        }
+      }
+    }
+    var bs = this.bubble.style;
+    if (left == null) bs.left = bs.right = bs.width = bs.marginLeft = bs.marginRight = '';
+    else { bs.left = left + 'px'; bs.right = 'auto'; bs.width = bw + 'px'; bs.marginLeft = bs.marginRight = '0'; }
     this.bubble.style.top = top + 'px';
     if (r) this.arrow.style.left = Math.max(18, Math.min(bw - 32, r.left + r.width / 2 - bl - 7)) + 'px';
     this.arrow.className = 'coach-arrow' + (arrowAt === 'bottom-far' ? ' bottom' : arrowAt ? ' ' + arrowAt : '');
