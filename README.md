@@ -50,7 +50,7 @@ at the bottom of the menu screen.
    for rule choices.
 2. Add a computer player (`bot.js`) and a table screen (`ui.js`), reusing pieces from Burns where they fit.
 3. Optionally, add an interactive tutorial (`tutorial.js`): lessons for `UI.makeTutorial`, registered in
-   `UI.tutorials`. How to play then offers it automatically.
+   `UI.tutorials`. How to play then offers it automatically, and so does Play, once, for someone new to the mode.
 4. Add the new files to `SOURCES` in `build.js`.
 
 The menu lists every registered mode, and each mode's rule choices appear on its setup screen automatically.

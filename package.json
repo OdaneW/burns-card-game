@@ -1,6 +1,6 @@
 {
   "name": "burns-card-game",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "A phone-first card game with several game modes: Burns and Pass-Roun Donkey.",
   "scripts": {

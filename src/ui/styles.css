@@ -579,6 +579,19 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 }
 .tut-card h3 { font: 800 17px/1.2 var(--font-ui); color: var(--marigold); }
 .tut-card p { margin-top: 3px; font-size: 14px; color: var(--ink); }
+/* the first time a mode is played: offer its tutorial */
+.intro { max-width: 400px; text-align: center; justify-items: center; gap: 10px; padding-top: 10px; }
+.intro .fan { margin-bottom: -4px; }
+.intro .eyebrow { color: var(--marigold); }
+.intro h2 { font: 800 25px/1.15 var(--font-ui); }
+.intro-text { max-width: 32ch; color: var(--ink); font-size: 15px; line-height: 1.45; text-wrap: pretty; }
+.intro-actions { display: grid; gap: 8px; width: 100%; margin-top: 6px; }
+.intro-actions .btn { width: 100%; padding: 15px 20px; font-size: 17px; }
+@media (max-height: 520px) {
+  .intro .fan { display: none; }
+  .intro-actions { grid-template-columns: 1fr 1fr; }
+  .intro-actions .btn { padding: 13px 12px; font-size: 16px; }
+}
 .coach { position: fixed; inset: 0; z-index: 55; pointer-events: none; }
 .coach-dim { position: fixed; inset: 0; background: rgba(4, 20, 19, .5); transition: opacity .25s; }
 .coach-spot {

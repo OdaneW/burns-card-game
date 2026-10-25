@@ -10,6 +10,7 @@
   var SAVE_KEY = 'cardtable.save.v1';
   var SETTINGS_KEY = 'cardtable.settings.v1';
   var STATS_KEY = 'cardtable.stats.v1';
+  var TUTORIALS_KEY = 'cardtable.tutorials.v1';   // per mode: 'offered' or 'started'
   var BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
 
   function $(id) { return document.getElementById(id); }
@@ -25,9 +26,22 @@
 
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
+  /* A mode's decorative fan of three cards (each mode picks its own). */
+  function fanHtml(mode) {
+    return '<div class="fan" aria-hidden="true" data-cards="' + (mode.fan || ['QS', '9D', 'AH']).join(' ') + '"></div>';
+  }
+  function fillFans(root) {
+    root.querySelectorAll('.fan').forEach(function (fan) {
+      fan.dataset.cards.split(' ').forEach(function (id) {
+        fan.appendChild(UI.makeCard({ id: id, rank: id.slice(0, -1), suit: id.slice(-1) }));
+      });
+    });
+  }
+
   var App = {
     settings: {},
     stats: {},
+    tutorialLog: {},
     session: null,
     table: null,
     game: null,
@@ -40,6 +54,7 @@
       this.settings = UI.store.get(SETTINGS_KEY, {}) || {};
       this.migrateSettings();
       this.stats = UI.store.get(STATS_KEY, {}) || {};
+      this.tutorialLog = UI.store.get(TUTORIALS_KEY, {}) || {};
       UI.Sound.on = this.settings.sound !== false;
       UI.Music.on = this.settings.music !== false;
 
@@ -50,7 +65,7 @@
       }, true);
       document.addEventListener('visibilitychange', function () { self.onVisibility(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && self.sheet && self.sheet !== 'result') self.closeSheet(); });
-      $('overlay').addEventListener('click', function (e) { if (e.target === this && self.sheet !== 'confirm') self.closeSheet(); });
+      $('overlay').addEventListener('click', function (e) { if (e.target === this && self.sheet !== 'confirm' && self.sheet !== 'intro') self.closeSheet(); });
       setInterval(function () { self.loop(); }, 50);
       setInterval(function () { self.save(); }, 2500);
 
@@ -123,7 +138,7 @@
         var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
         html += '<article class="mode-tile" data-mode="' + m.id + '">' +
           '<div class="mode-top"><h2 class="wordmark' + (m.name.length > 10 ? ' long' : '') + '">' + UI.esc(m.name.toUpperCase()) + '</h2>' +
-          '<div class="fan" aria-hidden="true" data-cards="' + (m.fan || ['QS', '9D', 'AH']).join(' ') + '"></div></div>' +
+          fanHtml(m) + '</div>' +
           '<p class="tag">' + UI.esc(m.tagline || '') + '</p>' +
           '<p class="meta">' + (m.players.min === m.players.max ? m.players.min : m.players.min + '–' + m.players.max) + ' players' + hand + ' · you vs computer players</p>' +
           '<div class="mode-actions"><button class="btn btn-primary" type="button" data-play="' + m.id + '">Play ' + UI.esc(m.shortName || m.name) + '</button>' +
@@ -140,13 +155,7 @@
       if (CT.BUILD) html += '<p class="build">Version ' + UI.esc(CT.BUILD.version) + ' · build ' + UI.esc(CT.BUILD.id) + '</p>';
       var home = $('screen-home');
       home.innerHTML = html;
-
-      // decorative fan of cards on each tile (a mode can pick its own three)
-      home.querySelectorAll('.fan').forEach(function (fan) {
-        fan.dataset.cards.split(' ').forEach(function (id) {
-          fan.appendChild(UI.makeCard({ id: id, rank: id.slice(0, -1), suit: id.slice(-1) }));
-        });
-      });
+      fillFans(home);
       var snd = $('h-sound'), mus = $('h-music');
       var paintAudio = function () {
         mus.innerHTML = UI.Music.on ? UI.icon.musicOn : UI.icon.musicOff;
@@ -161,7 +170,7 @@
       snd.addEventListener('click', function () { self.toggleSound(); paintAudio(); });
       if (save) $('h-resume').addEventListener('click', function () { self.resume(save); });
       home.querySelectorAll('[data-play]').forEach(function (b) {
-        b.addEventListener('click', function () { self.openSetup(b.dataset.play); });
+        b.addEventListener('click', function () { self.play(b.dataset.play); });
       });
       home.querySelectorAll('[data-rules]').forEach(function (b) {
         b.addEventListener('click', function () {
@@ -278,9 +287,54 @@
 
     /* ---------- tutorial ---------- */
 
+    /* Play on the home screen. The first time, offer the mode's tutorial. */
+    play: function (modeId) {
+      if (this.shouldOfferTutorial(modeId)) this.offerTutorial(modeId);
+      else this.openSetup(modeId);
+    },
+
+    /* Only once per mode, and only to someone new to it: no finished games,
+       no game of it in progress, and the tutorial not already offered or tried. */
+    shouldOfferTutorial: function (modeId) {
+      if (!(UI.tutorials && UI.tutorials[modeId]) || this.tutorialLog[modeId]) return false;
+      var s = this.stats[modeId];
+      if (s && s.played) return false;
+      var save = UI.store.get(SAVE_KEY, null);
+      return !(save && save.session && save.session.modeId === modeId);
+    },
+
+    noteTutorial: function (modeId, what) {
+      if (this.tutorialLog[modeId] === 'started') return;
+      this.tutorialLog[modeId] = what;
+      UI.store.set(TUTORIALS_KEY, this.tutorialLog);
+    },
+
+    offerTutorial: function (modeId) {
+      var self = this;
+      var mode = CT.getMode(modeId);
+      var lessons = UI.tutorials[modeId].prototype.lessons.length;
+      this.noteTutorial(modeId, 'offered');   // asked once; How to play always has it
+      var sheet = this.openSheet('intro',
+        fanHtml(mode) +
+        '<p class="eyebrow">New to ' + UI.esc(mode.name) + '?</p>' +
+        '<h2>Learn by playing</h2>' +
+        '<p class="intro-text">A short guided game on the real table: ' + lessons + ' quick lessons, about three minutes. You can leave it whenever you like.</p>' +
+        '<div class="intro-actions">' +
+          '<button class="btn btn-primary" type="button" id="i-tutorial">Start the tutorial</button>' +
+          '<button class="btn btn-ghost" type="button" id="i-skip">Skip to the game</button>' +
+        '</div>' +
+        '<button class="link-btn" type="button" id="i-rules">Read the rules instead</button>',
+        { center: true, cls: 'intro', label: 'New to ' + mode.name });
+      fillFans(sheet);
+      $('i-tutorial').addEventListener('click', function () { self.startTutorial(modeId); });
+      $('i-skip').addEventListener('click', function () { self.closeSheet(true); self.openSetup(modeId); });
+      $('i-rules').addEventListener('click', function () { self.openRules(modeId, self.modeSettings(mode).options); });
+    },
+
     startTutorial: function (modeId) {
       var Tutorial = UI.tutorials && UI.tutorials[modeId];
       if (!Tutorial) return;
+      this.noteTutorial(modeId, 'started');
       if (this.session && !this.tutorial) this.save();   // a game in progress stays resumable
       this.closeSheet(true);
       this.tutorial = new Tutorial(this);

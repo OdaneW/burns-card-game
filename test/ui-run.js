@@ -41,8 +41,15 @@ async function open(browser, opts) {
     if (speed && speed !== 1) { const pn = performance.now.bind(performance); const t0 = pn(); performance.now = () => t0 + (pn() - t0) * speed; }
   }, { seed: opts.seed || 1, settings: opts.settings || null, speed: opts.speed || 1 });
   await p.goto('file://' + wrapperPath, { waitUntil: 'domcontentloaded' });
-  // start from clean storage (plus any preset settings), then load again
-  await p.evaluate(settings => { localStorage.clear(); if (settings) localStorage.setItem('cardtable.settings.v1', JSON.stringify(settings)); }, opts.settings || null);
+  // start from clean storage (plus any preset settings), then load again. Unless
+  // the scenario is about a first visit, the tutorials count as already offered,
+  // so Play goes straight to the setup screen.
+  const preset = Object.assign({}, opts.firstVisit ? {} : { 'cardtable.tutorials.v1': { burns: 'offered', donkey: 'offered' } }, opts.storage || {});
+  if (opts.settings) preset['cardtable.settings.v1'] = opts.settings;
+  await p.evaluate(preset => {
+    localStorage.clear();
+    Object.keys(preset).forEach(k => localStorage.setItem(k, JSON.stringify(preset[k])));
+  }, preset);
   await p.reload({ waitUntil: 'domcontentloaded' });
   await sleep(500);
   return p;
@@ -353,6 +360,67 @@ async function playGame(p, tag, want) {
       console.log('  notes that left before their reading time:', rushed.length ? rushed.map(n => n.key + ' (' + n.shown + '/' + n.reading + ' ms)') : 'none');
       console.log('  final title:', finalText, '· after leaving:', after);
       console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (SCENARIO === 'first-play') {
+      // The first time each mode is played, Play offers its tutorial, once.
+      const checks = [];
+      const phone = { viewport: { width: 390, height: 844 } };
+      const p = await open(browser, { ctx: phone, seed: 6, firstVisit: true });
+      const state = pg => pg.evaluate(() => ({ screen: CT.App.screen, sheet: CT.App.sheet, tutorial: CT.App.tutorial ? CT.App.tutorial.modeId : null,
+        text: (document.querySelector('.intro-text') || {}).textContent || '', stored: localStorage.getItem('cardtable.tutorials.v1') }));
+      // Donkey: offered, then skipped
+      await p.tap('[data-play="donkey"]'); await sleep(450);
+      let s = await state(p);
+      checks.push('Play Donkey, first time → sheet = ' + s.sheet + ' · "' + s.text + '"');
+      await shot(p, '80-first-play-donkey');
+      await p.tap('#i-skip'); await sleep(350);
+      s = await state(p);
+      checks.push('Skip to the game → screen = ' + s.screen + ', sheet = ' + s.sheet + ', stored ' + s.stored);
+      await p.tap('#s-back'); await sleep(300);
+      await p.tap('[data-play="donkey"]'); await sleep(400);
+      s = await state(p);
+      checks.push('Play Donkey again → screen = ' + s.screen + ', sheet = ' + s.sheet);
+      await p.tap('#s-back'); await sleep(300);
+      // Burns: offered, then the tutorial taken and left
+      await p.tap('[data-play="burns"]'); await sleep(450);
+      s = await state(p);
+      checks.push('Play Burns, first time → sheet = ' + s.sheet + ' · "' + s.text + '"');
+      await shot(p, '81-first-play-burns');
+      await p.tap('#i-tutorial'); await sleep(800);
+      s = await state(p);
+      checks.push('Start the tutorial → tutorial = ' + s.tutorial + ', screen = ' + s.screen + ', stored ' + s.stored);
+      await shot(p, '82-first-play-burns-tutorial');
+      await p.tap('.coach-skip'); await sleep(400);
+      await p.tap('[data-play="burns"]'); await sleep(400);
+      s = await state(p);
+      checks.push('Leave the tutorial, Play Burns again → screen = ' + s.screen + ', sheet = ' + s.sheet);
+      // Someone who has finished a Burns game isn't asked about Burns, only Donkey
+      const q = await open(browser, { ctx: phone, seed: 6, firstVisit: true,
+        storage: { 'cardtable.stats.v1': { burns: { played: 3, won: 1, flushWins: 0 } } } });
+      await q.tap('[data-play="burns"]'); await sleep(400);
+      s = await state(q);
+      checks.push('Has played Burns before → screen = ' + s.screen + ', sheet = ' + s.sheet);
+      await q.tap('#s-back'); await sleep(300);
+      await q.tap('[data-play="donkey"]'); await sleep(400);
+      s = await state(q);
+      checks.push('…but new to Donkey → sheet = ' + s.sheet);
+      await q.touchscreen.tap(195, 20); await sleep(250);   // outside the card
+      s = await state(q);
+      checks.push('Tap outside the card → sheet = ' + s.sheet);
+      await q.tap('#i-rules'); await sleep(350);
+      s = await state(q);
+      const tutCard = await q.evaluate(() => !!document.getElementById('r-tutorial'));
+      checks.push('Read the rules instead → sheet = ' + s.sheet + ', tutorial offered there too = ' + tutCard);
+      // A phone on its side
+      const w = await open(browser, { ctx: { viewport: { width: 844, height: 390 } }, seed: 6, firstVisit: true });
+      await w.tap('[data-play="donkey"]'); await sleep(450);
+      await shot(w, '83-first-play-landscape');
+      const fits = await w.evaluate(() => { const el = document.querySelector('.sheet.intro'); return el.scrollHeight <= el.clientHeight + 1; });
+      checks.push('On its side, the offer fits without scrolling = ' + fits);
+      checks.forEach(c => console.log('  ' + c));
+      const errors = p.errors.concat(q.errors, w.errors);
+      console.log('  errors:', errors.length ? errors : 'none');
     }
 
     if (SCENARIO === 'settings') {
