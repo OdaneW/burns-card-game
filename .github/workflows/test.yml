@@ -1,0 +1,20 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Rule scenarios and simulated games
+        run: node test/burns.test.js
+      - name: Built app matches the source
+        run: |
+          node build.js
+          git diff --exit-code -- docs || (echo "docs/ is out of date. Run 'node build.js' and commit the result." && exit 1)

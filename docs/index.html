@@ -1,0 +1,3319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Burns Card Game</title>
+<meta name="description" content="Follow the suit, draw when you can’t, and be first to empty your hand. A card game with more modes on the way.">
+<meta name="theme-color" content="#0F3E3C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/bungee-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/young-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face { font-family: 'Bungee'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/bungee-latin-400-normal.woff2) format('woff2'), url(fonts/bungee-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Young Serif'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/young-serif-latin-400-normal.woff2) format('woff2'), url(fonts/young-serif-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Bricolage Grotesque'; font-style: normal; font-weight: 200 800; font-display: swap; src: url(fonts/bricolage-grotesque-latin-wght-normal.woff2) format('woff2-variations'), url(fonts/bricolage-grotesque-latin-wght-normal.woff2) format('woff2'); }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+/* Layout: one-screen portrait card table — opponents along the top edge, a shared
+   rail (deck · suit in play · put-aside pile) across the middle, your hand anchored
+   to the bottom. Look: a hand-painted yard sign — teal board, sign-paint marigold,
+   an ember glow for whoever burns the set. */
+:root {
+  --board: #0F3E3C;
+  --board-deep: #0A2C2B;
+  --board-lift: #17524E;
+  --line: rgba(238, 244, 234, .16);
+  --line-strong: rgba(238, 244, 234, .32);
+  --ink: #EEF4EA;
+  --ink-soft: #A7C5BB;
+  --ink-on-paint: #0E2B29;
+  --marigold: #F4B942;
+  --marigold-deep: #B9821A;
+  --ember: #F0643C;
+  --card: #FBF7EC;
+  --card-edge: #DCD1B8;
+  --suit-red: #C42F28;
+  --suit-black: #1B1E1F;
+
+  --font-display: 'Bungee', 'Arial Black', Impact, system-ui, sans-serif;
+  --font-ui: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-card: 'Young Serif', Georgia, 'Times New Roman', serif;
+
+  --hcw: 58px;      /* card width in your hand */
+  --seat-cw: 40px;  /* opponents' played cards */
+  --me-cw: 48px;    /* your played card */
+  --rail-cw: 50px;  /* deck, starter, put-aside */
+  color-scheme: dark;
+}
+@media (min-height: 700px) { :root { --hcw: 64px; --seat-cw: 44px; --me-cw: 54px; --rail-cw: 54px; } }
+@media (min-height: 740px) and (min-width: 370px) { :root { --hcw: 70px; --seat-cw: 48px; --me-cw: 58px; --rail-cw: 56px; } }
+@media (min-height: 820px) and (min-width: 380px) { :root { --hcw: 74px; --seat-cw: 50px; --me-cw: 62px; --rail-cw: 60px; } }
+@media (min-width: 520px) and (min-height: 860px) { :root { --hcw: 80px; --seat-cw: 54px; --me-cw: 66px; --rail-cw: 62px; } }
+
+html, body { height: 100%; }
+html { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background-color: var(--board);
+  background-image:
+    radial-gradient(110% 70% at 50% 38%, rgba(255, 255, 255, .06), transparent 62%),
+    repeating-linear-gradient(180deg, transparent 0 94px, rgba(0, 0, 0, .13) 94px 96px, rgba(255, 255, 255, .025) 96px 97px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  font: 400 15px/1.4 var(--font-ui);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; }
+button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+
+#app { height: 100%; display: flex; justify-content: center; }
+.screen {
+  width: 100%;
+  max-width: 560px;
+  height: 100%;
+  box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------- shared pieces ---------- */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--marigold);
+  letter-spacing: .02em;
+  line-height: .95;
+  text-shadow: .06em .06em 0 var(--ember), .11em .11em 0 rgba(0, 0, 0, .35);
+}
+.eyebrow {
+  font: 700 12px/1.2 var(--font-ui);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.btn {
+  border: 0;
+  border-radius: 7px;
+  padding: 13px 20px;
+  font: 700 16px/1 var(--font-ui);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform .08s ease, box-shadow .08s ease, background-color .15s;
+}
+.btn-primary {
+  background: var(--marigold);
+  color: var(--ink-on-paint);
+  box-shadow: 0 3px 0 var(--marigold-deep), 0 10px 22px rgba(0, 0, 0, .28);
+}
+.btn-primary:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--marigold-deep), 0 4px 10px rgba(0, 0, 0, .25); }
+.btn-ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.btn-ghost:active { background: rgba(238, 244, 234, .06); }
+.btn-wide { width: 100%; padding: 16px 20px; font-size: 18px; }
+.icon-btn {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 9px;
+  background: transparent; color: var(--ink);
+  cursor: pointer; touch-action: manipulation;
+  flex: none;
+}
+.icon-btn:active { background: rgba(238, 244, 234, .08); }
+.icon-btn svg { width: 22px; height: 22px; }
+.chip {
+  font: 700 11px/1 var(--font-ui);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 6px 9px;
+  border-radius: 99px;
+  background: var(--board-deep);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.chip-warn { background: rgba(240, 100, 60, .18); color: #FFB59B; }
+.spacer { flex: 1; }
+.si { width: 1em; height: 1em; fill: currentColor; vertical-align: -.12em; display: inline-block; }
+.suit-red { color: #FF8B7E; }
+.suit-black { color: var(--ink); }
+.ct { white-space: nowrap; font-weight: 800; }
+
+/* ---------- cards ---------- */
+.card {
+  --cw: var(--hcw);
+  position: relative;
+  box-sizing: border-box;
+  width: var(--cw);
+  aspect-ratio: 5 / 7;
+  border-radius: calc(var(--cw) * .1);
+  background: var(--card);
+  color: var(--suit-black);
+  container-type: inline-size;
+  box-shadow: 0 1px 0 var(--card-edge), 0 5px 12px rgba(3, 22, 21, .38);
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+.card.red { color: var(--suit-red); }
+.card .ci {
+  position: absolute; left: 6cqw; top: 5cqw;
+  display: flex; flex-direction: column; align-items: center;
+  line-height: .86;
+}
+.card .ci b { font: 400 31cqw/1 var(--font-card); letter-spacing: -.04em; }
+.card .ci b.ten { letter-spacing: -.12em; margin-left: -.06em; font-size: 28cqw; }
+.card .ci svg { width: 22cqw; height: 22cqw; fill: currentColor; margin-top: 3cqw; }
+.card .ci-b { left: auto; top: auto; right: 6cqw; bottom: 5cqw; transform: rotate(180deg); }
+.card .pip { position: absolute; inset: 0; display: grid; place-items: center; }
+.card .pip svg { width: 46cqw; height: 46cqw; fill: currentColor; }
+.card .pip.ace svg { width: 60cqw; height: 60cqw; }
+.card .face {
+  position: absolute; inset: 25cqw 29cqw;
+  display: grid; place-items: center;
+  border: 1.5cqw solid currentColor;
+  border-radius: 5cqw;
+  font: 400 40cqw/1 var(--font-card);
+  opacity: .92;
+}
+.card .face::after {
+  content: ''; position: absolute; inset: 3cqw;
+  border: .8cqw solid currentColor; border-radius: 3cqw; opacity: .45;
+}
+.card.back {
+  background-color: var(--marigold);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(14, 50, 48, .85) 0 1.6px, transparent 1.6px 7px),
+    repeating-linear-gradient(-45deg, rgba(14, 50, 48, .85) 0 1.6px, transparent 1.6px 7px);
+  box-shadow: inset 0 0 0 calc(var(--cw) * .06) var(--card), inset 0 0 0 calc(var(--cw) * .08) rgba(14, 50, 48, .55), 0 1px 0 var(--card-edge), 0 5px 12px rgba(3, 22, 21, .38);
+}
+.ghost { position: fixed; z-index: 70; pointer-events: none; margin: 0; }
+#fx { position: fixed; inset: 0; pointer-events: none; z-index: 70; }
+
+/* flip container used in the play slots */
+.flip { width: 100%; height: 100%; perspective: 600px; }
+.flip-in {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.3, .7, .2, 1);
+}
+.flip[data-up="1"] .flip-in { transform: rotateY(180deg); }
+.flip.no-anim .flip-in { transition: none; }
+.flip .card { position: absolute; inset: 0; width: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip .card.front { transform: rotateY(180deg); }
+
+/* ---------- home ---------- */
+#screen-home { overflow-y: auto; padding-block: 18px 28px; gap: 18px; }
+.home-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.home-title { font: 800 30px/1.05 var(--font-ui); letter-spacing: -.01em; }
+.resume {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(244, 185, 66, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(244, 185, 66, .45);
+}
+.resume p { flex: 1; min-width: 0; font-weight: 600; }
+.resume small { display: block; color: var(--ink-soft); font-weight: 500; }
+.resume .btn { padding: 10px 16px; font-size: 15px; }
+.modes { display: grid; gap: 14px; }
+.mode-tile {
+  position: relative;
+  padding: 20px 18px 18px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, var(--board-lift), var(--board-deep));
+  box-shadow: inset 0 0 0 1px var(--line), 0 18px 40px rgba(0, 0, 0, .28);
+  overflow: hidden;
+  display: grid; gap: 10px;
+}
+.mode-top { display: grid; grid-template-columns: minmax(0, 1fr) 118px; align-items: center; gap: 8px; min-height: 104px; }
+.mode-tile .wordmark { font-size: clamp(40px, 12vw, 56px); }
+.mode-tile .tag { font: 600 17px/1.35 var(--font-ui); max-width: 30ch; }
+.mode-tile .meta { color: var(--ink-soft); font-size: 14px; }
+.mode-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.fan { position: relative; width: 118px; height: 104px; pointer-events: none; }
+.fan .card { --cw: 54px; position: absolute; top: 14px; left: 34px; transform-origin: 50% 120%; }
+.fan .card:nth-child(1) { transform: rotate(-18deg) translateX(-14px); }
+.fan .card:nth-child(2) { transform: rotate(-2deg); }
+.fan .card:nth-child(3) { transform: rotate(14deg) translateX(14px); box-shadow: 0 0 0 2px var(--ember), 0 0 26px rgba(240, 100, 60, .55); }
+.mode-tile.soon {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  border: 0;
+  padding: 16px 18px;
+  gap: 4px;
+}
+.mode-tile.soon h3 { font: 700 16px/1.3 var(--font-ui); }
+.mode-tile.soon p { color: var(--ink-soft); font-size: 14px; }
+.record { color: var(--ink-soft); font-size: 14px; font-variant-numeric: tabular-nums; }
+.record b { color: var(--ink); }
+.build { margin-top: auto; padding-top: 8px; color: var(--ink-soft); font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
+
+/* installed app only: offered when a new version has downloaded */
+.update-bar {
+  position: fixed; z-index: 80;
+  left: 12px; right: 12px; margin-inline: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  width: max-content; max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 99px;
+  background: var(--ink); color: var(--ink-on-paint);
+  font: 700 14px/1.2 var(--font-ui);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
+  animation: rise .28s cubic-bezier(.2, .8, .2, 1);
+}
+.update-bar .btn { padding: 8px 14px; font-size: 14px; box-shadow: 0 2px 0 var(--marigold-deep); }
+.update-later { border: 0; background: none; color: var(--ink-on-paint); font: 600 14px var(--font-ui); padding: 8px 10px; cursor: pointer; opacity: .7; }
+
+/* ---------- setup ---------- */
+#screen-setup { padding-block: 10px 16px; gap: 10px; }
+.setup-head { display: flex; align-items: center; gap: 8px; }
+.setup-head .wordmark { font-size: 26px; }
+.setup-body { flex: 1; overflow-y: auto; display: grid; align-content: start; gap: 22px; padding: 10px 0 16px; }
+.field { display: grid; gap: 8px; }
+.field h3 { font: 700 16px/1.25 var(--font-ui); }
+.field .help { color: var(--ink-soft); font-size: 14px; min-height: 2.8em; max-width: 52ch; }
+.seg {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+  padding: 4px; border-radius: 10px;
+  background: var(--board-deep);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .35);
+}
+.seg button {
+  border: 0; border-radius: 7px; padding: 11px 6px;
+  background: transparent; color: var(--ink-soft);
+  font: 700 15px/1.1 var(--font-ui);
+  cursor: pointer; touch-action: manipulation;
+  font-variant-numeric: tabular-nums;
+}
+.seg button[aria-pressed="true"] { background: var(--marigold); color: var(--ink-on-paint); box-shadow: 0 2px 0 var(--marigold-deep); }
+.setup-foot { display: grid; gap: 10px; }
+.link-btn { background: none; border: 0; color: var(--ink-soft); font: 600 15px var(--font-ui); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 6px; justify-self: center; }
+
+/* ---------- table ---------- */
+#screen-table {
+  padding-block: 4px 8px;
+  gap: 6px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.topbar { display: flex; align-items: center; gap: 6px; height: 40px; flex: none; }
+.topbar .wordmark { font-size: 19px; margin: 0 4px 0 2px; }
+
+.seats { display: flex; justify-content: center; gap: 4px; flex: none; }
+.seat {
+  flex: 1 1 0; min-width: 0; max-width: 100px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 5px 2px 4px;
+  border-radius: 12px;
+  transition: background-color .25s;
+}
+.seat.is-active { background: rgba(244, 185, 66, .09); }
+.seat-row { display: flex; align-items: center; gap: 5px; }
+.avatar {
+  position: relative;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  font: 400 12px/1 var(--font-display);
+  color: var(--ink-on-paint);
+  background: var(--paint, var(--marigold));
+  box-shadow: 0 0 0 2px var(--board);
+}
+.seat.is-active .avatar { animation: ring 1.3s ease-in-out infinite; }
+.avatar .flame { position: absolute; right: -7px; top: -8px; width: 15px; height: 15px; fill: var(--ember); display: none; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .4)); }
+.is-leader .avatar .flame { display: block; }
+.seat-count { display: flex; align-items: center; gap: 3px; font: 800 15px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.mini-back {
+  width: 10px; height: 14px; border-radius: 2px; display: inline-block;
+  background: var(--marigold);
+  background-image: repeating-linear-gradient(45deg, rgba(14, 50, 48, .9) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 0 1px var(--card);
+}
+.seat-name { font: 600 12px/1.15 var(--font-ui); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-chip { font: 600 11px/1.15 var(--font-ui); color: var(--ink-soft); height: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-chip.hot { color: var(--marigold); }
+.seat-chip.warn { color: #FFB59B; }
+.seat-voids { height: 13px; font: 600 11px/1 var(--font-ui); color: var(--ink-soft); display: flex; gap: 2px; align-items: center; white-space: nowrap; }
+.seat-voids .si { width: 10px; height: 10px; vertical-align: -1px; }
+
+.slot {
+  --cw: var(--seat-cw);
+  position: relative;
+  width: var(--cw);
+  aspect-ratio: 5 / 7;
+  border-radius: calc(var(--cw) * .1);
+  flex: none;
+}
+.slot::before {
+  content: ''; position: absolute; inset: 0;
+  border-radius: inherit;
+  border: 1.5px dashed rgba(238, 244, 234, .22);
+}
+.slot .flip { position: relative; z-index: 1; }
+.slot .card { --cw: 100%; }
+.slot.gone .flip { opacity: .4; }
+.slot-tag {
+  position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+  z-index: 3;
+  font: 800 9px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase;
+  padding: 3px 5px; border-radius: 4px;
+  background: var(--ink); color: var(--ink-on-paint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.slot-tag.ember { background: var(--ember); color: #2A0E05; }
+.slot-tag.top { bottom: auto; top: -8px; }
+.slot.winner .flip .card.front { animation: burn 2.2s ease-out .55s both; }
+.slot.takeable { cursor: pointer; }
+.slot.takeable .flip { animation: bob .9s ease-in-out infinite alternate; }
+.slot.takeable .flip .card.front { box-shadow: 0 0 0 2px var(--marigold), 0 0 18px rgba(244, 185, 66, .7); }
+.slot .eye {
+  position: absolute; z-index: 3; right: -6px; top: -6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--board-deep); color: var(--ink-soft);
+  box-shadow: 0 0 0 1.5px var(--line-strong);
+}
+.slot .eye svg { width: 11px; height: 11px; }
+
+.rail-zone { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.rail {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(6, 30, 29, .72), rgba(6, 30, 29, .45));
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .04);
+}
+.deck {
+  justify-self: start;
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 6px 6px 4px;
+  border: 0; border-radius: 12px; background: transparent;
+  cursor: default;
+  touch-action: manipulation;
+}
+.deck-stack { position: relative; width: var(--rail-cw); aspect-ratio: 5 / 7; display: block; }
+.deck-stack .card { --cw: var(--rail-cw); position: absolute; left: 0; top: 0; }
+.deck-stack .card:nth-child(1) { transform: translate(3px, 3px); }
+.deck-stack .card:nth-child(2) { transform: translate(1.5px, 1.5px); }
+.deck.empty .deck-stack .card { display: none; }
+.deck.empty .deck-stack::before { content: ''; position: absolute; inset: 0; border-radius: 6px; border: 1.5px dashed rgba(238, 244, 234, .25); }
+.deck-count { font: 700 12px/1 var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.deck .cool { position: absolute; left: 50%; top: 6px; width: calc(var(--rail-cw) + 18px); height: calc(var(--rail-cw) + 18px); transform: translate(-50%, calc(var(--rail-cw) * .2 - 9px)); pointer-events: none; opacity: 0; }
+.deck .cool circle { fill: none; stroke: var(--marigold); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 100.5; stroke-dashoffset: 0; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.deck.cooling .cool { opacity: 1; }
+.deck.cooling .cool circle { animation: cool var(--cool, 500ms) linear forwards; }
+.deck.can-draw { cursor: pointer; }
+.deck.can-draw .deck-stack .card:last-child { box-shadow: 0 0 0 2px var(--marigold), 0 0 20px rgba(244, 185, 66, .7); }
+.deck.can-draw .deck-count { color: var(--marigold); }
+.deck.can-draw:not(.cooling) .deck-stack { animation: nudge 1.4s ease-in-out infinite; }
+.deck.tapped .deck-stack { transform: scale(.94); transition: transform .06s; }
+.deck.wiggle .deck-stack { animation: wiggle .25s ease; }
+
+.lead-spot { position: relative; width: calc(var(--rail-cw) * 2 + 4px); height: calc(var(--rail-cw) * 2 + 4px); display: grid; place-items: center; }
+.lead-spot .ring { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); transform: rotate(-90deg); pointer-events: none; }
+.lead-spot .ring circle { fill: none; stroke-width: 3; }
+.lead-spot .ring .bg { stroke: rgba(238, 244, 234, .12); }
+.lead-spot .ring .fg { stroke: var(--marigold); stroke-linecap: round; transition: stroke .3s; }
+.lead-spot.urgent .ring .fg { stroke: var(--ember); }
+.roundel {
+  width: calc(var(--rail-cw) * 1.62); height: calc(var(--rail-cw) * 1.62);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 38%, #FFFDF5, var(--card) 60%, #EDE3CA);
+  box-shadow: 0 0 0 3px var(--board-deep), 0 0 0 5px rgba(244, 185, 66, .55), 0 10px 24px rgba(0, 0, 0, .35);
+  color: var(--suit-black);
+  position: relative;
+}
+.roundel.red { color: var(--suit-red); }
+.roundel svg { width: 52%; height: 52%; fill: currentColor; }
+.roundel.empty { background: rgba(238, 244, 234, .06); box-shadow: inset 0 0 0 1.5px dashed rgba(238, 244, 234, .25); color: var(--ink-soft); }
+.roundel.empty::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1.5px dashed rgba(238, 244, 234, .3); }
+.roundel .q { font: 400 calc(var(--rail-cw) * .62)/1 var(--font-display); color: var(--ink-soft); }
+.lead-label {
+  position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+  font: 800 10px/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase;
+  padding: 4px 7px; border-radius: 99px;
+  background: var(--board-deep); color: var(--ink-soft);
+  white-space: nowrap; z-index: 2;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.lead-label.hot { background: var(--marigold); color: var(--ink-on-paint); box-shadow: none; }
+.lead-label.ember { background: var(--ember); color: #2A0E05; box-shadow: none; }
+.timer-num { position: absolute; top: -4px; right: -4px; z-index: 3; min-width: 26px; height: 26px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; display: grid; place-items: center; font: 800 13px/1 var(--font-ui); background: var(--marigold); color: var(--ink-on-paint); font-variant-numeric: tabular-nums; }
+.lead-spot.urgent .timer-num { background: var(--ember); color: #2A0E05; }
+.starter-card { --cw: calc(var(--rail-cw) * 1.08); position: relative; }
+.starter-card .flip { width: var(--cw); aspect-ratio: 5 / 7; height: auto; }
+.starter-card.takeable { cursor: pointer; }
+.starter-card.takeable .flip { animation: bob .9s ease-in-out infinite alternate; }
+.starter-card.takeable .card.front { box-shadow: 0 0 0 2px var(--marigold), 0 0 18px rgba(244, 185, 66, .7); }
+.starter-card.gone .flip { opacity: .4; }
+.aside { justify-self: end; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 6px 4px; }
+.aside-stack { position: relative; width: var(--rail-cw); aspect-ratio: 5 / 7; display: block; transform: rotate(4deg); }
+.aside-stack .card { --cw: var(--rail-cw); position: absolute; left: 0; top: 0; filter: brightness(.82) saturate(.8); }
+.aside-stack .card:nth-child(1) { transform: rotate(-9deg); }
+.aside.empty .aside-stack .card { display: none; }
+.aside.empty .aside-stack::before { content: ''; position: absolute; inset: 0; border-radius: 6px; border: 1.5px dashed rgba(238, 244, 234, .18); }
+.aside-count { font: 700 12px/1 var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.status { min-height: 46px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 3px; flex: none; }
+.status-main { font: 700 17px/1.22 var(--font-ui); text-wrap: balance; }
+.status-sub { font: 500 13px/1.3 var(--font-ui); color: var(--ink-soft); text-wrap: balance; min-height: 1.3em; }
+.status .hl { color: var(--marigold); }
+.status .em { color: #FFB59B; }
+
+.me { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; flex: none; }
+.me-info { justify-self: start; display: grid; gap: 2px; min-width: 0; }
+.me-name { font: 800 15px/1.1 var(--font-ui); display: flex; align-items: center; gap: 4px; }
+.me-name svg { width: 14px; height: 14px; fill: var(--ember); display: none; }
+.me.is-leader .me-name svg { display: inline-block; }
+.me-count { font: 500 13px/1.2 var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.me .slot { --cw: var(--me-cw); }
+.me-action { justify-self: end; }
+.btn-play { padding: 11px 14px; font-size: 15px; white-space: nowrap; }
+.btn-play .si { margin-left: 1px; }
+
+.hand-wrap {
+  position: relative; flex: none;
+  height: calc(var(--hcw) * 1.4 + 22px);
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+  margin: 0 calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+}
+.hand-wrap::-webkit-scrollbar { display: none; }
+.hand { position: relative; height: 100%; }
+.hcard {
+  position: absolute; bottom: 4px;
+  padding: 0; border: 0;
+  cursor: pointer; touch-action: manipulation;
+  transition: transform .18s cubic-bezier(.3, .7, .3, 1), left .28s cubic-bezier(.3, .7, .3, 1), filter .2s, box-shadow .2s;
+}
+.hcard.playable { box-shadow: 0 0 0 2px rgba(244, 185, 66, .85), 0 6px 14px rgba(3, 22, 21, .4); }
+.hcard.selected { transform: translateY(-16px); box-shadow: 0 0 0 3px var(--marigold), 0 14px 24px rgba(3, 22, 21, .5); }
+.hcard.dim { filter: saturate(.35) brightness(.62); }
+.hcard.new { animation: arrive .35s ease-out; }
+.hcard.shake { animation: shake .3s ease; }
+.hand-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-soft); font-weight: 600; }
+
+/* ---------- sheets & overlays ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  background: rgba(4, 20, 19, .66);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.overlay.center { align-items: center; }
+.sheet {
+  width: 100%; max-width: 520px; max-height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--board-lift), var(--board));
+  box-shadow: inset 0 0 0 1px var(--line), 0 24px 60px rgba(0, 0, 0, .45);
+  padding: 20px 18px 18px;
+  display: grid; gap: 14px;
+  animation: rise .28s cubic-bezier(.2, .8, .2, 1);
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sheet-head h2 { font: 800 21px/1.2 var(--font-ui); }
+.rules { display: grid; gap: 14px; }
+.rules section { display: grid; gap: 3px; }
+.rules h3 { font: 700 15px/1.25 var(--font-ui); color: var(--marigold); }
+.rules p { color: var(--ink); font-size: 15px; line-height: 1.45; max-width: 60ch; }
+.rules .house { color: var(--ink-soft); font-size: 13px; }
+.menu-list { display: grid; gap: 8px; }
+.menu-list .btn { text-align: left; }
+.confirm { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(240, 100, 60, .12); box-shadow: inset 0 0 0 1px rgba(240, 100, 60, .4); }
+.confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.log { display: grid; gap: 6px; font-size: 14px; line-height: 1.4; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.log p { padding-left: 10px; border-left: 2px solid var(--line); }
+.log p.set { border-left-color: var(--marigold); font-weight: 700; margin-top: 6px; }
+.log p.win { border-left-color: var(--ember); }
+.log .empty { color: var(--ink-soft); border: 0; padding: 0; }
+
+.result { text-align: center; justify-items: center; gap: 12px; }
+.result .wordmark { font-size: 44px; }
+.result-why { font: 600 16px/1.4 var(--font-ui); max-width: 34ch; }
+.result-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.result-cards .card { --cw: 48px; }
+.standings { width: 100%; display: grid; gap: 4px; text-align: left; }
+.standings li { list-style: none; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(6, 30, 29, .45); }
+.standings ul { margin: 0; padding: 0; display: grid; gap: 4px; }
+.standings .avatar { width: 24px; height: 24px; font-size: 10px; }
+.standings .left { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
+.standings .champ { box-shadow: inset 0 0 0 1.5px var(--ember); }
+.result-actions { display: grid; gap: 8px; width: 100%; grid-template-columns: 1fr 1fr; }
+.result-actions .btn-ghost { padding: 12px 8px; font-size: 15px; }
+.result-actions .btn-primary { grid-column: 1 / -1; }
+
+.toast {
+  position: fixed; left: 50%; z-index: 60;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--hcw) * 1.4 + 36px);
+  transform: translate(-50%, 8px);
+  max-width: min(88vw, 420px);
+  padding: 9px 14px; border-radius: 99px;
+  background: var(--ink); color: var(--ink-on-paint);
+  font: 700 14px/1.25 var(--font-ui); text-align: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+  opacity: 0; pointer-events: none;
+  transition: opacity .18s, transform .18s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast .si { vertical-align: -.1em; }
+.toast .suit-red { color: var(--suit-red); }
+.toast .suit-black { color: var(--suit-black); }
+
+/* ---------- motion ---------- */
+@keyframes ring { 0%, 100% { box-shadow: 0 0 0 2px var(--board), 0 0 0 3px rgba(244, 185, 66, .25); } 50% { box-shadow: 0 0 0 2px var(--board), 0 0 0 5px rgba(244, 185, 66, .9); } }
+@keyframes burn {
+  0% { box-shadow: 0 0 0 0 rgba(240, 100, 60, 0); }
+  25% { box-shadow: 0 0 0 3px var(--ember), 0 0 30px 6px rgba(240, 100, 60, .8); }
+  100% { box-shadow: 0 0 0 2px var(--ember), 0 0 16px 2px rgba(240, 100, 60, .55); }
+}
+@keyframes bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+@keyframes cool { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 100.5; } }
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes wiggle { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-3px); } 70% { transform: translateX(3px); } }
+@keyframes shake { 0%, 100% { translate: 0; } 25% { translate: -4px; } 75% { translate: 4px; } }
+@keyframes arrive { from { filter: brightness(1.25); } to { filter: none; } }
+@keyframes rise { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes dealIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+.deal-in { animation: dealIn .35s ease-out both; }
+
+/* short screens (landscape phones): smaller cards, and the hand moves beside the table */
+@media (max-height: 560px) {
+  :root { --hcw: 50px; --seat-cw: 32px; --me-cw: 40px; --rail-cw: 40px; }
+  .status-sub, .seat-voids { display: none; }
+  .status { min-height: 0; }
+}
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  #screen-table {
+    max-width: 1000px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    column-gap: 20px;
+    row-gap: 6px;
+  }
+  .topbar { grid-column: 1 / -1; }
+  .seats { grid-column: 1; grid-row: 2; }
+  .rail-zone { grid-column: 1; grid-row: 3 / span 2; justify-content: flex-start; }
+  .me { grid-column: 2; grid-row: 2 / span 2; align-self: end; }
+  .hand-wrap { grid-column: 2; grid-row: 4; margin: 0; padding: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="suit-H" viewBox="0 0 100 100"><path d="M50 91C27 72 6 54 6 32 6 17 17 7 30.5 7 39.5 7 46.5 12 50 20 53.5 12 60.5 7 69.5 7 83 7 94 17 94 32 94 54 73 72 50 91Z"/></symbol>
+    <symbol id="suit-D" viewBox="0 0 100 100"><path d="M50 4C61 21 73 36 88 50 73 64 61 79 50 96 39 79 27 64 12 50 27 36 39 21 50 4Z"/></symbol>
+    <symbol id="suit-S" viewBox="0 0 100 100"><path d="M50 5C61 23 93 37 93 60 93 74 83 82 71 82 63 82 57 78 53.5 72 54.5 82 58.5 90 67 95H33C41.5 90 45.5 82 46.5 72 43 78 37 82 29 82 17 82 7 74 7 60 7 37 39 23 50 5Z"/></symbol>
+    <symbol id="suit-C" viewBox="0 0 100 100"><circle cx="50" cy="27" r="19.5"/><circle cx="27" cy="57" r="19.5"/><circle cx="73" cy="57" r="19.5"/><circle cx="50" cy="52" r="12"/><path d="M45 54H55L58 72C59 83 63 90 69 95H31C37 90 41 83 42 72Z"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12.6 1.8c.7 3.5 5 5.7 5 10.9 0 4-2.6 7.6-5.6 7.6s-5.5-2.7-5.5-6c0-2.7 1.6-4.5 2.7-5.8.2 2.2 1 3.4 2.3 3.5C11.3 8.6 11 5 12.6 1.8Z"/></symbol>
+  </defs>
+</svg>
+
+<div id="app">
+  <main class="screen" id="screen-home" aria-label="Games"></main>
+  <main class="screen" id="screen-setup" aria-label="Game setup" hidden></main>
+  <main class="screen" id="screen-table" aria-label="Card table" hidden></main>
+</div>
+<div class="overlay" id="overlay" hidden></div>
+<div id="fx" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="update-bar" id="update-bar" role="status" hidden>
+  <span>A new version is ready.</span>
+  <button class="btn btn-primary" type="button" id="update-now">Update</button>
+  <button class="update-later" type="button" id="update-later" aria-label="Not now">Later</button>
+</div>
+
+<script>
+window.CT = window.CT || {};
+CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
+/* ---- src/engine/core.js ---- */
+/* ==========================================================================
+   CARD TABLE ENGINE · core
+   Mode-agnostic building blocks shared by every game mode:
+   cards and decks, a seedable random source kept inside the game state,
+   and the registry that game modes plug into.
+   Works in the browser (attaches to window.CT) and in Node (globalThis.CT).
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  /* ---------- Cards ------------------------------------------------------ */
+
+  // Display order alternates colours so a sorted hand is easy to read.
+  var SUITS = ['S', 'H', 'C', 'D'];
+  var SUIT_INFO = {
+    S: { name: 'Spades', single: 'spade', color: 'black' },
+    H: { name: 'Hearts', single: 'heart', color: 'red' },
+    C: { name: 'Clubs', single: 'club', color: 'black' },
+    D: { name: 'Diamonds', single: 'diamond', color: 'red' }
+  };
+  var RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  var RANK_NAMES = { J: 'Jack', Q: 'Queen', K: 'King', A: 'Ace' };
+
+  function makeCard(rank, suit) {
+    return { id: rank + suit, rank: rank, suit: suit };
+  }
+
+  /** A fresh, ordered 52-card deck. */
+  function standardDeck() {
+    var deck = [];
+    SUITS.forEach(function (s) {
+      RANKS.forEach(function (r) { deck.push(makeCard(r, s)); });
+    });
+    return deck;
+  }
+
+  /** 2 → 1 … K → 12, A → 13 (or 0 when aces are low). */
+  function rankValue(rank, aceHigh) {
+    if (rank === 'A' && aceHigh === false) return 0;
+    return RANKS.indexOf(rank) + 1;
+  }
+
+  function cardName(card) {
+    return (RANK_NAMES[card.rank] || card.rank) + ' of ' + SUIT_INFO[card.suit].name;
+  }
+
+  function hasSuit(hand, suit) {
+    for (var i = 0; i < hand.length; i++) if (hand[i].suit === suit) return true;
+    return false;
+  }
+
+  /* ---------- Randomness ------------------------------------------------- *
+   * The generator's state lives on the game state (state.rng), so a saved or
+   * transmitted game replays exactly. mulberry32.                            */
+
+  function rand(state) {
+    var a = (state.rng + 0x6D2B79F5) | 0;
+    state.rng = a >>> 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  function shuffle(arr, state) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(rand(state) * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function pickRandom(arr, state) {
+    return arr[Math.floor(rand(state) * arr.length)];
+  }
+
+  /** Stand-alone generator for things outside the rules (bot timing, names). */
+  function makeRng(seed) {
+    var box = { rng: (seed >>> 0) || 1 };
+    return function () { return rand(box); };
+  }
+
+  /* ---------- Results ---------------------------------------------------- */
+
+  function ok(extra) {
+    var r = { ok: true };
+    if (extra) for (var k in extra) r[k] = extra[k];
+    return r;
+  }
+
+  function fail(code, message, extra) {
+    var r = { ok: false, code: code, message: message };
+    if (extra) for (var k in extra) r[k] = extra[k];
+    return r;
+  }
+
+  /* ---------- Game-mode registry ----------------------------------------- *
+   * A mode is a plain object:
+   *   id, name, tagline, players {min,max,default}, options [ ... ],
+   *   rules(options)            → [{ title, text }]   (shown in How to play)
+   *   createGame(config)        → state               (JSON-serialisable)
+   *   act(state, pid, type, payload, now) → { ok, code?, message? }
+   *   tick(state, now)          → true when the state changed
+   *   view(state, pid, opts)    → what that one player is allowed to see
+   *   bot                       → { intent(view), delay(intent, view, rnd), decide(view, memory, rnd) }
+   *   presenter                 → id of the table UI that draws this mode
+   * ------------------------------------------------------------------------ */
+
+  var modes = [];
+
+  function registerMode(def) {
+    ['id', 'name', 'createGame', 'act', 'tick', 'view'].forEach(function (key) {
+      if (!def[key]) throw new Error('Game mode is missing "' + key + '"');
+    });
+    modes = modes.filter(function (m) { return m.id !== def.id; });
+    modes.push(def);
+    return def;
+  }
+
+  function getMode(id) {
+    for (var i = 0; i < modes.length; i++) if (modes[i].id === id) return modes[i];
+    return null;
+  }
+
+  function listModes() { return modes.slice(); }
+
+  /** Fill in defaults for a mode's option schema and drop unknown values. */
+  function resolveOptions(schema, given) {
+    var out = {};
+    (schema || []).forEach(function (opt) {
+      var v = given ? given[opt.id] : undefined;
+      var valid = opt.choices.some(function (c) { return c.value === v; });
+      out[opt.id] = valid ? v : opt.default;
+    });
+    return out;
+  }
+
+  CT.SUITS = SUITS;
+  CT.SUIT_INFO = SUIT_INFO;
+  CT.RANKS = RANKS;
+  CT.makeCard = makeCard;
+  CT.standardDeck = standardDeck;
+  CT.rankValue = rankValue;
+  CT.cardName = cardName;
+  CT.hasSuit = hasSuit;
+  CT.rand = rand;
+  CT.shuffle = shuffle;
+  CT.pickRandom = pickRandom;
+  CT.makeRng = makeRng;
+  CT.ok = ok;
+  CT.fail = fail;
+  CT.registerMode = registerMode;
+  CT.getMode = getMode;
+  CT.listModes = listModes;
+  CT.resolveOptions = resolveOptions;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/engine/session.js ---- */
+/* ==========================================================================
+   CARD TABLE ENGINE · session
+   Runs one game of any registered mode: owns the state, a pausable game
+   clock, action dispatch, timed rule steps (tick) and computer players.
+   The UI only ever talks to a Session; a future online version can swap the
+   Session for a network client with the same act/view/on surface.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  function realNow() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+
+  /** Game time in ms. Stops while paused (app in background), survives reloads. */
+  function Clock(startAt) {
+    this.base = startAt || 0;
+    this.since = realNow();
+    this.running = true;
+  }
+  Clock.prototype.now = function () {
+    return this.running ? this.base + (realNow() - this.since) : this.base;
+  };
+  Clock.prototype.pause = function () {
+    if (!this.running) return;
+    this.base = this.now();
+    this.running = false;
+  };
+  Clock.prototype.resume = function () {
+    if (this.running) return;
+    this.since = realNow();
+    this.running = true;
+  };
+
+  /** Manually advanced clock for tests and simulations. */
+  function ManualClock(startAt) { this.t = startAt || 0; }
+  ManualClock.prototype.now = function () { return this.t; };
+  ManualClock.prototype.advance = function (ms) { this.t += ms; };
+  ManualClock.prototype.pause = function () {};
+  ManualClock.prototype.resume = function () {};
+
+  /**
+   * new Session({ modeId, players:[{id,name,isBot}], options, seed, timing, clock })
+   * or Session.restore(saved)
+   */
+  function Session(config) {
+    this.mode = CT.getMode(config.modeId);
+    if (!this.mode) throw new Error('Unknown game mode: ' + config.modeId);
+    this.clock = config.clock || new Clock(0);
+    this.state = config.state || this.mode.createGame({
+      players: config.players,
+      options: config.options,
+      seed: config.seed,
+      timing: config.timing,
+      now: this.clock.now()
+    });
+    this.botRng = CT.makeRng((config.botSeed != null ? config.botSeed : (this.state.rng ^ 0x9E3779B9)) >>> 0);
+    this.botPlans = {};
+    this.botMemory = {};
+    this.listeners = [];
+  }
+
+  Session.prototype.now = function () { return this.clock.now(); };
+
+  Session.prototype.on = function (fn) {
+    var list = this.listeners;
+    list.push(fn);
+    return function () { var i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); };
+  };
+
+  Session.prototype._changed = function (info) {
+    for (var i = 0; i < this.listeners.length; i++) this.listeners[i](info);
+  };
+
+  /** Apply a player's action. Returns the mode's { ok, code, message, … }. */
+  Session.prototype.act = function (playerId, type, payload) {
+    var res = this.mode.act(this.state, playerId, type, payload || {}, this.now());
+    if (res.ok) this._changed({ by: playerId, type: type });
+    return res;
+  };
+
+  /** Advance timed rule steps and let computer players act. Call ~20×/s. */
+  Session.prototype.tick = function () {
+    var now = this.now();
+    if (this.mode.tick(this.state, now)) this._changed({ type: 'tick' });
+    this._runBots(now);
+  };
+
+  Session.prototype._runBots = function (now) {
+    var bot = this.mode.bot;
+    if (!bot) return;
+    var players = this.state.players;
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      if (!p.isBot) continue;
+      var view = this.mode.view(this.state, p.id, { events: false });
+      var intent = bot.intent(view);
+      if (!intent) { delete this.botPlans[p.id]; continue; }
+      var plan = this.botPlans[p.id];
+      if (!plan || plan.key !== intent.key) {
+        plan = this.botPlans[p.id] = { key: intent.key, at: now + bot.delay(intent, view, this.botRng) };
+      }
+      if (now < plan.at) continue;
+      var memory = this.botMemory[p.id] || (this.botMemory[p.id] = {});
+      var action = bot.decide(view, memory, this.botRng);
+      delete this.botPlans[p.id];
+      if (!action) continue;
+      var res = this.act(p.id, action.type, action.payload);
+      if (!res.ok) {
+        // Lost a race (card already taken, still cooling down…): think again shortly.
+        this.botPlans[p.id] = { key: intent.key, at: now + (res.retryInMs || 0) + 250 };
+      }
+      now = this.now();
+    }
+  };
+
+  Session.prototype.view = function (playerId, opts) {
+    return this.mode.view(this.state, playerId, opts || {});
+  };
+
+  Session.prototype.pause = function () { this.clock.pause(); };
+  Session.prototype.resume = function () { this.clock.resume(); };
+
+  Session.prototype.serialize = function () {
+    return {
+      kind: 'card-table-session',
+      modeId: this.mode.id,
+      engineVersion: this.state.engineVersion,
+      clock: this.clock.now(),
+      state: this.state
+    };
+  };
+
+  /** Rebuild a session from serialize() output. Returns null when incompatible. */
+  Session.restore = function (saved) {
+    if (!saved || saved.kind !== 'card-table-session') return null;
+    var mode = CT.getMode(saved.modeId);
+    if (!mode || !saved.state || mode.engineVersion !== saved.engineVersion) return null;
+    try {
+      return new Session({ modeId: saved.modeId, state: saved.state, clock: new Clock(saved.clock || 0) });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  CT.Clock = Clock;
+  CT.ManualClock = ManualClock;
+  CT.Session = Session;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/modes/burns/rules.js ---- */
+/* ==========================================================================
+   GAME MODE · BURNS — rules
+   Pure rules: every function takes the state and the current game time and
+   either changes the state or explains why it can't. No timers, no DOM.
+
+   Flow of one game
+     dealing ──(flush?)──► over
+        └──► set 1: starter card sets the suit ─► follow ─► [take] ─► reveal
+     reveal ──► lead (set winner plays any suit) ─► follow ─► [take] ─► reveal …
+     A set ends with everyone's card revealed; whoever has emptied their hand
+     at that point wins.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  var ENGINE_VERSION = 1;
+  var HAND_SIZE = 4;
+
+  var DEFAULT_TIMING = {
+    drawCooldownMs: 500,   // minimum gap between two draws by the same player
+    takeWindowMs: 10000,   // time to choose a card from the set when the deck is empty
+    dealHoldMs: 1900,      // pause after the deal before the Flush check
+    revealHoldMs: 2700     // how long a revealed set stays on the table
+  };
+
+  /* Rule choices the user can switch on the setup screen. Add new house
+     rules here; the setup screen and the rules text pick them up. */
+  var OPTIONS = [
+    {
+      id: 'deckEmpty',
+      label: 'When the deck runs out',
+      default: 'pickUp',
+      choices: [
+        { value: 'pickUp', label: 'Pick up', help: 'Players who can’t follow take one card from the set into their hand and sit out that set.' },
+        { value: 'takeAndPlay', label: 'Take and play', help: 'Players who can’t follow take one card from the set and play it as their own, so it can win them the set.' }
+      ]
+    },
+    {
+      id: 'leadCard',
+      label: 'The leader’s card',
+      default: 'suitOnly',
+      choices: [
+        { value: 'suitOnly', label: 'Suit only', help: 'Everyone sees which suit was led. The card itself stays hidden until the reveal.' },
+        { value: 'faceUp', label: 'Face up', help: 'The lead card is shown to everyone as soon as it is played.' }
+      ]
+    }
+  ];
+
+  /* ---------- helpers ---------------------------------------------------- */
+
+  function player(state, pid) {
+    for (var i = 0; i < state.players.length; i++) if (state.players[i].id === pid) return state.players[i];
+    return null;
+  }
+
+  function followers(state) {
+    return state.players.filter(function (p) { return p.id !== state.leader; });
+  }
+
+  function isTaker(state, pid) { return state.takers.indexOf(pid) >= 0; }
+
+  function value(state, card) { return CT.rankValue(card.rank, true); }
+
+  function suitName(suit) { return CT.SUIT_INFO[suit].single; }
+
+  function emit(state, now, ev, secret) {
+    state.seq += 1;
+    ev.seq = state.seq;
+    ev.t = Math.round(now);
+    if (secret) ev.secret = secret;
+    state.events.push(ev);
+    if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
+  }
+
+  /* Public knowledge: suits a player is certainly out of. */
+  function addVoid(state, pid, suit) {
+    var v = state.voids[pid] || (state.voids[pid] = []);
+    if (v.indexOf(suit) < 0) v.push(suit);
+  }
+  function removeVoid(state, pid, suit) {
+    var v = state.voids[pid];
+    if (v) state.voids[pid] = v.filter(function (s) { return s !== suit; });
+  }
+  function keepOnlyVoid(state, pid, suit) {
+    var v = state.voids[pid] || [];
+    state.voids[pid] = v.indexOf(suit) >= 0 ? [suit] : [];
+  }
+
+  function cardsOnTable(state) { return state.table.filter(function (e) { return !e.takenBy; }); }
+
+  /* ---------- setup ------------------------------------------------------ */
+
+  function createGame(config) {
+    var players = config.players || [];
+    if (players.length < 2 || players.length > 6) throw new Error('Burns needs 2 to 6 players');
+    var now = config.now || 0;
+    var timing = {};
+    for (var k in DEFAULT_TIMING) timing[k] = DEFAULT_TIMING[k];
+    if (config.timing) for (var t in config.timing) timing[t] = config.timing[t];
+
+    var state = {
+      mode: 'burns',
+      engineVersion: ENGINE_VERSION,
+      rng: ((config.seed != null ? config.seed : Date.now()) >>> 0) || 1,
+      options: CT.resolveOptions(OPTIONS, config.options),
+      timing: timing,
+      players: players.map(function (p, i) {
+        return { id: p.id, name: p.name, isBot: !!p.isBot, seat: i, hand: [] };
+      }),
+      deck: [],
+      discard: [],
+      starter: null,
+      setNo: 0,
+      phase: 'dealing',
+      phaseEndsAt: now + timing.dealHoldMs,
+      leader: null,
+      suit: null,
+      table: [],        // [{ card, owner, via: 'starter'|'lead'|'hand'|'draw', takenBy? }]
+      committed: {},    // pid → true once their card for this set is in
+      drawn: {},        // pid → cards drawn this set
+      takers: [],       // pids who must take a card from the set (deck empty)
+      taken: {},        // pid → card id taken in the take phase
+      takeEndsAt: null,
+      revealed: false,
+      lastDrawAt: {},
+      voids: {},
+      setResult: null,
+      winners: null,
+      winReason: null,
+      seq: 0,
+      events: []
+    };
+
+    var deck = CT.shuffle(CT.standardDeck(), state);
+    for (var round = 0; round < HAND_SIZE; round++) {
+      state.players.forEach(function (p) { p.hand.push(deck.pop()); });
+    }
+    state.starter = deck.pop();
+    state.deck = deck;
+
+    var secret = {};
+    state.players.forEach(function (p) { secret[p.id] = { hand: p.hand.slice() }; });
+    emit(state, now, { type: 'deal', handSize: HAND_SIZE, order: state.players.map(function (p) { return p.id; }) }, secret);
+    return state;
+  }
+
+  function startSet(state, now, leaderId) {
+    // Put the finished set aside. Cards picked up by takers already left the table.
+    state.table.forEach(function (e) { if (!e.gone) state.discard.push(e.card); });
+    state.table = [];
+    state.setNo += 1;
+    state.committed = {};
+    state.drawn = {};
+    state.takers = [];
+    state.taken = {};
+    state.takeEndsAt = null;
+    state.revealed = false;
+    state.setResult = null;
+    state.phaseEndsAt = null;
+
+    if (state.setNo === 1) {
+      var starter = state.starter;
+      state.starter = null;
+      state.leader = null;
+      state.suit = starter.suit;
+      state.table.push({ card: starter, owner: null, via: 'starter' });
+      state.phase = 'follow';
+      emit(state, now, { type: 'setStart', setNo: 1, leader: null, suit: starter.suit, starter: starter });
+      beginFollow(state, now);
+    } else {
+      state.leader = leaderId;
+      state.suit = null;
+      state.phase = 'lead';
+      emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId });
+    }
+  }
+
+  /* Suit is known: anyone who can't follow while the deck is already empty is stuck. */
+  function beginFollow(state, now) {
+    if (state.deck.length === 0) markStuck(state, now);
+    checkFollowComplete(state, now);
+  }
+
+  function markStuck(state, now) {
+    var stuck = [];
+    followers(state).forEach(function (p) {
+      if (!state.committed[p.id] && !isTaker(state, p.id) && !CT.hasSuit(p.hand, state.suit)) {
+        state.takers.push(p.id);
+        addVoid(state, p.id, state.suit);
+        stuck.push(p.id);
+      }
+    });
+    if (stuck.length) emit(state, now, { type: 'stuck', players: stuck, suit: state.suit });
+    return stuck;
+  }
+
+  /* When every follower has a card in (or is stuck), reveal the set. */
+  function checkFollowComplete(state, now) {
+    if (state.phase !== 'follow') return;
+    var waiting = followers(state).filter(function (p) {
+      return !state.committed[p.id] && !isTaker(state, p.id);
+    });
+    if (waiting.length) return;
+
+    state.revealed = true;
+    emit(state, now, {
+      type: 'reveal',
+      cards: state.table.map(function (e) { return { owner: e.owner, via: e.via, card: e.card }; })
+    });
+    if (state.takers.length) {
+      state.phase = 'take';
+      state.takeEndsAt = now + state.timing.takeWindowMs;
+      emit(state, now, { type: 'takeStart', takers: state.takers.slice(), endsAt: state.takeEndsAt });
+    } else {
+      finishSet(state, now);
+    }
+  }
+
+  function applyTake(state, pid, entry, now, auto) {
+    entry.takenBy = pid;
+    state.taken[pid] = entry.card.id;
+    if (state.options.deckEmpty === 'pickUp') {
+      entry.gone = true;
+      player(state, pid).hand.push(entry.card);
+      removeVoid(state, pid, entry.card.suit);
+    }
+    emit(state, now, { type: 'take', player: pid, card: entry.card, from: entry.owner, auto: !!auto });
+  }
+
+  function maybeFinishTake(state, now) {
+    var waiting = state.takers.filter(function (pid) { return !state.taken[pid]; });
+    if (!waiting.length || !cardsOnTable(state).length) finishSet(state, now);
+  }
+
+  function finishSet(state, now) {
+    var steal = state.options.deckEmpty === 'takeAndPlay';
+
+    // Highest card in the set. With "Pick up" a picked-up card still counts for
+    // the player who played it; with "Take and play" it counts for the taker.
+    // The starter card only sets the suit and never wins on its own.
+    var best = null;
+    state.table.forEach(function (e) {
+      var holder = steal ? (e.takenBy || e.owner) : e.owner;
+      if (!holder) return;
+      if (!best || value(state, e.card) > value(state, best.card)) best = { player: holder, card: e.card };
+    });
+
+    var out = state.players.filter(function (p) { return p.hand.length === 0; });
+    if (out.length) {
+      // Two players went out on the same set: the higher card they played wins.
+      var playedValue = function (pid) {
+        for (var i = 0; i < state.table.length; i++) {
+          if (state.table[i].owner === pid) return value(state, state.table[i].card);
+        }
+        return -1;
+      };
+      out.sort(function (a, b) { return playedValue(b.id) - playedValue(a.id); });
+      state.setResult = best;
+      state.phase = 'over';
+      state.winners = [out[0].id];
+      state.winReason = 'empty';
+      emit(state, now, { type: 'setWon', player: best ? best.player : null, card: best ? best.card : null });
+      emit(state, now, {
+        type: 'gameOver', reason: 'empty', winners: state.winners,
+        out: out.map(function (p) { return p.id; }),
+        hands: handsOf(state)
+      });
+      return;
+    }
+
+    if (!best) {
+      // Nobody holds a card in the set (only possible in freak deck-empty cases).
+      var keep = state.leader || CT.pickRandom(state.players, state).id;
+      best = { player: keep, card: null };
+    }
+    state.setResult = best;
+    state.phase = 'reveal';
+    state.phaseEndsAt = now + state.timing.revealHoldMs;
+    emit(state, now, { type: 'setWon', player: best.player, card: best.card });
+  }
+
+  function handsOf(state) {
+    var hands = {};
+    state.players.forEach(function (p) { hands[p.id] = p.hand.slice(); });
+    return hands;
+  }
+
+  /* ---------- actions ---------------------------------------------------- */
+
+  function actLead(state, pid, payload, now) {
+    if (state.phase !== 'lead') return CT.fail('not-now', 'Wait for the next set to start.');
+    if (pid !== state.leader) return CT.fail('not-leader', 'Only the winner of the last set leads.');
+    var p = player(state, pid);
+    var idx = p.hand.findIndex(function (c) { return c.id === payload.cardId; });
+    if (idx < 0) return CT.fail('no-card', 'That card is not in your hand.');
+    var card = p.hand.splice(idx, 1)[0];
+    state.table.push({ card: card, owner: pid, via: 'lead' });
+    state.committed[pid] = true;
+    state.suit = card.suit;
+    state.phase = 'follow';
+    removeVoid(state, pid, card.suit);
+    var faceUp = state.options.leadCard === 'faceUp';
+    emit(state, now, { type: 'lead', player: pid, suit: card.suit, card: faceUp ? card : null }, (function () {
+      var s = {}; s[pid] = { card: card }; return s;
+    })());
+    beginFollow(state, now);
+    return CT.ok();
+  }
+
+  function followGuard(state, pid) {
+    if (state.phase !== 'follow') return CT.fail('not-now', 'Wait for the suit to be set.');
+    if (pid === state.leader) return CT.fail('leader', 'You already led this set.');
+    if (!player(state, pid)) return CT.fail('no-player', 'You are not in this game.');
+    if (state.committed[pid]) return CT.fail('done', 'Your card for this set is already in.');
+    if (isTaker(state, pid)) return CT.fail('stuck', 'The deck is empty. You will take a card from the set once everyone has played.');
+    return null;
+  }
+
+  function actFollow(state, pid, payload, now) {
+    var bad = followGuard(state, pid);
+    if (bad) return bad;
+    var p = player(state, pid);
+    var idx = p.hand.findIndex(function (c) { return c.id === payload.cardId; });
+    if (idx < 0) return CT.fail('no-card', 'That card is not in your hand.');
+    var card = p.hand[idx];
+    if (card.suit !== state.suit) return CT.fail('wrong-suit', 'You must play a ' + suitName(state.suit) + '.');
+    p.hand.splice(idx, 1);
+    state.table.push({ card: card, owner: pid, via: 'hand' });
+    state.committed[pid] = true;
+    var s = {}; s[pid] = { card: card };
+    emit(state, now, { type: 'commit', player: pid, via: 'hand' }, s);
+    checkFollowComplete(state, now);
+    return CT.ok();
+  }
+
+  function actDraw(state, pid, payload, now) {
+    var bad = followGuard(state, pid);
+    if (bad) return bad;
+    var p = player(state, pid);
+    if (CT.hasSuit(p.hand, state.suit)) return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it instead of drawing.');
+    if (!state.deck.length) return CT.fail('deck-empty', 'The deck is empty.');
+    var last = state.lastDrawAt[pid];
+    var gap = state.timing.drawCooldownMs;
+    if (last != null && now - last < gap) {
+      return CT.fail('cooldown', 'Drawing too fast.', { retryInMs: Math.ceil(gap - (now - last)) });
+    }
+
+    var card = state.deck.pop();
+    state.lastDrawAt[pid] = now;
+    var n = (state.drawn[pid] || 0) + 1;
+    state.drawn[pid] = n;
+    if (n === 1) addVoid(state, pid, state.suit);   // everyone now knows they lacked it
+
+    var matched = card.suit === state.suit;
+    if (matched) {
+      state.table.push({ card: card, owner: pid, via: 'draw' });
+      state.committed[pid] = true;
+    } else {
+      p.hand.push(card);
+      keepOnlyVoid(state, pid, state.suit);           // the new card may fill other gaps
+    }
+    var s = {}; s[pid] = { card: card };
+    emit(state, now, { type: 'draw', player: pid, n: n, matched: matched, deckLeft: state.deck.length }, s);
+
+    if (!state.deck.length) {
+      emit(state, now, { type: 'deckEmpty' });
+      markStuck(state, now);
+    }
+    checkFollowComplete(state, now);
+    return CT.ok({ card: card, matched: matched });
+  }
+
+  function actTake(state, pid, payload, now) {
+    if (state.phase !== 'take') return CT.fail('not-now', 'Cards can only be taken when the deck is empty.');
+    if (!isTaker(state, pid)) return CT.fail('not-taker', 'Only players who could not follow take a card.');
+    if (state.taken[pid]) return CT.fail('done', 'You already took a card.');
+    var entry = null;
+    for (var i = 0; i < state.table.length; i++) if (state.table[i].card.id === payload.cardId) entry = state.table[i];
+    if (!entry) return CT.fail('no-card', 'That card is not in this set.');
+    if (entry.takenBy) {
+      var who = player(state, entry.takenBy);
+      return CT.fail('taken', (who ? who.name : 'Someone') + ' already took that card.');
+    }
+    applyTake(state, pid, entry, now, false);
+    maybeFinishTake(state, now);
+    return CT.ok();
+  }
+
+  var ACTIONS = { lead: actLead, follow: actFollow, draw: actDraw, take: actTake };
+
+  function act(state, pid, type, payload, now) {
+    if (state.phase === 'over') return CT.fail('over', 'This game is over.');
+    var fn = ACTIONS[type];
+    if (!fn) return CT.fail('unknown', 'Unknown action: ' + type);
+    return fn(state, pid, payload || {}, now);
+  }
+
+  /* ---------- timed steps ------------------------------------------------ */
+
+  function tick(state, now) {
+    if (state.phase === 'dealing' && now >= state.phaseEndsAt) {
+      var flush = state.players.filter(function (p) {
+        return CT.SUITS.every(function (s) { return CT.hasSuit(p.hand, s); });
+      });
+      if (flush.length) {
+        state.phase = 'over';
+        state.winners = flush.map(function (p) { return p.id; });
+        state.winReason = 'flush';
+        emit(state, now, { type: 'flush', players: state.winners, hands: handsOf(state) });
+        emit(state, now, { type: 'gameOver', reason: 'flush', winners: state.winners, hands: handsOf(state) });
+      } else {
+        emit(state, now, { type: 'noFlush' });
+        startSet(state, now, null);
+      }
+      return true;
+    }
+
+    if (state.phase === 'take' && now >= state.takeEndsAt) {
+      // Time's up: anyone who didn't choose gets a random card, in random order,
+      // while cards last.
+      var waiting = CT.shuffle(state.takers.filter(function (pid) { return !state.taken[pid]; }), state);
+      waiting.forEach(function (pid) {
+        var left = cardsOnTable(state);
+        if (left.length) applyTake(state, pid, CT.pickRandom(left, state), now, true);
+      });
+      finishSet(state, now);
+      return true;
+    }
+
+    if (state.phase === 'reveal' && now >= state.phaseEndsAt) {
+      startSet(state, now, state.setResult.player);
+      return true;
+    }
+    return false;
+  }
+
+  /* ---------- what one player may see ------------------------------------ */
+
+  function view(state, pid, opts) {
+    opts = opts || {};
+    var me = player(state, pid);
+    var over = state.phase === 'over';
+    var faceUpLead = state.options.leadCard === 'faceUp';
+    var hand = me ? me.hand.slice() : [];
+
+    function visible(e) {
+      return state.revealed || over || e.owner === pid || e.via === 'starter' || (e.via === 'lead' && faceUpLead);
+    }
+
+    var v = {
+      mode: 'burns',
+      engineVersion: state.engineVersion,
+      me: pid,
+      phase: state.phase,
+      setNo: state.setNo,
+      leader: state.leader,
+      suit: state.suit,
+      options: state.options,
+      timing: { drawCooldownMs: state.timing.drawCooldownMs, takeWindowMs: state.timing.takeWindowMs },
+      phaseEndsAt: state.phaseEndsAt,
+      takeEndsAt: state.takeEndsAt,
+      revealed: state.revealed,
+      deckCount: state.deck.length,
+      discard: state.discard.slice(),
+      starter: state.starter,   // face up during the deal; joins the table in set 1
+      hand: hand,
+      players: state.players.map(function (p) {
+        return {
+          id: p.id,
+          name: p.name,
+          isBot: p.isBot,
+          seat: p.seat,
+          handCount: p.hand.length,
+          isLeader: p.id === state.leader,
+          committed: !!state.committed[p.id],
+          drew: state.drawn[p.id] || 0,
+          isTaker: isTaker(state, p.id),
+          took: state.taken[p.id] || null,
+          voids: (state.voids[p.id] || []).slice(),
+          hand: over ? p.hand.slice() : undefined
+        };
+      }),
+      table: state.table.map(function (e) {
+        return { owner: e.owner, via: e.via, takenBy: e.takenBy || null, gone: !!e.gone, card: visible(e) ? e.card : null };
+      }),
+      setResult: state.setResult,
+      winners: state.winners,
+      winReason: state.winReason,
+      lastDrawAt: state.lastDrawAt[pid] != null ? state.lastDrawAt[pid] : null,
+      seq: state.seq
+    };
+
+    var mine = me && state.phase === 'follow' && pid !== state.leader && !state.committed[pid] && !isTaker(state, pid);
+    v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
+    v.canFollow = !!mine && CT.hasSuit(hand, state.suit);
+    v.mustDraw = !!mine && !v.canFollow && state.deck.length > 0;
+    v.canTake = !!me && state.phase === 'take' && isTaker(state, pid) && !state.taken[pid];
+    v.playable = v.canLead ? hand.map(function (c) { return c.id; })
+      : v.canFollow ? hand.filter(function (c) { return c.suit === state.suit; }).map(function (c) { return c.id; })
+      : [];
+
+    if (opts.events !== false) {
+      var since = opts.sinceSeq || 0;
+      v.events = state.events.filter(function (e) { return e.seq > since; }).map(function (e) {
+        var copy = {};
+        for (var k in e) if (k !== 'secret') copy[k] = e[k];
+        if (e.secret && e.secret[pid]) copy.mine = e.secret[pid];
+        return copy;
+      });
+    }
+    return v;
+  }
+
+  /* ---------- rules text for How to play ---------------------------------- */
+
+  function rules(options) {
+    var o = CT.resolveOptions(OPTIONS, options);
+    var deckEmptyText = o.deckEmpty === 'pickUp'
+      ? 'Instead, take one card from the set into your hand and sit out that set. Its card still counts for whoever played it.'
+      : 'Instead, take one card from the set and play it as your own. It can win you the set.';
+    var leadText = o.leadCard === 'suitOnly'
+      ? 'Everyone sees the suit that was led; the card itself stays hidden until the reveal.'
+      : 'The lead card is shown to everyone straight away.';
+    return [
+      { title: 'The deal', text: 'Everyone gets 4 cards from a standard 52-card deck. One more card is turned face up. Its suit must be followed in the first set.' },
+      { title: 'Flush', text: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.' },
+      { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
+      { title: 'Winning a set', text: 'The highest card wins the set (Ace is high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
+      { title: 'Can’t follow?', text: 'Draw from the deck until you find a card of the suit, then it is played for you. Everyone who needs to draws at the same time, with a short pause between draws.' },
+      { title: 'Deck empty', text: 'If the deck runs out before you find the suit, you can’t draw. ' + deckEmptyText + ' You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
+      { title: 'Winning the game', text: 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.' }
+    ];
+  }
+
+  CT.registerMode({
+    id: 'burns',
+    name: 'Burns',
+    tagline: 'Follow the suit, draw when you can’t, and be first to empty your hand.',
+    engineVersion: ENGINE_VERSION,
+    players: { min: 2, max: 6, default: 4 },
+    options: OPTIONS,
+    defaultTiming: DEFAULT_TIMING,
+    handSize: HAND_SIZE,
+    rules: rules,
+    createGame: createGame,
+    act: act,
+    tick: tick,
+    view: view,
+    presenter: 'burns'
+  });
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/modes/burns/bot.js ---- */
+/* ==========================================================================
+   GAME MODE · BURNS — computer players
+   A bot only ever sees its own view (the same one a human gets), so it can't
+   peek at hands or the deck. It counts cards that have been revealed and
+   remembers which suits opponents are known to be out of.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  function val(card) { return CT.rankValue(card.rank, true); }
+
+  function seenIds(v) {
+    var seen = {};
+    v.discard.forEach(function (c) { seen[c.id] = true; });
+    v.hand.forEach(function (c) { seen[c.id] = true; });
+    v.table.forEach(function (e) { if (e.card) seen[e.card.id] = true; });
+    return seen;
+  }
+
+  /* How many cards of this suit that could beat `card` are still unaccounted for. */
+  function unseenHigher(card, seen) {
+    var n = 0;
+    CT.RANKS.forEach(function (r) {
+      if (!seen[r + card.suit] && CT.rankValue(r, true) > val(card)) n++;
+    });
+    return n;
+  }
+
+  function me(v) {
+    for (var i = 0; i < v.players.length; i++) if (v.players[i].id === v.me) return v.players[i];
+    return null;
+  }
+
+  function chooseLead(v, rnd) {
+    var opps = v.players.filter(function (p) { return p.id !== v.me; });
+    var seen = seenIds(v);
+    var deckEmpty = v.deckCount === 0;
+    var steal = v.options.deckEmpty === 'takeAndPlay';
+    var bySuit = {};
+    v.hand.forEach(function (c) { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
+
+    var best = null, bestScore = -Infinity;
+    v.hand.forEach(function (c) {
+      var score = 0;
+      var voidOpps = opps.filter(function (o) { return o.voids.indexOf(c.suit) >= 0; }).length;
+      if (!deckEmpty) score += voidOpps * 2.2;          // they will have to draw
+      else score += steal ? -voidOpps * 1.5 : voidOpps * 1.2;
+      var higher = unseenHigher(c, seen);
+      var sure = higher === 0;
+      score += sure ? 3 : Math.max(0, 1.5 - higher * 0.6);
+      var count = bySuit[c.suit].length;
+      if (count === 1 && v.hand.length > 2) score -= 1.6;  // don't open a gap in my own hand
+      score += (count - 1) * 0.25;
+      if (!sure) score -= val(c) * 0.05;                  // save high cards that won't win anyway
+      if (v.hand.length === 2 && sure) score += 3;          // win this, then lead my last card
+      score += (rnd() - 0.5) * 0.8;
+      if (score > bestScore) { bestScore = score; best = c; }
+    });
+    return best;
+  }
+
+  function chooseFollow(v, rnd) {
+    var mine = v.hand.filter(function (c) { return c.suit === v.suit; })
+      .sort(function (a, b) { return val(a) - val(b); });
+    var seen = seenIds(v);
+    var toBeat = 0;
+    v.table.forEach(function (e) { if (e.card && e.owner && e.owner !== v.me) toBeat = Math.max(toBeat, val(e.card)); });
+
+    var sure = mine.filter(function (c) { return val(c) > toBeat && unseenHigher(c, seen) === 0; });
+    if (sure.length) return sure[0];
+    var top = mine[mine.length - 1];
+    if (v.hand.length <= 3 && val(top) > toBeat) return top;   // close to going out: chase the lead
+    if (rnd() < 0.12) return mine[Math.floor(rnd() * mine.length)];
+    return mine[0];
+  }
+
+  function chooseTake(v, rnd) {
+    var open = v.table.filter(function (e) { return e.card && !e.takenBy; })
+      .sort(function (a, b) { return val(b.card) - val(a.card); });
+    if (!open.length) return null;
+    if (open.length > 1 && rnd() < 0.1) return open[1].card;
+    return open[0].card;
+  }
+
+  var BurnsBot = {
+    /* What this bot needs to do right now; the key changes whenever a new decision is due. */
+    intent: function (v) {
+      if (v.canLead) return { kind: 'lead', key: 'L' + v.setNo };
+      if (v.canFollow) return { kind: 'follow', key: 'F' + v.setNo };
+      if (v.mustDraw) {
+        var drew = me(v).drew;
+        return { kind: 'draw', key: 'D' + v.setNo + ':' + drew, first: drew === 0 };
+      }
+      if (v.canTake) return { kind: 'take', key: 'T' + v.setNo };
+      return null;
+    },
+
+    /* Human-like thinking time, in ms. */
+    delay: function (intent, v, rnd) {
+      switch (intent.kind) {
+        case 'lead': return 900 + rnd() * 1300;
+        case 'follow': return 650 + rnd() * 1500;
+        case 'draw': return intent.first ? 450 + rnd() * 500 : v.timing.drawCooldownMs + 60 + rnd() * 380;
+        case 'take': return 1400 + rnd() * 4800;
+      }
+      return 800;
+    },
+
+    decide: function (v, memory, rnd) {
+      if (v.canLead) {
+        var lead = chooseLead(v, rnd);
+        return lead ? { type: 'lead', payload: { cardId: lead.id } } : null;
+      }
+      if (v.canFollow) {
+        var follow = chooseFollow(v, rnd);
+        return follow ? { type: 'follow', payload: { cardId: follow.id } } : null;
+      }
+      if (v.mustDraw) return { type: 'draw', payload: {} };
+      if (v.canTake) {
+        var take = chooseTake(v, rnd);
+        return take ? { type: 'take', payload: { cardId: take.id } } : null;
+      }
+      return null;
+    }
+  };
+
+  CT.getMode('burns').bot = BurnsBot;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/ui/kit.js ---- */
+/* ==========================================================================
+   UI KIT — shared by every mode's table: card elements, suit icons,
+   flying-card animation, sound, toasts and per-device storage.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI = CT.UI || {};
+
+  var PLURAL = { S: 'spades', H: 'hearts', C: 'clubs', D: 'diamonds' };
+  var SINGLE = { S: 'spade', H: 'heart', C: 'club', D: 'diamond' };
+
+  UI.esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  UI.isRed = function (suit) { return suit === 'H' || suit === 'D'; };
+  UI.suitPlural = function (s) { return PLURAL[s]; };
+  UI.suitSingle = function (s) { return SINGLE[s]; };
+
+  UI.suitSvg = function (suit) {
+    return '<svg class="si" viewBox="0 0 100 100" aria-hidden="true"><use href="#suit-' + suit + '"/></svg>';
+  };
+  /** Suit icon for running text, coloured for the dark board. */
+  UI.suit = function (suit) {
+    return '<span class="' + (UI.isRed(suit) ? 'suit-red' : 'suit-black') + '" aria-label="' + PLURAL[suit] + '">' + UI.suitSvg(suit) + '</span>';
+  };
+  /** "K♥" for running text. */
+  UI.cardText = function (card) {
+    return '<span class="ct ' + (UI.isRed(card.suit) ? 'suit-red' : 'suit-black') + '" aria-label="' + UI.esc(CT.cardName(card)) + '">' + card.rank + UI.suitSvg(card.suit) + '</span>';
+  };
+
+  UI.cardFace = function (card) {
+    var r = card.rank;
+    var idx = '<b' + (r === '10' ? ' class="ten"' : '') + '>' + r + '</b>' + UI.suitSvg(card.suit);
+    var center;
+    if (r === 'J' || r === 'Q' || r === 'K') center = '<span class="face">' + r + '</span>';
+    else center = '<span class="pip' + (r === 'A' ? ' ace' : '') + '">' + UI.suitSvg(card.suit) + '</span>';
+    return '<span class="ci">' + idx + '</span>' + center + '<span class="ci ci-b">' + idx + '</span>';
+  };
+
+  /** A card element; pass null for a face-down card. */
+  UI.makeCard = function (card, tag) {
+    var el = document.createElement(tag || 'div');
+    UI.setCard(el, card);
+    return el;
+  };
+  UI.setCard = function (el, card) {
+    var key = card ? card.id : 'back';
+    if (el.dataset.card === key) return el;
+    el.dataset.card = key;
+    el.classList.remove('red', 'back');
+    el.classList.add('card');
+    if (card) {
+      if (UI.isRed(card.suit)) el.classList.add('red');
+      el.innerHTML = UI.cardFace(card);
+      el.setAttribute('aria-label', CT.cardName(card));
+    } else {
+      el.classList.add('back');
+      el.innerHTML = '';
+      el.setAttribute('aria-label', 'Face-down card');
+    }
+    return el;
+  };
+
+  UI.reducedMotion = (function () {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  })();
+
+  /**
+   * Fly a card from one place to another.
+   * from: element or DOMRect; to: element. Resolves when it lands.
+   */
+  UI.fly = function (opts) {
+    return new Promise(function (resolve) {
+      var a = opts.fromRect || (opts.from && opts.from.getBoundingClientRect && opts.from.getBoundingClientRect());
+      var b = opts.to && opts.to.getBoundingClientRect && opts.to.getBoundingClientRect();
+      var layer = document.getElementById('fx');
+      if (!a || !b || !a.width || !b.width || !layer || UI.reducedMotion || document.hidden) { resolve(); return; }
+      var g = UI.makeCard(opts.card || null);
+      g.classList.add('ghost');
+      // Draw the ghost at the larger of the two sizes and only ever scale it down,
+      // so the card-back pattern and shadow never get blown up.
+      var base = Math.max(a.width, b.width);
+      g.style.setProperty('--cw', base + 'px');
+      var bh = base * 1.4;
+      g.style.left = (b.left + b.width / 2 - base / 2) + 'px';
+      g.style.top = (b.top + b.height / 2 - bh / 2) + 'px';
+      var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
+      var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
+      layer.appendChild(g);
+      var spin = opts.spin || 0;
+      var anim = g.animate([
+        { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + (a.width / base) + ') rotate(' + spin + 'deg)' },
+        { transform: 'translate(0,0) scale(' + (b.width / base) + ') rotate(0deg)' }
+      ], { duration: opts.duration || 360, delay: opts.delay || 0, easing: 'cubic-bezier(.22,.8,.26,1)', fill: 'both' });
+      var done = function () { if (g.parentNode) g.parentNode.removeChild(g); resolve(); };
+      anim.onfinish = done;
+      anim.oncancel = done;
+    });
+  };
+
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  UI.toast = function (html, ms) {
+    var el = document.getElementById('toast');
+    if (!el) return;
+    el.innerHTML = html;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, ms || 1900);
+  };
+
+  /* ---------- storage (per device; may be unavailable) ---------- */
+  UI.store = {
+    get: function (key, fallback) {
+      try { var v = window.localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
+    },
+    set: function (key, value) {
+      try { window.localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage blocked */ }
+    },
+    del: function (key) {
+      try { window.localStorage.removeItem(key); } catch (e) { /* storage blocked */ }
+    }
+  };
+
+  /* ---------- sound: tiny synthesised effects, no files ---------- */
+  var Sound = UI.Sound = {
+    ctx: null,
+    on: true,
+    noiseBuf: null,
+    unlock: function () {
+      if (!this.ctx) {
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        } catch (e) { this.ctx = null; }
+      }
+      if (this.ctx && this.ctx.state === 'suspended') { try { this.ctx.resume(); } catch (e) { /* ignore */ } }
+    },
+    ready: function () { return this.on && this.ctx && this.ctx.state === 'running'; },
+    noise: function (dur, freq, gain, when) {
+      var c = this.ctx;
+      if (!this.noiseBuf) {
+        this.noiseBuf = c.createBuffer(1, c.sampleRate * 0.5, c.sampleRate);
+        var d = this.noiseBuf.getChannelData(0);
+        for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      var src = c.createBufferSource();
+      src.buffer = this.noiseBuf;
+      var f = c.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.4;
+      var g = c.createGain();
+      var t = c.currentTime + (when || 0);
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(c.destination);
+      src.start(t, Math.random() * 0.3, dur + 0.02);
+    },
+    tone: function (freq, dur, gain, type, when) {
+      var c = this.ctx;
+      var o = c.createOscillator();
+      var g = c.createGain();
+      var t = c.currentTime + (when || 0);
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    },
+    play: function (name) {
+      if (!this.ready()) return;
+      try {
+        switch (name) {
+          case 'deal': this.noise(0.05, 2600, 0.22); break;
+          case 'draw': this.noise(0.06, 2100, 0.28); break;
+          case 'play': this.noise(0.07, 1300, 0.3); this.tone(180, 0.08, 0.08, 'sine'); break;
+          case 'flip': this.noise(0.04, 3200, 0.18); this.noise(0.04, 2800, 0.14, 0.05); break;
+          case 'win': this.tone(523, 0.14, 0.12, 'triangle'); this.tone(784, 0.22, 0.12, 'triangle', 0.1); break;
+          case 'lose': this.tone(392, 0.16, 0.1, 'triangle'); this.tone(330, 0.24, 0.1, 'triangle', 0.12); break;
+          case 'alert': this.tone(880, 0.09, 0.09, 'square'); this.tone(660, 0.12, 0.08, 'square', 0.1); break;
+          case 'tick': this.tone(1320, 0.04, 0.05, 'square'); break;
+          case 'nope': this.tone(150, 0.12, 0.1, 'sawtooth'); break;
+          case 'victory': [523, 659, 784, 1046].forEach(function (f, i) { Sound.tone(f, 0.22, 0.11, 'triangle', i * 0.11); }); break;
+        }
+      } catch (e) { /* audio is optional */ }
+    }
+  };
+
+  UI.buzz = function (ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms || 12); } catch (e) { /* not allowed here */ }
+  };
+
+  /* Small inline icons used by the shell and tables. */
+  UI.icon = {
+    menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h11"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    soundOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/></svg>',
+    soundOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><path d="M4 4l16 16"/></svg>',
+    flame: '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flame"/></svg>'
+  };
+})(window.CT);
+
+/* ---- src/modes/burns/ui.js ---- */
+/* ==========================================================================
+   GAME MODE · BURNS — table screen
+   Draws one player's view of a Burns game and turns taps into actions.
+   It never reads the rules state directly: everything comes from
+   session.view(me), so it can't show anything the player shouldn't see.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
+  var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+
+  function sortHand(hand) {
+    return hand.slice().sort(function (a, b) {
+      return (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]) || (CT.rankValue(a.rank, true) - CT.rankValue(b.rank, true));
+    });
+  }
+
+  function list(names) {
+    if (names.length <= 1) return names.join('');
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  function makeFlip() {
+    var flip = document.createElement('div');
+    flip.className = 'flip';
+    flip.dataset.up = '0';
+    var inner = document.createElement('div');
+    inner.className = 'flip-in';
+    var back = UI.makeCard(null);
+    var front = UI.makeCard(null);
+    front.classList.add('front');
+    inner.appendChild(back);
+    inner.appendChild(front);
+    flip.appendChild(inner);
+    return { flip: flip, inner: inner, front: front };
+  }
+
+  function BurnsTable(app, session, me, opts) {
+    opts = opts || {};
+    this.app = app;
+    this.session = session;
+    this.me = me;
+    this.lastSeq = 0;
+    this.selected = null;
+    this.hidden = {};
+    this.handEls = {};
+    this.seatEls = {};
+    this.slotState = {};
+    this.logItems = [];
+    this.drawLog = {};
+    this.v = null;
+    this.overShown = false;
+    this.first = true;
+    this.quiet = !!opts.restored;
+    this.root = document.getElementById('screen-table');
+    this.build();
+    var self = this;
+    this.unsub = session.on(function () { self.update(); });
+    this.onResize = function () { if (self.v) self.layoutHand(sortHand(self.v.hand)); };
+    window.addEventListener('resize', this.onResize);
+    this.update();
+  }
+
+  BurnsTable.prototype.destroy = function () {
+    if (this.unsub) this.unsub();
+    window.removeEventListener('resize', this.onResize);
+    clearTimeout(this.overTimer);
+    this.root.innerHTML = '';
+  };
+
+  BurnsTable.prototype.name = function (pid, cap) {
+    if (pid === this.me) return cap === false ? 'you' : 'You';
+    var p = this.v && this.v.players.filter(function (x) { return x.id === pid; })[0];
+    if (!p) p = this.session.state.players.filter(function (x) { return x.id === pid; })[0];
+    return p ? UI.esc(p.name) : 'Someone';
+  };
+
+  /* ---------- static layout ---------- */
+
+  BurnsTable.prototype.build = function () {
+    var view = this.session.view(this.me, { events: false });
+    var me = this.me;
+    var opps = view.players.filter(function (p) { return p.id !== me; });
+    this.root.innerHTML =
+      '<header class="topbar">' +
+        '<button class="icon-btn" id="t-menu" type="button" aria-label="Game menu">' + UI.icon.menu + '</button>' +
+        '<span class="wordmark">BURNS</span>' +
+        '<span class="chip" id="t-set">Dealing</span>' +
+        '<span class="chip chip-warn" id="t-empty" hidden>Deck empty</span>' +
+        '<span class="spacer"></span>' +
+        '<button class="icon-btn" id="t-sound" type="button" aria-label="Sound"></button>' +
+      '</header>' +
+      '<div class="seats" id="t-seats"></div>' +
+      '<div class="rail-zone">' +
+        '<div class="rail">' +
+          '<button class="deck" id="t-deck" type="button" aria-label="Deck">' +
+            '<span class="deck-stack"><span class="card back"></span><span class="card back"></span><span class="card back"></span></span>' +
+            '<svg class="cool" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16"/></svg>' +
+            '<span class="deck-count" id="t-deckcount"></span>' +
+          '</button>' +
+          '<div class="lead-spot" id="t-lead">' +
+            '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="bg" cx="50" cy="50" r="47"/><circle class="fg" cx="50" cy="50" r="47" stroke-dasharray="295.3" stroke-dashoffset="0"/></svg>' +
+            '<div class="lead-content" id="t-leadcontent"></div>' +
+            '<span class="timer-num" id="t-timer" hidden></span>' +
+            '<span class="lead-label" id="t-leadlabel"></span>' +
+          '</div>' +
+          '<div class="aside" id="t-aside">' +
+            '<span class="aside-stack"><span class="card back"></span><span class="card back"></span></span>' +
+            '<span class="aside-count" id="t-asidecount"></span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="status" id="t-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
+      '</div>' +
+      '<div class="me" id="t-me">' +
+        '<div class="me-info"><span class="me-name">You' + UI.icon.flame + '</span><span class="me-count" id="t-mycount"></span></div>' +
+        '<div class="slot" id="slot-' + me + '"></div>' +
+        '<div class="me-action"><button class="btn btn-primary btn-play" id="t-play" type="button" hidden></button></div>' +
+      '</div>' +
+      '<div class="hand-wrap" id="t-handwrap"><div class="hand" id="t-hand"></div></div>';
+
+    var seats = this.root.querySelector('#t-seats');
+    var self = this;
+    opps.forEach(function (p, i) {
+      var seat = document.createElement('div');
+      seat.className = 'seat';
+      seat.dataset.pid = p.id;
+      seat.style.setProperty('--paint', PAINTS[i % PAINTS.length]);
+      seat.innerHTML =
+        '<div class="seat-row"><span class="avatar">' + UI.esc(p.name.charAt(0)) + UI.icon.flame + '</span>' +
+        '<span class="seat-count"><span class="mini-back"></span><b></b></span></div>' +
+        '<span class="seat-name">' + UI.esc(p.name) + '</span>' +
+        '<div class="slot" id="slot-' + p.id + '"></div>' +
+        '<span class="seat-chip"></span>' +
+        '<span class="seat-voids"></span>';
+      seats.appendChild(seat);
+      self.seatEls[p.id] = {
+        seat: seat,
+        avatar: seat.querySelector('.avatar'),
+        mini: seat.querySelector('.mini-back'),
+        count: seat.querySelector('.seat-count b'),
+        chip: seat.querySelector('.seat-chip'),
+        voids: seat.querySelector('.seat-voids'),
+        slot: seat.querySelector('.slot')
+      };
+    });
+
+    this.el = {
+      set: this.root.querySelector('#t-set'),
+      empty: this.root.querySelector('#t-empty'),
+      sound: this.root.querySelector('#t-sound'),
+      deck: this.root.querySelector('#t-deck'),
+      deckTop: this.root.querySelector('#t-deck .deck-stack .card:last-child'),
+      deckCount: this.root.querySelector('#t-deckcount'),
+      lead: this.root.querySelector('#t-lead'),
+      leadContent: this.root.querySelector('#t-leadcontent'),
+      leadLabel: this.root.querySelector('#t-leadlabel'),
+      ring: this.root.querySelector('#t-lead .ring'),
+      ringFg: this.root.querySelector('#t-lead .ring .fg'),
+      timer: this.root.querySelector('#t-timer'),
+      aside: this.root.querySelector('#t-aside'),
+      asideTop: this.root.querySelector('#t-aside .aside-stack'),
+      asideCount: this.root.querySelector('#t-asidecount'),
+      statusMain: this.root.querySelector('#t-status .status-main'),
+      statusSub: this.root.querySelector('#t-status .status-sub'),
+      me: this.root.querySelector('#t-me'),
+      myCount: this.root.querySelector('#t-mycount'),
+      mySlot: this.root.querySelector('#slot-' + me),
+      play: this.root.querySelector('#t-play'),
+      handWrap: this.root.querySelector('#t-handwrap'),
+      hand: this.root.querySelector('#t-hand')
+    };
+    this.renderSound();
+
+    // input
+    this.root.querySelector('#t-menu').addEventListener('click', function () { self.app.openMenu(); });
+    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderSound(); });
+    this.el.hand.addEventListener('click', function (e) {
+      var btn = e.target.closest('.hcard');
+      if (btn) self.tapCard(btn.dataset.id, btn);
+    });
+    this.el.play.addEventListener('click', function () { if (self.selected) self.play(self.selected); });
+    this.el.deck.addEventListener('pointerdown', function (e) { e.preventDefault(); self.tapDeck(); });
+    this.el.deck.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self.tapDeck(); }
+    });
+    this.root.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-take]');
+      if (t) self.take(t.dataset.take);
+    });
+  };
+
+  BurnsTable.prototype.renderSound = function () {
+    var on = UI.Sound.on;
+    this.el.sound.innerHTML = on ? UI.icon.soundOn : UI.icon.soundOff;
+    this.el.sound.setAttribute('aria-label', on ? 'Sound on. Tap to mute.' : 'Sound off. Tap to turn on.');
+  };
+
+  /* ---------- update cycle ---------- */
+
+  BurnsTable.prototype.update = function () {
+    var v = this.session.view(this.me, { sinceSeq: this.lastSeq });
+    var events = v.events || [];
+    var prev = this.v;
+    this.v = v;
+    var pre = (events.length && prev && !this.quiet) ? this.capture(prev) : null;
+    var plan = (!this.quiet && events.length) ? this.plan(events, pre, v) : { flights: [], intoSlots: false };
+    this.render(v, plan);
+    if (plan.flights.length) this.run(plan);
+    if (!this.quiet) this.react(events, v);
+    var self = this;
+    events.forEach(function (e) { self.logEvent(e, v); });
+    if (events.length) this.lastSeq = events[events.length - 1].seq;
+    this.first = false;
+    this.quiet = false;
+    if (this.app.logOpen) this.app.renderLog();
+
+    if (v.phase === 'over' && !this.overShown) {
+      this.overShown = true;
+      var wait = v.winReason === 'flush' ? 1700 : 2400;
+      if (!events.length) wait = 200;
+      this.overTimer = setTimeout(function () { self.app.showResult(self.v); }, wait);
+    }
+  };
+
+  /* Where cards are on screen right now (before the DOM changes). */
+  BurnsTable.prototype.capture = function (prev) {
+    var pre = { hand: {}, table: [] };
+    for (var id in this.handEls) pre.hand[id] = this.handEls[id].getBoundingClientRect();
+    var self = this;
+    var steal = prev.options.deckEmpty === 'takeAndPlay';
+    prev.table.forEach(function (e) {
+      if (!e.card) return;
+      var el = null;
+      if (e.via === 'starter' && !(steal && e.takenBy)) el = self.el.leadContent.querySelector('.starter-card .flip');
+      else {
+        var holder = steal ? (e.takenBy || e.owner) : e.owner;
+        var st = self.slotState[holder];
+        if (st && st.flip) el = st.flip;
+      }
+      if (el) pre.table.push({ card: e.card, rect: el.getBoundingClientRect(), gone: e.gone });
+    });
+    return pre;
+  };
+
+  /* Work out the card flights for a batch of events; hide their landing spots. */
+  BurnsTable.prototype.plan = function (events, pre, v) {
+    var me = this.me;
+    var flights = [];
+    var self = this;
+    var steal = v.options.deckEmpty === 'takeAndPlay';
+    var intoSlots = false;
+    function preTable(cardId) {
+      if (!pre) return null;
+      for (var i = 0; i < pre.table.length; i++) if (pre.table[i].card.id === cardId) return pre.table[i];
+      return null;
+    }
+    function add(f) {
+      if (f.hide) self.hide(f.hide);
+      if (f.to.indexOf('slot:') === 0) intoSlots = true;
+      flights.push(f);
+    }
+
+    events.forEach(function (e) {
+      if (e.type === 'deal') {
+        var k = 0;
+        for (var r = 0; r < e.handSize; r++) {
+          e.order.forEach(function (pid) {
+            var delay = 120 + k * 70;
+            k++;
+            if (pid === me && e.mine) {
+              var c = e.mine.hand[r];
+              add({ from: 'deck', to: 'h:' + c.id, card: c, delay: delay, duration: 340, hide: 'h:' + c.id, sound: 'deal' });
+            } else {
+              add({ from: 'deck', to: 'seat:' + pid, card: null, delay: delay, duration: 320, sound: 'deal' });
+            }
+          });
+        }
+        self.dealDoneAt = performance.now() + 120 + k * 70 + 340;
+      } else if (e.type === 'setStart' && pre) {
+        pre.table.forEach(function (t, i) {
+          if (!t.gone) add({ fromRect: t.rect, to: 'aside', card: t.card, delay: i * 45, duration: 420, spin: 0 });
+        });
+      } else if (e.type === 'lead' || e.type === 'commit') {
+        if (e.player === me && e.mine) {
+          var r1 = pre && pre.hand[e.mine.card.id];
+          add({ fromRect: r1, to: 'slot:' + me, card: e.mine.card, duration: 300, hide: 'slot:' + me });
+        } else {
+          add({ from: 'seat:' + e.player, to: 'slot:' + e.player, card: e.card || null, duration: 340, hide: 'slot:' + e.player });
+        }
+      } else if (e.type === 'draw') {
+        if (e.player === me && e.mine) {
+          if (e.matched) add({ from: 'deck', to: 'slot:' + me, card: e.mine.card, duration: 360, hide: 'slot:' + me });
+          else add({ from: 'deck', to: 'h:' + e.mine.card.id, card: e.mine.card, duration: 330, hide: 'h:' + e.mine.card.id });
+        } else {
+          if (e.matched) add({ from: 'deck', to: 'slot:' + e.player, card: null, duration: 340, hide: 'slot:' + e.player });
+          else add({ from: 'deck', to: 'seat:' + e.player, card: null, duration: 300 });
+        }
+      } else if (e.type === 'take') {
+        var src = preTable(e.card.id);
+        var fromRect = src ? src.rect : null;
+        if (steal) add({ fromRect: fromRect, to: 'slot:' + e.player, card: e.card, duration: 380, hide: 'slot:' + e.player });
+        else if (e.player === me) add({ fromRect: fromRect, to: 'h:' + e.card.id, card: e.card, duration: 380, hide: 'h:' + e.card.id });
+        else add({ fromRect: fromRect, to: 'seat:' + e.player, card: e.card, duration: 380 });
+      }
+    });
+    return { flights: flights, intoSlots: intoSlots };
+  };
+
+  BurnsTable.prototype.target = function (key) {
+    if (key === 'deck') return this.el.deckTop;
+    if (key === 'aside') return this.el.asideTop;
+    if (key.indexOf('h:') === 0) return this.handEls[key.slice(2)] || null;
+    if (key.indexOf('slot:') === 0) {
+      var st = this.slotState[key.slice(5)];
+      return st && st.flip ? st.flip : null;
+    }
+    if (key.indexOf('seat:') === 0) {
+      var s = this.seatEls[key.slice(5)];
+      return s ? s.mini : this.el.mySlot;
+    }
+    return null;
+  };
+
+  BurnsTable.prototype.run = function (plan) {
+    var self = this;
+    plan.flights.forEach(function (f) {
+      var from = f.fromRect ? null : (f.from.indexOf('seat:') === 0 ? (self.seatEls[f.from.slice(5)] || {}).avatar : self.target(f.from));
+      var to = self.target(f.to);
+      if (f.sound) setTimeout(function () { UI.Sound.play(f.sound); }, f.delay || 0);
+      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration, spin: f.spin })
+        .then(function () { if (f.hide) self.unhide(f.hide); });
+    });
+  };
+
+  BurnsTable.prototype.hide = function (key) { this.hidden[key] = (this.hidden[key] || 0) + 1; };
+  BurnsTable.prototype.unhide = function (key) {
+    this.hidden[key] = Math.max(0, (this.hidden[key] || 0) - 1);
+    if (this.hidden[key]) return;
+    delete this.hidden[key];
+    var el = this.target(key);
+    if (el) el.style.visibility = '';
+  };
+
+  /* ---------- rendering ---------- */
+
+  BurnsTable.prototype.render = function (v, plan) {
+    this.renderTop(v);
+    this.renderSeats(v, plan);
+    this.renderRail(v);
+    this.renderStatus(v);
+    this.renderMe(v, plan);
+    this.renderHand(v);
+  };
+
+  BurnsTable.prototype.renderTop = function (v) {
+    this.el.set.textContent = v.phase === 'dealing' ? 'Dealing' : 'Set ' + v.setNo;
+    this.el.empty.hidden = !(v.deckCount === 0 && v.phase !== 'dealing');
+  };
+
+  BurnsTable.prototype.holder = function (v, e) {
+    return v.options.deckEmpty === 'takeAndPlay' ? (e.takenBy || e.owner) : e.owner;
+  };
+
+  BurnsTable.prototype.entryFor = function (v, pid) {
+    for (var i = 0; i < v.table.length; i++) {
+      var e = v.table[i];
+      if (this.holder(v, e) === pid) return e;
+    }
+    return null;
+  };
+
+  BurnsTable.prototype.renderSeats = function (v, plan) {
+    var self = this;
+    var revealOrder = 0;
+    v.players.forEach(function (p) {
+      if (p.id === self.me) return;
+      var s = self.seatEls[p.id];
+      if (!s) return;
+      s.count.textContent = p.handCount;
+      s.seat.setAttribute('aria-label', p.name + ', ' + p.handCount + ' cards');
+      s.seat.classList.toggle('is-leader', p.isLeader);
+      s.seat.classList.toggle('is-active', self.isActive(v, p));
+      var chip = self.chipFor(v, p);
+      s.chip.textContent = chip.text;
+      s.chip.className = 'seat-chip' + (chip.tone ? ' ' + chip.tone : '');
+      var vk = p.voids.join('') + (v.phase === 'over');
+      if (s.voids.dataset.k !== vk) {
+        s.voids.dataset.k = vk;
+        s.voids.innerHTML = p.voids.length && v.phase !== 'over'
+          ? 'no&nbsp;' + p.voids.map(UI.suit).join('')
+          : '';
+        s.voids.title = p.voids.length ? p.name + ' is known to be out of ' + p.voids.map(UI.suitPlural).join(' and ') : '';
+      }
+      if (self.renderSlot(s.slot, p.id, v, plan, revealOrder)) revealOrder++;
+    });
+    this.revealCount = revealOrder;
+  };
+
+  BurnsTable.prototype.isActive = function (v, p) {
+    if (v.phase === 'lead') return p.isLeader;
+    if (v.phase === 'follow') return !p.isLeader && !p.committed && !p.isTaker;
+    if (v.phase === 'take') return p.isTaker && !p.took;
+    return false;
+  };
+
+  BurnsTable.prototype.chipFor = function (v, p) {
+    var won = v.setResult && v.setResult.player === p.id && (v.phase === 'reveal' || v.phase === 'over');
+    switch (v.phase) {
+      case 'lead': return p.isLeader ? { text: 'choosing…', tone: 'hot' } : { text: '' };
+      case 'follow':
+        if (p.isLeader) return { text: 'led' };
+        if (p.isTaker) return { text: 'can’t follow', tone: 'warn' };
+        if (p.committed) return { text: p.drew ? 'drew ' + p.drew + ' · in' : 'card in' };
+        if (p.drew) return { text: 'drawing · ' + p.drew, tone: 'hot' };
+        return { text: 'thinking…' };
+      case 'take':
+        if (p.isTaker) return p.took ? { text: 'took one' } : { text: 'taking…', tone: 'hot' };
+        return { text: p.drew ? 'drew ' + p.drew : '' };
+      case 'reveal':
+      case 'over':
+        if (won) return { text: 'wins the set', tone: 'hot' };
+        if (p.took) return { text: v.options.deckEmpty === 'pickUp' ? 'picked one up' : 'took one' };
+        return { text: p.drew ? 'drew ' + p.drew : '' };
+    }
+    return { text: '' };
+  };
+
+  /* Returns true when this slot flips face up in this render (for staggering). */
+  BurnsTable.prototype.renderSlot = function (slotEl, pid, v, plan, order) {
+    var st = this.slotState[pid] || (this.slotState[pid] = { flip: null, key: null, up: false });
+    var steal = v.options.deckEmpty === 'takeAndPlay';
+    var entry = this.entryFor(v, pid);
+    var flipped = false;
+    var tag = null;
+
+    // A card this player played was taken away by someone else ("Take and play").
+    var lostTo = null;
+    if (steal) v.table.forEach(function (e) { if (e.owner === pid && e.takenBy && e.takenBy !== pid) lostTo = e.takenBy; });
+
+    if (!entry) {
+      if (st.flip) { st.flip.parentNode && st.flip.parentNode.removeChild(st.flip); st.flip = null; st.key = null; st.up = false; }
+      slotEl.classList.remove('winner', 'takeable', 'gone');
+      slotEl.removeAttribute('data-take');
+      if (lostTo) tag = { text: 'taken', tone: '' };
+    } else {
+      var key = v.setNo + '|' + (entry.owner || 'starter') + '|' + entry.via;
+      if (st.key !== key) {
+        if (st.flip && st.flip.parentNode) st.flip.parentNode.removeChild(st.flip);
+        var f = makeFlip();
+        st.flip = f.flip; st.inner = f.inner; st.front = f.front; st.key = key; st.up = false;
+        slotEl.appendChild(st.flip);
+      }
+      var card = entry.card;
+      if (card) UI.setCard(st.front, card);
+      var wantUp = !!card;
+      if (wantUp !== st.up) {
+        var isReveal = wantUp && v.revealed && entry.owner !== this.me && entry.via !== 'starter' &&
+          !(entry.via === 'lead' && v.options.leadCard === 'faceUp') && !(steal && entry.takenBy === pid);
+        if (isReveal && !this.quiet) {
+          st.flip.classList.remove('no-anim');
+          void st.flip.offsetWidth;
+          st.inner.style.transitionDelay = ((plan.intoSlots ? 380 : 40) + order * 90) + 'ms';
+          flipped = true;
+        } else {
+          st.flip.classList.add('no-anim');
+          st.inner.style.transitionDelay = '0ms';
+        }
+        st.flip.dataset.up = wantUp ? '1' : '0';
+        st.up = wantUp;
+        if (!isReveal || this.quiet) { void st.flip.offsetWidth; st.flip.classList.remove('no-anim'); }
+      }
+      st.flip.style.visibility = this.hidden['slot:' + pid] ? 'hidden' : '';
+
+      var won = v.setResult && v.setResult.player === pid && (v.phase === 'reveal' || v.phase === 'over');
+      slotEl.classList.toggle('winner', !!won);
+      slotEl.classList.toggle('gone', !!entry.gone);
+      var takeable = v.canTake && card && !entry.takenBy;
+      slotEl.classList.toggle('takeable', !!takeable);
+      if (takeable) slotEl.dataset.take = card.id; else slotEl.removeAttribute('data-take');
+      if (won && pid === this.me) tag = { text: 'wins', tone: 'ember' };
+      else if (entry.gone && entry.takenBy) tag = { text: '→ ' + this.name(entry.takenBy), tone: '' };
+      else if (takeable) tag = { text: 'take', tone: '' };
+    }
+
+    // hidden-from-others marker on your own card before the reveal
+    var eye = slotEl.querySelector('.eye');
+    var showEye = pid === this.me && entry && entry.card && !v.revealed && v.phase !== 'over';
+    if (showEye && !eye) {
+      eye = document.createElement('span');
+      eye.className = 'eye';
+      eye.title = 'Only you can see this card until the reveal';
+      eye.innerHTML = UI.icon.eyeOff;
+      slotEl.appendChild(eye);
+    } else if (!showEye && eye) eye.parentNode.removeChild(eye);
+
+    var tagEl = slotEl.querySelector('.slot-tag');
+    if (tag) {
+      if (!tagEl) { tagEl = document.createElement('span'); slotEl.appendChild(tagEl); }
+      tagEl.className = 'slot-tag' + (tag.tone ? ' ' + tag.tone : '') + (tag.top ? ' top' : '');
+      tagEl.innerHTML = tag.text;
+    } else if (tagEl) tagEl.parentNode.removeChild(tagEl);
+    return flipped;
+  };
+
+  BurnsTable.prototype.renderRail = function (v) {
+    var deck = this.el.deck;
+    deck.classList.toggle('can-draw', !!v.mustDraw);
+    deck.classList.toggle('empty', v.deckCount === 0);
+    this.el.deckCount.textContent = v.deckCount === 0 ? 'empty' : v.deckCount + ' left';
+    deck.setAttribute('aria-label', v.mustDraw ? 'Deck, ' + v.deckCount + ' cards. Tap to draw.' : 'Deck, ' + v.deckCount + ' cards');
+
+    this.el.aside.classList.toggle('empty', v.discard.length === 0);
+    this.el.asideCount.textContent = v.discard.length + ' aside';
+
+    // middle of the rail: starter card, suit to follow, or who leads
+    var steal = v.options.deckEmpty === 'takeAndPlay';
+    var starterEntry = null;
+    v.table.forEach(function (e) { if (e.via === 'starter') starterEntry = e; });
+    var content = this.el.leadContent;
+    var label = { text: '', tone: '' };
+    var key, html = null;
+
+    if ((v.phase === 'dealing' || (v.phase === 'over' && v.winReason === 'flush')) && v.starter) {
+      key = 'starter-deal:' + v.starter.id;
+      label.text = 'Starter';
+    } else if (starterEntry && !(steal && starterEntry.takenBy)) {
+      key = 'starter:' + starterEntry.card.id;
+      label.text = 'Follow ' + UI.suitPlural(v.suit);
+      label.tone = v.canFollow || v.mustDraw ? 'hot' : '';
+    } else if (v.phase === 'lead') {
+      key = 'lead';
+      html = '<div class="roundel empty"><span class="q">?</span></div>';
+      label.text = v.canLead ? 'Your lead' : this.name(v.leader) + ' leads';
+      label.tone = v.canLead ? 'hot' : '';
+    } else if (v.suit) {
+      key = 'suit:' + v.suit;
+      html = '<div class="roundel ' + (UI.isRed(v.suit) ? 'red' : '') + '" aria-label="Suit in play: ' + UI.suitPlural(v.suit) + '">' + UI.suitSvg(v.suit) + '</div>';
+      label.text = 'Follow ' + UI.suitPlural(v.suit);
+      label.tone = v.canFollow || v.mustDraw ? 'hot' : '';
+    } else {
+      key = 'blank';
+      html = '<div class="roundel empty"></div>';
+    }
+    if (v.phase === 'take') { label.text = 'Deck empty'; label.tone = 'ember'; }
+    if (v.phase === 'reveal' && v.setResult) { label.text = v.setResult.player === this.me ? 'You win it' : this.name(v.setResult.player) + ' wins'; label.tone = 'ember'; }
+
+    if (content.dataset.key !== key) {
+      content.dataset.key = key;
+      if (html != null) content.innerHTML = html;
+      else {
+        var card = key.indexOf('starter-deal:') === 0 ? v.starter : starterEntry.card;
+        content.innerHTML = '';
+        var wrap = document.createElement('div');
+        wrap.className = 'starter-card';
+        var f = makeFlip();
+        f.flip.classList.add('no-anim');
+        UI.setCard(f.front, card);
+        wrap.appendChild(f.flip);
+        content.appendChild(wrap);
+        this.starterFlip = f;
+        if (v.phase === 'dealing' && !this.quiet) {
+          // turn the starter face up once the deal has landed
+          var wait = Math.max(0, (this.dealDoneAt || performance.now()) - performance.now());
+          wrap.classList.add('deal-in');
+          wrap.style.animationDelay = Math.max(0, wait - 350) + 'ms';
+          setTimeout(function () { f.flip.classList.remove('no-anim'); f.flip.dataset.up = '1'; UI.Sound.play('flip'); }, wait + 60);
+        } else {
+          f.flip.dataset.up = '1';
+          void f.flip.offsetWidth;
+          f.flip.classList.remove('no-anim');
+        }
+      }
+    }
+    var starterWrap = content.querySelector('.starter-card');
+    if (starterWrap && starterEntry) {
+      var takeable = v.canTake && !starterEntry.takenBy;
+      starterWrap.classList.toggle('takeable', !!takeable);
+      starterWrap.classList.toggle('gone', !!starterEntry.gone);
+      if (takeable) starterWrap.dataset.take = starterEntry.card.id; else starterWrap.removeAttribute('data-take');
+      if (starterEntry.gone && starterEntry.takenBy) { label.text = '→ ' + this.name(starterEntry.takenBy); label.tone = ''; }
+    }
+    this.el.leadLabel.textContent = '';
+    this.el.leadLabel.innerHTML = label.text;
+    this.el.leadLabel.className = 'lead-label' + (label.tone ? ' ' + label.tone : '');
+    this.el.leadLabel.hidden = !label.text;
+
+    var timing = v.phase === 'take';
+    this.el.ring.hidden = !timing;
+    this.el.timer.hidden = !timing;
+    if (!timing) this.el.lead.classList.remove('urgent');
+    this.frame();
+  };
+
+  BurnsTable.prototype.statusFor = function (v) {
+    var me = this.me, self = this;
+    var mine = v.players.filter(function (p) { return p.id === me; })[0];
+    var s = v.suit;
+    var P = s ? UI.suit(s) + ' ' + UI.suitPlural(s) : '';
+    var one = s ? UI.suitSingle(s) : '';
+    var waitingOn = v.players.filter(function (p) { return p.id !== v.leader && !p.committed && !p.isTaker && p.id !== me; })
+      .map(function (p) { return self.name(p.id); });
+
+    switch (v.phase) {
+      case 'dealing':
+        return { main: 'Dealing…', sub: 'Four cards each. A Flush (one of every suit) wins on the spot.' };
+      case 'lead':
+        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.', sub: 'Its suit is the one everyone must follow.' };
+        return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
+      case 'follow': {
+        var intro = v.setNo === 1 ? 'The starter card sets the suit.' : this.name(v.leader) + ' led ' + UI.suit(s) + '.';
+        if (v.canFollow) return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>', sub: intro + ' Cards stay hidden until everyone has played.' };
+        if (v.mustDraw) {
+          return {
+            main: 'No ' + P + '. <span class="hl">Tap the deck to draw.</span>',
+            sub: mine.drew ? 'Drawn ' + mine.drew + ' so far. Keep going until a ' + one + ' turns up.' : 'Draw until a ' + one + ' turns up. It is played for you.'
+          };
+        }
+        if (mine && mine.isTaker) return { main: '<span class="em">No ' + P + ' and the deck is empty.</span>', sub: 'Once everyone else is in, you take a card from the set.' };
+        return { main: v.leader === me ? 'You led ' + P + '.' : 'Your card is in.', sub: waitingOn.length ? 'Waiting for ' + list(waitingOn) + '.' : '' };
+      }
+      case 'take': {
+        var takers = v.players.filter(function (p) { return p.isTaker; });
+        var pending = takers.filter(function (p) { return !p.took && p.id !== me; }).map(function (p) { return self.name(p.id); });
+        var verb = v.options.deckEmpty === 'pickUp' ? 'It goes into your hand.' : 'You play it as your own.';
+        if (v.canTake) return { main: '<span class="hl">Take a card from the set</span> <span class="secs"></span>', sub: verb + ' Each card can only be taken once.' };
+        if (mine && mine.isTaker) return { main: 'Got it.', sub: pending.length ? 'Waiting for ' + list(pending) + '.' : '' };
+        var names = takers.map(function (p) { return self.name(p.id); });
+        return { main: list(names) + (names.length > 1 ? ' are' : ' is') + ' taking from the set <span class="secs"></span>', sub: 'The deck is empty, so they take from the cards just played.' };
+      }
+      case 'reveal': {
+        var r = v.setResult;
+        if (!r || !r.card) return { main: this.name(r && r.player) + ' keeps the lead.', sub: '' };
+        if (r.player === me) return { main: '<span class="hl">You win the set</span> with ' + UI.cardText(r.card) + '.', sub: 'You lead next.' };
+        return { main: this.name(r.player) + ' wins the set with ' + UI.cardText(r.card) + '.', sub: this.name(r.player) + ' leads next.' };
+      }
+      case 'over': {
+        var w = (v.winners || []).map(function (id) { return self.name(id); });
+        var iWon = (v.winners || []).indexOf(me) >= 0;
+        if (v.winReason === 'flush') return { main: (iWon ? '<span class="hl">Flush! You win.</span>' : 'Flush! ' + list(w) + (w.length > 1 ? ' win.' : ' wins.')), sub: 'All four suits on the deal.' };
+        return { main: iWon ? '<span class="hl">You emptied your hand. You win!</span>' : list(w) + ' emptied their hand and wins.', sub: '' };
+      }
+    }
+    return { main: '', sub: '' };
+  };
+
+  BurnsTable.prototype.renderStatus = function (v) {
+    var st = this.statusFor(v);
+    this.el.statusMain.innerHTML = st.main;
+    this.el.statusSub.innerHTML = st.sub || '';
+  };
+
+  BurnsTable.prototype.renderMe = function (v, plan) {
+    var me = this.me;
+    var mine = v.players.filter(function (p) { return p.id === me; })[0];
+    this.el.me.classList.toggle('is-leader', !!(mine && mine.isLeader));
+    this.el.myCount.textContent = v.hand.length === 1 ? '1 card' : v.hand.length + ' cards';
+    this.renderSlot(this.el.mySlot, me, v, plan, this.revealCount || 0);
+    var sel = this.selected && v.playable.indexOf(this.selected) >= 0 ? this.selected : null;
+    var card = sel && v.hand.filter(function (c) { return c.id === sel; })[0];
+    if (card) {
+      this.el.play.hidden = false;
+      this.el.play.innerHTML = (v.canLead ? 'Lead ' : 'Play ') + card.rank + UI.suitSvg(card.suit);
+      this.el.play.setAttribute('aria-label', (v.canLead ? 'Lead the ' : 'Play the ') + CT.cardName(card));
+    } else {
+      this.el.play.hidden = true;
+    }
+  };
+
+  BurnsTable.prototype.renderHand = function (v) {
+    var cards = sortHand(v.hand);
+    var playable = {};
+    v.playable.forEach(function (id) { playable[id] = true; });
+    var needAct = v.canLead || v.canFollow;
+    if (this.selected && !playable[this.selected]) this.selected = null;
+    var keep = {};
+    var self = this;
+    cards.forEach(function (c, i) {
+      keep[c.id] = true;
+      var el = self.handEls[c.id];
+      if (!el) {
+        el = UI.makeCard(c, 'button');
+        el.type = 'button';
+        el.classList.add('hcard');
+        el.dataset.id = c.id;
+        if (!self.first && !self.hidden['h:' + c.id]) el.classList.add('new');
+        self.el.hand.appendChild(el);
+        self.handEls[c.id] = el;
+      }
+      el.classList.toggle('playable', needAct && !!playable[c.id]);
+      el.classList.toggle('dim', (needAct && !playable[c.id]) || !!v.mustDraw || (v.canTake && true));
+      el.classList.toggle('selected', self.selected === c.id);
+      el.style.visibility = self.hidden['h:' + c.id] ? 'hidden' : '';
+      el.style.zIndex = String(i + 1);
+    });
+    for (var id in this.handEls) {
+      if (!keep[id]) { this.handEls[id].parentNode.removeChild(this.handEls[id]); delete this.handEls[id]; }
+    }
+    this.layoutHand(cards);
+
+    // bring the first playable card into view when it's your turn on a long hand
+    var turnKey = needAct ? v.setNo + v.phase : null;
+    if (turnKey && turnKey !== this.turnKey) {
+      var first = cards.filter(function (c) { return playable[c.id]; })[0];
+      var wrap = this.el.handWrap;
+      if (first && wrap.scrollWidth > wrap.clientWidth) {
+        var left = parseFloat(this.handEls[first.id].style.left) || 0;
+        wrap.scrollTo({ left: Math.max(0, left - 24), behavior: 'smooth' });
+      }
+    }
+    this.turnKey = turnKey;
+  };
+
+  BurnsTable.prototype.layoutHand = function (cards) {
+    var wrap = this.el.handWrap;
+    var cs = getComputedStyle(wrap);
+    var W = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var cw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hcw')) || 58;
+    var n = cards.length;
+    var step = n > 1 ? Math.min(cw + 6, (W - cw) / (n - 1)) : 0;
+    var minStep = Math.max(18, cw * 0.4);
+    if (n > 1 && step < minStep) step = minStep;
+    var total = n ? (n - 1) * step + cw : 0;
+    var offset = total < W ? (W - total) / 2 : 0;
+    this.el.hand.style.width = Math.max(total, W) + 'px';
+    var self = this;
+    cards.forEach(function (c, i) {
+      var el = self.handEls[c.id];
+      if (el) el.style.left = (offset + i * step) + 'px';
+    });
+  };
+
+  /* Called ~20×/s by the app loop for live timers. */
+  BurnsTable.prototype.frame = function () {
+    var v = this.v;
+    if (!v || v.phase !== 'take' || !v.takeEndsAt) return;
+    var left = Math.max(0, v.takeEndsAt - this.session.now());
+    var frac = left / (v.timing.takeWindowMs || 10000);
+    this.el.ringFg.setAttribute('stroke-dashoffset', String(295.3 * (1 - frac)));
+    var secs = Math.ceil(left / 1000);
+    this.el.timer.textContent = secs + 's';
+    var urgent = left <= 3000;
+    this.el.lead.classList.toggle('urgent', urgent);
+    var span = this.el.statusMain.querySelector('.secs');
+    if (span) span.textContent = '· ' + secs + 's';
+    if (secs !== this.lastSecs) {
+      this.lastSecs = secs;
+      if (urgent && secs > 0 && v.canTake) UI.Sound.play('tick');
+    }
+  };
+
+  /* ---------- input ---------- */
+
+  BurnsTable.prototype.tapCard = function (id, el) {
+    var v = this.v;
+    if (!v) return;
+    UI.Sound.unlock();
+    if (v.canLead || v.canFollow) {
+      if (v.playable.indexOf(id) < 0) {
+        this.shake(el);
+        UI.toast('Follow ' + UI.suit(v.suit) + ' — play a ' + UI.suitSingle(v.suit) + '.');
+        UI.Sound.play('nope');
+        return;
+      }
+      if (this.selected === id) { this.play(id); return; }
+      this.selected = id;
+      UI.buzz(8);
+      this.renderHand(v);
+      this.renderMe(v, { intoSlots: false });
+      return;
+    }
+    if (v.mustDraw) {
+      this.shake(el);
+      UI.toast('No ' + UI.suit(v.suit) + ' ' + UI.suitPlural(v.suit) + '. Draw from the deck.');
+      return;
+    }
+    if (v.canTake) { UI.toast('Tap a glowing card on the table to take it.'); return; }
+  };
+
+  BurnsTable.prototype.shake = function (el) {
+    if (!el) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+  };
+
+  BurnsTable.prototype.play = function (id) {
+    var v = this.v;
+    var res = this.session.act(this.me, v.canLead ? 'lead' : 'follow', { cardId: id });
+    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+    this.selected = null;
+    UI.Sound.play('play');
+    UI.buzz(10);
+  };
+
+  BurnsTable.prototype.tapDeck = function () {
+    var v = this.v;
+    if (!v) return;
+    UI.Sound.unlock();
+    var deck = this.el.deck;
+    if (!v.mustDraw) {
+      if (v.canFollow) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
+      return;
+    }
+    var res = this.session.act(this.me, 'draw');
+    if (res.ok) {
+      var cd = v.timing.drawCooldownMs;
+      deck.classList.remove('cooling');
+      void deck.offsetWidth;
+      deck.style.setProperty('--cool', cd + 'ms');
+      deck.classList.add('cooling');
+      clearTimeout(this.coolTimer);
+      this.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
+      UI.Sound.play('draw');
+      UI.buzz(8);
+      if (res.matched) UI.toast('Drew ' + UI.cardText(res.card) + ' — played for you.');
+    } else if (res.code === 'cooldown') {
+      deck.classList.remove('wiggle');
+      void deck.offsetWidth;
+      deck.classList.add('wiggle');
+    } else {
+      UI.toast(UI.esc(res.message));
+    }
+  };
+
+  BurnsTable.prototype.take = function (cardId) {
+    var v = this.v;
+    if (!v || !v.canTake) return;
+    var res = this.session.act(this.me, 'take', { cardId: cardId });
+    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+    UI.Sound.play('draw');
+    UI.buzz(10);
+  };
+
+  /* ---------- sounds and notices for things other players did ---------- */
+
+  BurnsTable.prototype.react = function (events, v) {
+    var me = this.me, self = this;
+    events.forEach(function (e) {
+      switch (e.type) {
+        case 'lead':
+        case 'commit':
+          if (e.player !== me) UI.Sound.play('play');
+          break;
+        case 'draw':
+          if (e.player !== me) UI.Sound.play('draw');
+          break;
+        case 'reveal':
+          setTimeout(function () { UI.Sound.play('flip'); }, 420);
+          break;
+        case 'setWon':
+          if (e.player === me && v.phase !== 'over') setTimeout(function () { UI.Sound.play('win'); }, 700);
+          break;
+        case 'deckEmpty':
+          UI.toast('The deck is empty.');
+          break;
+        case 'stuck':
+          if (e.players.indexOf(me) >= 0) UI.toast('No ' + UI.suit(e.suit) + ' and the deck is empty. You’ll take from the set.', 2600);
+          break;
+        case 'takeStart':
+          if (e.takers.indexOf(me) >= 0) UI.Sound.play('alert');
+          break;
+        case 'take':
+          if (e.player !== me) UI.Sound.play('draw');
+          if (e.player === me && e.auto) UI.toast('Time’s up — you got ' + UI.cardText(e.card) + '.');
+          break;
+        case 'gameOver':
+          var iWon = e.winners.indexOf(me) >= 0;
+          setTimeout(function () { UI.Sound.play(iWon ? 'victory' : 'lose'); }, e.reason === 'flush' ? 1200 : 1500);
+          break;
+      }
+    });
+  };
+
+  /* ---------- play-by-play ---------- */
+
+  BurnsTable.prototype.pushLog = function (html, cls) {
+    var item = { html: html, cls: cls || '' };
+    this.logItems.push(item);
+    if (this.logItems.length > 600) this.logItems.shift();
+    return item;
+  };
+
+  BurnsTable.prototype.logEvent = function (e, v) {
+    var self = this;
+    var me = this.me;
+    var N = function (pid) { return self.name(pid); };
+    switch (e.type) {
+      case 'deal':
+        this.pushLog('Dealt ' + e.handSize + ' cards to each of ' + e.order.length + ' players.', 'set');
+        if (e.mine) this.pushLog('Your hand: ' + sortHand(e.mine.hand).map(UI.cardText).join(' '));
+        break;
+      case 'flush':
+        this.pushLog('Flush! ' + list(e.players.map(N)) + (e.players.length > 1 ? ' hold' : ' holds') + ' all four suits.', 'win');
+        break;
+      case 'noFlush':
+        this.pushLog('No Flush on the deal.');
+        break;
+      case 'setStart':
+        if (e.setNo === 1) this.pushLog('Set 1 · starter card ' + UI.cardText(e.starter) + ', so everyone follows ' + UI.suit(e.suit) + '.', 'set');
+        else this.pushLog('Set ' + e.setNo + ' · ' + N(e.leader) + ' to lead.', 'set');
+        break;
+      case 'lead':
+        if (e.player === me && e.mine) this.pushLog('You led ' + UI.cardText(e.mine.card) + (e.card ? '.' : ' (others only see the suit).'));
+        else this.pushLog(N(e.player) + ' led ' + (e.card ? UI.cardText(e.card) : UI.suit(e.suit) + ' (card hidden)') + '.');
+        break;
+      case 'commit':
+        this.pushLog(e.player === me && e.mine ? 'You played ' + UI.cardText(e.mine.card) + '.' : N(e.player) + ' played a card.');
+        break;
+      case 'draw': {
+        var k = this.lastSetNo + ':' + e.player;
+        var d = this.drawLog[k];
+        if (!d) d = this.drawLog[k] = { item: this.pushLog(''), n: 0, cards: [] };
+        d.n = e.n;
+        if (e.mine) d.cards.push(e.mine.card);
+        var text;
+        if (e.player === me) {
+          text = 'You drew ' + d.cards.map(UI.cardText).join(', ');
+          if (e.matched) text += ' — played the ' + UI.cardText(e.mine.card) + '.';
+        } else {
+          text = N(e.player) + ' drew ' + d.n + (d.n === 1 ? ' card' : ' cards');
+          if (e.matched) text += d.n === 1 ? ', which matched and was played.' : '; the last one matched and was played.';
+        }
+        d.item.html = text;
+        break;
+      }
+      case 'deckEmpty':
+        this.pushLog('The deck is empty.');
+        break;
+      case 'stuck':
+        this.pushLog(list(e.players.map(N)) + ' can’t follow ' + UI.suit(e.suit) + ' and can’t draw.');
+        break;
+      case 'reveal':
+        this.pushLog('Reveal: ' + e.cards.filter(function (c) { return c.owner; }).map(function (c) {
+          return N(c.owner) + ' ' + UI.cardText(c.card);
+        }).join(' · '));
+        break;
+      case 'takeStart':
+        this.pushLog(list(e.takers.map(N)) + (e.takers.length > 1 ? ' have' : ' has') + ' 10 seconds to take a card from the set.');
+        break;
+      case 'take':
+        this.pushLog(N(e.player) + (v.options.deckEmpty === 'pickUp' ? ' picked up ' : ' took and played ') + UI.cardText(e.card) +
+          (e.from ? ' (' + N(e.from).replace(/^You$/, 'yours') + (e.from === me ? '' : '’s') + ')' : ' (the starter)') +
+          (e.auto ? ', picked at random when time ran out.' : '.'));
+        break;
+      case 'setWon':
+        if (e.card) this.pushLog(N(e.player) + ' won the set with ' + UI.cardText(e.card) + '.', 'win');
+        break;
+      case 'gameOver':
+        if (e.reason === 'empty') this.pushLog(list(e.winners.map(N)) + (e.winners[0] === me ? ' emptied your hand and won!' : ' emptied their hand and won.'), 'win');
+        break;
+    }
+    if (e.type === 'setStart') this.lastSetNo = e.setNo;
+  };
+
+  CT.UI.presenters = CT.UI.presenters || {};
+  CT.UI.presenters.burns = BurnsTable;
+})(window.CT);
+
+/* ---- src/ui/app.js ---- */
+/* ==========================================================================
+   APP SHELL — menu, setup, sheets, saving, and the game loop.
+   Mode-agnostic: the home screen lists every registered mode, the setup
+   screen is generated from the mode's option list, and the table screen is
+   whichever presenter the mode names.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var SAVE_KEY = 'cardtable.save.v1';
+  var SETTINGS_KEY = 'cardtable.settings.v1';
+  var STATS_KEY = 'cardtable.stats.v1';
+  var BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
+  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
+
+  function $(id) { return document.getElementById(id); }
+
+  function pickNames(n) {
+    var pool = BOT_NAMES.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    return pool.slice(0, n);
+  }
+
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+  var App = {
+    settings: {},
+    stats: {},
+    session: null,
+    table: null,
+    game: null,
+    screen: 'home',
+    sheet: null,
+    logOpen: false,
+
+    boot: function (data) {
+      var self = this;
+      this.settings = UI.store.get(SETTINGS_KEY, {}) || {};
+      this.stats = UI.store.get(STATS_KEY, {}) || {};
+      UI.Sound.on = this.settings.sound !== false;
+
+      document.addEventListener('pointerdown', function () { UI.Sound.unlock(); }, true);
+      document.addEventListener('visibilitychange', function () { self.onVisibility(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && self.sheet && self.sheet !== 'result') self.closeSheet(); });
+      $('overlay').addEventListener('click', function (e) { if (e.target === this && self.sheet !== 'confirm') self.closeSheet(); });
+      setInterval(function () { self.loop(); }, 50);
+      setInterval(function () { self.save(); }, 2500);
+
+      var hot = window.claude && window.claude.hot;
+      if (hot && typeof hot.snapshot === 'function') {
+        try { hot.snapshot(function () { return self.snapshot(); }); } catch (e) { /* optional */ }
+      }
+
+      data = data || {};
+      if (data.save && data.screen === 'table' && this.resume(data.save)) return;
+      this.showHome();
+    },
+
+    snapshot: function () {
+      return { save: this.currentSave(), screen: this.screen };
+    },
+
+    /* ---------- screens ---------- */
+
+    show: function (name) {
+      this.screen = name;
+      ['home', 'setup', 'table'].forEach(function (s) { $('screen-' + s).hidden = s !== name; });
+    },
+
+    showHome: function () {
+      var self = this;
+      if (this.session && this.session.state.phase !== 'over') { this.session.pause(); this.save(); }
+      this.show('home');
+      var save = this.loadSave();
+      var modes = CT.listModes();
+      var html =
+        '<header class="home-head"><p class="eyebrow">Card table</p>' +
+        '<button class="icon-btn" id="h-sound" type="button"></button></header>' +
+        '<h1 class="home-title">Pick a game</h1>';
+      if (save) {
+        var st = save.session.state;
+        var mine = st.players.filter(function (p) { return p.id === save.me; })[0];
+        var mode = CT.getMode(save.session.modeId);
+        html += '<div class="resume"><p>' + UI.esc(mode ? mode.name : 'Game') + ' in progress' +
+          '<small>' + (st.setNo ? 'Set ' + st.setNo : 'Just dealt') + ' · you hold ' + (mine ? mine.hand.length : 0) + ' cards · ' + (st.players.length - 1) + ' opponents</small></p>' +
+          '<button class="btn btn-primary" id="h-resume" type="button">Resume</button></div>';
+      }
+      html += '<section class="modes">';
+      modes.forEach(function (m) {
+        var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
+        html += '<article class="mode-tile" data-mode="' + m.id + '">' +
+          '<div class="mode-top"><h2 class="wordmark">' + UI.esc(m.name.toUpperCase()) + '</h2><div class="fan" aria-hidden="true"></div></div>' +
+          '<p class="tag">' + UI.esc(m.tagline || '') + '</p>' +
+          '<p class="meta">' + m.players.min + '–' + m.players.max + ' players' + hand + ' · you vs computer players</p>' +
+          '<div class="mode-actions"><button class="btn btn-primary" type="button" data-play="' + m.id + '">Play ' + UI.esc(m.name) + '</button>' +
+          '<button class="btn btn-ghost" type="button" data-rules="' + m.id + '">How to play</button></div>' +
+          '</article>';
+      });
+      html += '<article class="mode-tile soon"><h3>More games</h3><p>New modes appear here as their rules are added.</p></article></section>';
+      var lines = modes.map(function (m) {
+        var s = self.stats[m.id];
+        if (!s || !s.played) return '';
+        return UI.esc(m.name) + ': <b>' + s.won + '</b> ' + (s.won === 1 ? 'win' : 'wins') + ' from <b>' + s.played + '</b> ' + (s.played === 1 ? 'game' : 'games');
+      }).filter(Boolean);
+      if (lines.length) html += '<p class="record">Your record · ' + lines.join(' · ') + '</p>';
+      if (CT.BUILD) html += '<p class="build">Version ' + UI.esc(CT.BUILD.version) + ' · build ' + UI.esc(CT.BUILD.id) + '</p>';
+      var home = $('screen-home');
+      home.innerHTML = html;
+
+      // decorative fan of cards on each tile
+      home.querySelectorAll('.fan').forEach(function (fan) {
+        [{ id: 'QS', rank: 'Q', suit: 'S' }, { id: '9D', rank: '9', suit: 'D' }, { id: 'AH', rank: 'A', suit: 'H' }].forEach(function (c) {
+          fan.appendChild(UI.makeCard(c));
+        });
+      });
+      var snd = $('h-sound');
+      var paintSound = function () {
+        snd.innerHTML = UI.Sound.on ? UI.icon.soundOn : UI.icon.soundOff;
+        snd.setAttribute('aria-label', UI.Sound.on ? 'Sound on. Tap to mute.' : 'Sound off. Tap to turn on.');
+      };
+      paintSound();
+      snd.addEventListener('click', function () { self.toggleSound(); paintSound(); });
+      if (save) $('h-resume').addEventListener('click', function () { self.resume(save); });
+      home.querySelectorAll('[data-play]').forEach(function (b) {
+        b.addEventListener('click', function () { self.openSetup(b.dataset.play); });
+      });
+      home.querySelectorAll('[data-rules]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var m = CT.getMode(b.dataset.rules);
+          self.openRules(m.id, CT.resolveOptions(m.options, (self.settings[m.id] || {}).options));
+        });
+      });
+    },
+
+    modeSettings: function (mode) {
+      var cfg = this.settings[mode.id] || {};
+      return {
+        opponents: clamp(cfg.opponents != null ? cfg.opponents : mode.players.default - 1, mode.players.min - 1, mode.players.max - 1),
+        options: CT.resolveOptions(mode.options, cfg.options)
+      };
+    },
+
+    openSetup: function (modeId) {
+      var self = this;
+      var mode = CT.getMode(modeId);
+      var cfg = this.modeSettings(mode);
+      this.show('setup');
+      var opp = '';
+      for (var n = mode.players.min - 1; n <= mode.players.max - 1; n++) {
+        opp += '<button type="button" data-opp="' + n + '" aria-pressed="' + (n === cfg.opponents) + '">' + n + '</button>';
+      }
+      var opts = (mode.options || []).map(function (o) {
+        var segs = o.choices.map(function (c) {
+          return '<button type="button" data-opt="' + o.id + '" data-val="' + c.value + '" aria-pressed="' + (cfg.options[o.id] === c.value) + '">' + UI.esc(c.label) + '</button>';
+        }).join('');
+        return '<section class="field"><h3 id="lbl-' + o.id + '">' + UI.esc(o.label) + '</h3>' +
+          '<div class="seg" role="group" aria-labelledby="lbl-' + o.id + '">' + segs + '</div>' +
+          '<p class="help" id="help-' + o.id + '"></p></section>';
+      }).join('');
+      $('screen-setup').innerHTML =
+        '<header class="setup-head"><button class="icon-btn" id="s-back" type="button" aria-label="Back to games">' + UI.icon.back + '</button>' +
+        '<span class="wordmark">' + UI.esc(mode.name.toUpperCase()) + '</span></header>' +
+        '<div class="setup-body">' +
+          '<section class="field"><h3 id="lbl-opp">Opponents</h3><div class="seg" role="group" aria-labelledby="lbl-opp">' + opp + '</div>' +
+          '<p class="help" id="help-opp"></p></section>' +
+          '<p class="eyebrow">Rule choices</p>' + opts +
+        '</div>' +
+        '<div class="setup-foot"><button class="btn btn-primary btn-wide" id="s-deal" type="button">Deal</button>' +
+        '<button class="link-btn" id="s-rules" type="button">How to play</button></div>';
+
+      var paint = function () {
+        var c = self.modeSettings(mode);
+        $('screen-setup').querySelectorAll('[data-opp]').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.dataset.opp === c.opponents)); });
+        $('help-opp').textContent = c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
+        (mode.options || []).forEach(function (o) {
+          $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });
+          var choice = o.choices.filter(function (x) { return x.value === c.options[o.id]; })[0];
+          $('help-' + o.id).textContent = choice ? choice.help : '';
+        });
+      };
+      var store = function (patch) {
+        var cur = self.modeSettings(mode);
+        var next = { opponents: cur.opponents, options: Object.assign({}, cur.options) };
+        if (patch.opponents != null) next.opponents = patch.opponents;
+        if (patch.opt) next.options[patch.opt] = patch.val;
+        self.settings[mode.id] = next;
+        UI.store.set(SETTINGS_KEY, self.settings);
+        paint();
+      };
+      paint();
+      $('screen-setup').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.opp != null) store({ opponents: +b.dataset.opp });
+        else if (b.dataset.opt) store({ opt: b.dataset.opt, val: b.dataset.val });
+      });
+      $('s-back').addEventListener('click', function () { self.showHome(); });
+      $('s-rules').addEventListener('click', function () { self.openRules(mode.id, self.modeSettings(mode).options); });
+      $('s-deal').addEventListener('click', function () {
+        UI.Sound.unlock();
+        var c = self.modeSettings(mode);
+        self.startGame(mode.id, { opponents: c.opponents, options: c.options });
+      });
+    },
+
+    /* ---------- games ---------- */
+
+    startGame: function (modeId, cfg) {
+      var names = cfg.names && cfg.names.length === cfg.opponents ? cfg.names : pickNames(cfg.opponents);
+      var players = [{ id: 'p0', name: 'You', isBot: false }].concat(names.map(function (n, i) {
+        return { id: 'p' + (i + 1), name: n, isBot: true };
+      }));
+      var session = new CT.Session({
+        modeId: modeId,
+        players: players,
+        options: cfg.options,
+        seed: (Math.random() * 4294967296) >>> 0
+      });
+      this.game = { modeId: modeId, opponents: cfg.opponents, options: cfg.options, names: names };
+      this.attach(session, false);
+    },
+
+    attach: function (session, restored) {
+      this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.session = session;
+      this.recorded = session.state.phase === 'over';
+      this.show('table');
+      var Presenter = UI.presenters[session.mode.presenter];
+      this.table = new Presenter(this, session, 'p0', { restored: restored });
+      session.resume();
+      this.save();
+    },
+
+    resume: function (save) {
+      var session = CT.Session.restore(save.session);
+      if (!session) { UI.store.del(SAVE_KEY); return false; }
+      this.game = save.game;
+      this.attach(session, true);
+      return true;
+    },
+
+    currentSave: function () {
+      if (!this.session || this.session.state.phase === 'over') return null;
+      return { session: this.session.serialize(), game: this.game, me: 'p0', savedAt: Date.now() };
+    },
+
+    save: function () {
+      if (!this.session) return;
+      if (this.session.state.phase === 'over') { UI.store.del(SAVE_KEY); return; }
+      var s = this.currentSave();
+      if (s) UI.store.set(SAVE_KEY, s);
+    },
+
+    loadSave: function () {
+      var s = UI.store.get(SAVE_KEY, null);
+      if (!s || !s.session || !s.session.state || s.session.state.phase === 'over') return null;
+      if (!CT.Session.restore(s.session)) return null;
+      return s;
+    },
+
+    loop: function () {
+      if (!this.session || this.screen !== 'table' || this.sheet) return;
+      this.session.tick();
+      if (this.table) this.table.frame();
+    },
+
+    onVisibility: function () {
+      if (!this.session) return;
+      if (document.hidden) { this.session.pause(); this.save(); }
+      else if (!this.sheet && this.screen === 'table') this.session.resume();
+    },
+
+    toggleSound: function () {
+      UI.Sound.on = !UI.Sound.on;
+      this.settings.sound = UI.Sound.on;
+      UI.store.set(SETTINGS_KEY, this.settings);
+      if (UI.Sound.on) { UI.Sound.unlock(); UI.Sound.play('tick'); }
+    },
+
+    /* ---------- sheets ---------- */
+
+    openSheet: function (name, html, opts) {
+      var ov = $('overlay');
+      ov.className = 'overlay' + (opts && opts.center ? ' center' : '');
+      ov.innerHTML = '<div class="sheet ' + ((opts && opts.cls) || '') + '" role="dialog" aria-modal="true" aria-label="' + UI.esc((opts && opts.label) || name) + '">' + html + '</div>';
+      ov.hidden = false;
+      this.sheet = name;
+      if (this.session) this.session.pause();
+      var first = ov.querySelector('button');
+      if (first) try { first.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+      return ov.firstChild;
+    },
+
+    closeSheet: function (silent) {
+      var ov = $('overlay');
+      ov.hidden = true;
+      ov.innerHTML = '';
+      this.sheet = null;
+      this.logOpen = false;
+      if (!silent && this.session && this.screen === 'table' && !document.hidden) this.session.resume();
+    },
+
+    sheetHead: function (title) {
+      return '<div class="sheet-head"><h2>' + title + '</h2><button class="icon-btn" type="button" data-close aria-label="Close">' + UI.icon.close + '</button></div>';
+    },
+
+    wireClose: function (sheet) {
+      var self = this;
+      sheet.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { self.closeSheet(); }); });
+    },
+
+    openRules: function (modeId, options) {
+      var mode = CT.getMode(modeId);
+      var sections = mode.rules(options).map(function (r) {
+        return '<section><h3>' + UI.esc(r.title) + '</h3><p>' + UI.esc(r.text) + '</p></section>';
+      }).join('');
+      var chosen = (mode.options || []).map(function (o) {
+        var c = o.choices.filter(function (x) { return x.value === options[o.id]; })[0];
+        return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
+      }).join(' · ');
+      var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) +
+        '<div class="rules">' + sections + (chosen ? '<p class="house">Rule choices for this table · ' + chosen + '</p>' : '') + '</div>' +
+        '<button class="btn btn-primary" type="button" data-close>Got it</button>', { label: 'How to play' });
+      this.wireClose(sheet);
+    },
+
+    openMenu: function () {
+      var self = this;
+      var sheet = this.openSheet('menu', this.sheetHead('Game menu') +
+        '<div class="menu-list">' +
+          '<button class="btn btn-primary" type="button" data-close>Keep playing</button>' +
+          '<button class="btn btn-ghost" type="button" id="m-rules">How to play</button>' +
+          '<button class="btn btn-ghost" type="button" id="m-log">Play-by-play</button>' +
+          '<button class="btn btn-ghost" type="button" id="m-new">New game</button>' +
+          '<button class="btn btn-ghost" type="button" id="m-home">Back to games</button>' +
+        '</div><div id="m-confirm"></div>', { label: 'Game menu' });
+      this.wireClose(sheet);
+      $('m-rules').addEventListener('click', function () { self.openRules(self.session.mode.id, self.session.state.options); });
+      $('m-log').addEventListener('click', function () { self.openLog(); });
+      $('m-home').addEventListener('click', function () { self.closeSheet(true); self.showHome(); });
+      $('m-new').addEventListener('click', function () {
+        var over = self.session.state.phase === 'over';
+        if (over) { self.closeSheet(true); self.playAgain(); return; }
+        $('m-confirm').innerHTML = '<div class="confirm"><p>Start a new game? This one ends without a result.</p>' +
+          '<div class="confirm-actions"><button class="btn btn-primary" type="button" id="m-yes">Start new game</button>' +
+          '<button class="btn btn-ghost" type="button" id="m-no">Keep this one</button></div></div>';
+        $('m-yes').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
+        $('m-no').addEventListener('click', function () { $('m-confirm').innerHTML = ''; });
+      });
+    },
+
+    openLog: function () {
+      var sheet = this.openSheet('log', this.sheetHead('Play-by-play') + '<div class="log" id="log-list"></div>' +
+        '<button class="btn btn-ghost" type="button" data-close>Back to the table</button>', { label: 'Play-by-play' });
+      this.wireClose(sheet);
+      this.logOpen = true;
+      this.renderLog();
+    },
+
+    renderLog: function () {
+      var box = $('log-list');
+      if (!box || !this.table) return;
+      var items = this.table.logItems;
+      box.innerHTML = items.length
+        ? items.map(function (it) { return '<p class="' + it.cls + '">' + it.html + '</p>'; }).join('')
+        : '<p class="empty">Nothing has happened yet.</p>';
+      box.scrollTop = box.scrollHeight;
+    },
+
+    playAgain: function () {
+      var g = this.game;
+      if (!g) { this.showHome(); return; }
+      this.startGame(g.modeId, { opponents: g.opponents, options: g.options, names: g.names });
+    },
+
+    record: function (v) {
+      if (this.recorded) return;
+      this.recorded = true;
+      var id = this.session.mode.id;
+      var s = this.stats[id] || (this.stats[id] = { played: 0, won: 0, flushWins: 0 });
+      s.played++;
+      if ((v.winners || []).indexOf('p0') >= 0) {
+        s.won++;
+        if (v.winReason === 'flush') s.flushWins++;
+      }
+      UI.store.set(STATS_KEY, this.stats);
+      UI.store.del(SAVE_KEY);
+    },
+
+    showResult: function (v) {
+      var self = this;
+      this.record(v);
+      var me = 'p0';
+      var byId = {};
+      v.players.forEach(function (p, i) { byId[p.id] = { p: p, i: i }; });
+      var winners = v.winners || [];
+      var iWon = winners.indexOf(me) >= 0;
+      var raw = winners.map(function (id) { return id === me ? 'You' : byId[id].p.name; });
+      var names = raw.map(UI.esc);
+      var title;
+      if (winners.length > 1) title = iWon ? 'SHARED WIN' : raw.join(' & ').toUpperCase() + ' WIN';
+      else title = iWon ? 'YOU WIN' : raw[0].toUpperCase() + ' WINS';
+      title = UI.esc(title);
+
+      var why, cards = '';
+      if (v.winReason === 'flush') {
+        why = (winners.length > 1 ? names.join(' and ') + ' each held' : (iWon ? 'You held' : names[0] + ' held')) + ' one card of every suit on the deal: a Flush.';
+        winners.forEach(function (id) {
+          cards += '<div class="result-cards" aria-label="' + (id === me ? 'Your' : UI.esc(byId[id].p.name) + '’s') + ' Flush"></div>';
+        });
+      } else {
+        why = (iWon ? 'You played your last card' : names[0] + ' played their last card') + ' in set ' + v.setNo + '.';
+      }
+      var standings = v.players.slice().sort(function (a, b) {
+        var aw = winners.indexOf(a.id) >= 0 ? -1 : 0, bw = winners.indexOf(b.id) >= 0 ? -1 : 0;
+        return (aw - bw) || (a.handCount - b.handCount);
+      }).map(function (p) {
+        var paint = p.id === me ? 'var(--ink)' : PAINTS[(byId[p.id].i - 1 + PAINTS.length) % PAINTS.length];
+        return '<li class="' + (winners.indexOf(p.id) >= 0 ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc((p.id === me ? 'You' : p.name).charAt(0)) + '</span>' +
+          '<span>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</span><span class="left">' + p.handCount + (p.handCount === 1 ? ' card' : ' cards') + ' left</span></li>';
+      }).join('');
+
+      var sheet = this.openSheet('result',
+        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + ' · ' + (v.winReason === 'flush' ? 'on the deal' : 'set ' + v.setNo) + '</p>' +
+        '<h2 class="wordmark">' + title + '</h2>' +
+        '<p class="result-why">' + why + '</p>' + cards +
+        '<div class="standings"><ul>' + standings + '</ul></div>' +
+        '<div class="result-actions">' +
+          '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
+          '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
+          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+        '</div>', { cls: 'result', center: true, label: 'Game result' });
+      if (v.winReason === 'flush') {
+        var rows = sheet.querySelectorAll('.result-cards');
+        winners.forEach(function (id, k) {
+          (byId[id].p.hand || []).forEach(function (c) { rows[k].appendChild(UI.makeCard(c)); });
+        });
+      }
+      $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
+      $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
+      $('r-table').addEventListener('click', function () { self.closeSheet(); });
+    }
+  };
+
+  CT.App = App;
+
+  function start(data) { App.boot(data || {}); }
+  var hot = window.claude && window.claude.hot;
+  if (hot && typeof hot.ready === 'function') hot.ready(start);
+  else start((hot && hot.data) || {});
+})(window.CT);
+
+</script>
+<script>
+(function () {
+  // Offline support and updates. Each new build ships a new sw.js; when it has
+  // downloaded, offer a restart. The current game is saved first, so it can be resumed.
+  if (!('serviceWorker' in navigator)) return;
+  var local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (location.protocol !== 'https:' && !local) return;
+  var updating = false;
+  function offer(worker) {
+    var bar = document.getElementById('update-bar');
+    if (!bar) return;
+    bar.hidden = false;
+    document.getElementById('update-now').onclick = function () {
+      updating = true;
+      this.disabled = true;
+      try { if (window.CT && CT.App) CT.App.save(); } catch (e) {}
+      worker.postMessage('skipWaiting');
+    };
+    document.getElementById('update-later').onclick = function () { bar.hidden = true; };
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (updating) location.reload();
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+      reg.addEventListener('updatefound', function () {
+        var w = reg.installing;
+        if (!w) return;
+        w.addEventListener('statechange', function () {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w);
+        });
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) reg.update().catch(function () {});
+      });
+    }).catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>
