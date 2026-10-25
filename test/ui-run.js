@@ -57,7 +57,8 @@ async function view(p) {
   return p.evaluate(() => {
     const s = CT.App.session; if (!s) return null;
     const v = s.view('p0', { events: false });
-    return { phase: v.phase, setNo: v.setNo, canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, canTake: v.canTake,
+    return { phase: v.phase, setNo: v.setNo, canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake,
+      turnLeft: v.turnEndsAt ? v.turnEndsAt - s.now() : null,
       playable: v.playable, hand: v.hand.length, deck: v.deckCount, winners: v.winners, reason: v.winReason,
       takers: v.players.filter(x => x.isTaker).length, sheet: CT.App.sheet };
   });
@@ -76,7 +77,11 @@ async function playGame(p, tag, want) {
   let v = await view(p);
   while (v && v.phase !== 'over' && guard++ < 3000) {
     if (v.phase === 'dealing') await once('deal', 'dealing', 650);
-    if (v.canLead || v.canFollow) {
+    if (v.mayDraw) await once('found', 'found-suit', 350);
+    if (v.mayDraw && Math.random() < 0.5) {
+      await p.tap('#t-deck');          // keep drawing for a better card
+      await sleep(560);
+    } else if (v.canLead || v.canFollow) {
       const id = v.playable[Math.floor(Math.random() * v.playable.length)];
       await once(v.canLead ? 'lead' : 'follow', v.canLead ? 'your-lead' : 'follow', 300);
       await p.tap(`.hcard[data-id="${id}"]`);
@@ -121,7 +126,7 @@ async function playGame(p, tag, want) {
       let games = 0, v;
       do {
         games++;
-        v = await playGame(p, '03-g' + games, ['deal', 'follow', 'selected', 'draw', 'take', 'takeOther', 'reveal', 'lead', 'result']);
+        v = await playGame(p, '03-g' + games, ['deal', 'follow', 'selected', 'draw', 'found', 'take', 'takeOther', 'reveal', 'lead', 'result']);
         console.log('  game', games, '→', v.reason, 'winners', v.winners, 'set', v.setNo);
         if (v.reason === 'flush' && games < 4) { await p.tap('#r-again'); await sleep(300); }
       } while (v.reason === 'flush' && games < 4);
@@ -158,6 +163,26 @@ async function playGame(p, tag, want) {
         if (v.reason !== 'flush') real++;
         await p.tap('#r-again'); await sleep(300);
       }
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (SCENARIO === 'timer') {
+      // Sit idle with a 15-second limit: the countdown appears, then a card is played for you.
+      const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 31,
+        settings: { burns: { opponents: 3, options: { leadCard: 'suitOnly', turnTime: '15' } } } });
+      await p.tap('[data-play="burns"]');
+      await sleep(200);
+      await p.tap('#s-deal');
+      let v = await view(p), guard = 0;
+      while (v.phase === 'over' && guard++ < 6) { await p.waitForSelector('#r-again'); await p.tap('#r-again'); await sleep(2500); v = await view(p); }
+      while (!(v.turnLeft != null && v.turnLeft < 8000 && (v.canFollow || v.mustDraw || v.canLead)) && guard++ < 400) { await sleep(200); v = await view(p); }
+      await shot(p, '14-timer-running-out');
+      const hand = v.hand;
+      while ((v.canFollow || v.mustDraw || v.canLead) && guard++ < 600) { await sleep(200); v = await view(p); }
+      await sleep(300);
+      await shot(p, '15-timed-out');
+      const log = await p.evaluate(() => CT.App.table.logItems.map(i => i.html.replace(/<[^>]+>/g, '')).filter(t => /Time ran out|random/.test(t)));
+      console.log('  hand before', hand, 'phase now', v.phase, '· log:', log.slice(-3));
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 

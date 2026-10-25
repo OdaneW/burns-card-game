@@ -24,7 +24,8 @@ at the bottom of the menu screen.
 | `src/modes/burns/rules.js` | The Burns rules and its rule choices. Pure logic, no screen code |
 | `src/modes/burns/bot.js` | The Burns computer player. It only sees what a human player would see |
 | `src/modes/burns/ui.js` | The Burns table screen |
-| `src/ui/kit.js` | Shared screen pieces: cards, animations, sound, storage |
+| `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
+| `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/app.js` | Menu, setup screen, sheets, saving and the game loop |
 | `src/ui/styles.css` | Look and layout |
 | `src/shell/body.html` | Page markup and the suit icons |

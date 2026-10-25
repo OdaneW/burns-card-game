@@ -17,6 +17,7 @@ const SOURCES = [
   'src/modes/burns/rules.js',
   'src/modes/burns/bot.js',
   'src/ui/kit.js',
+  'src/ui/music.js',
   'src/modes/burns/ui.js',
   'src/ui/app.js'
 ];

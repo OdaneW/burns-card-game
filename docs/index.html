@@ -134,6 +134,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 }
 .icon-btn:active { background: rgba(238, 244, 234, .08); }
 .icon-btn svg { width: 22px; height: 22px; }
+.icon-btn.off { color: var(--ink-soft); opacity: .65; }
 .chip {
   font: 700 11px/1 var(--font-ui);
   letter-spacing: .1em;
@@ -351,8 +352,6 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .seat-chip { font: 600 11px/1.15 var(--font-ui); color: var(--ink-soft); height: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seat-chip.hot { color: var(--marigold); }
 .seat-chip.warn { color: #FFB59B; }
-.seat-voids { height: 13px; font: 600 11px/1 var(--font-ui); color: var(--ink-soft); display: flex; gap: 2px; align-items: center; white-space: nowrap; }
-.seat-voids .si { width: 10px; height: 10px; vertical-align: -1px; }
 
 .slot {
   --cw: var(--seat-cw);
@@ -426,6 +425,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .deck.can-draw .deck-stack .card:last-child { box-shadow: 0 0 0 2px var(--marigold), 0 0 20px rgba(244, 185, 66, .7); }
 .deck.can-draw .deck-count { color: var(--marigold); }
 .deck.can-draw:not(.cooling) .deck-stack { animation: nudge 1.4s ease-in-out infinite; }
+.deck.may-draw { cursor: pointer; }
+.deck.may-draw .deck-stack .card:last-child { box-shadow: 0 0 0 2px rgba(244, 185, 66, .7), 0 5px 12px rgba(3, 22, 21, .38); }
+.deck.may-draw .deck-count { color: var(--marigold); }
 .deck.tapped .deck-stack { transform: scale(.94); transition: transform .06s; }
 .deck.wiggle .deck-stack { animation: wiggle .25s ease; }
 
@@ -434,7 +436,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .lead-spot .ring circle { fill: none; stroke-width: 3; }
 .lead-spot .ring .bg { stroke: rgba(238, 244, 234, .12); }
 .lead-spot .ring .fg { stroke: var(--marigold); stroke-linecap: round; transition: stroke .3s; }
-.lead-spot.urgent .ring .fg { stroke: var(--ember); }
+.lead-spot.turn .ring .fg { stroke: rgba(238, 244, 234, .5); }
+.lead-spot.turn.late .ring .fg { stroke: var(--marigold); }
+.lead-spot.urgent .ring .fg, .lead-spot.turn.late.urgent .ring .fg { stroke: var(--ember); }
 .roundel {
   width: calc(var(--rail-cw) * 1.62); height: calc(var(--rail-cw) * 1.62);
   border-radius: 50%;
@@ -657,7 +661,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
+CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -977,12 +981,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         └──► set 1: starter card sets the suit ─► follow ─► [take] ─► reveal
      reveal ──► lead (set winner plays any suit) ─► follow ─► [take] ─► reveal …
      A set ends with everyone's card revealed; whoever has emptied their hand
-     at that point wins.
+     at that point wins. Lead and follow each have a time limit so an idle
+     player can't hold up the table.
    ========================================================================== */
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 1;
+  var ENGINE_VERSION = 2;
   var HAND_SIZE = 4;
 
   var DEFAULT_TIMING = {
@@ -996,21 +1001,22 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
      rules here; the setup screen and the rules text pick them up. */
   var OPTIONS = [
     {
-      id: 'deckEmpty',
-      label: 'When the deck runs out',
-      default: 'pickUp',
-      choices: [
-        { value: 'pickUp', label: 'Pick up', help: 'Players who can’t follow take one card from the set into their hand and sit out that set.' },
-        { value: 'takeAndPlay', label: 'Take and play', help: 'Players who can’t follow take one card from the set and play it as their own, so it can win them the set.' }
-      ]
-    },
-    {
       id: 'leadCard',
       label: 'The leader’s card',
       default: 'suitOnly',
       choices: [
         { value: 'suitOnly', label: 'Suit only', help: 'Everyone sees which suit was led. The card itself stays hidden until the reveal.' },
         { value: 'faceUp', label: 'Face up', help: 'The lead card is shown to everyone as soon as it is played.' }
+      ]
+    },
+    {
+      id: 'turnTime',
+      label: 'Time to play',
+      default: '30',
+      choices: [
+        { value: '15', label: '15 sec', help: 'The leader has 15 seconds to lead, then everyone has 15 seconds to play. When time runs out, a random card is played for anyone still deciding.' },
+        { value: '30', label: '30 sec', help: 'The leader has 30 seconds to lead, then everyone has 30 seconds to play. When time runs out, a random card is played for anyone still deciding.' },
+        { value: '60', label: '60 sec', help: 'The leader has 60 seconds to lead, then everyone has 60 seconds to play. When time runs out, a random card is played for anyone still deciding.' }
       ]
     }
   ];
@@ -1028,9 +1034,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
 
   function isTaker(state, pid) { return state.takers.indexOf(pid) >= 0; }
 
-  function value(state, card) { return CT.rankValue(card.rank, true); }
+  function value(card) { return CT.rankValue(card.rank, true); }
 
   function suitName(suit) { return CT.SUIT_INFO[suit].single; }
+
+  function turnMs(state) { return (Number(state.options.turnTime) || 30) * 1000; }
+
+  function secretFor(pid, data) { var s = {}; s[pid] = data; return s; }
 
   function emit(state, now, ev, secret) {
     state.seq += 1;
@@ -1041,21 +1051,12 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
   }
 
-  /* Public knowledge: suits a player is certainly out of. */
-  function addVoid(state, pid, suit) {
-    var v = state.voids[pid] || (state.voids[pid] = []);
-    if (v.indexOf(suit) < 0) v.push(suit);
-  }
-  function removeVoid(state, pid, suit) {
-    var v = state.voids[pid];
-    if (v) state.voids[pid] = v.filter(function (s) { return s !== suit; });
-  }
-  function keepOnlyVoid(state, pid, suit) {
-    var v = state.voids[pid] || [];
-    state.voids[pid] = v.indexOf(suit) >= 0 ? [suit] : [];
-  }
-
   function cardsOnTable(state) { return state.table.filter(function (e) { return !e.takenBy; }); }
+
+  /* Followers who still owe a card this set (not in yet, not stuck). */
+  function pending(state) {
+    return followers(state).filter(function (p) { return !state.committed[p.id] && !isTaker(state, p.id); });
+  }
 
   /* ---------- setup ------------------------------------------------------ */
 
@@ -1082,9 +1083,10 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       setNo: 0,
       phase: 'dealing',
       phaseEndsAt: now + timing.dealHoldMs,
+      turnEndsAt: null, // time limit for leading, then for following
       leader: null,
       suit: null,
-      table: [],        // [{ card, owner, via: 'starter'|'lead'|'hand'|'draw', takenBy? }]
+      table: [],        // [{ card, owner, via: 'starter'|'lead'|'hand', auto?, takenBy?, gone? }]
       committed: {},    // pid → true once their card for this set is in
       drawn: {},        // pid → cards drawn this set
       takers: [],       // pids who must take a card from the set (deck empty)
@@ -1092,7 +1094,6 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       takeEndsAt: null,
       revealed: false,
       lastDrawAt: {},
-      voids: {},
       setResult: null,
       winners: null,
       winReason: null,
@@ -1140,12 +1141,15 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       state.leader = leaderId;
       state.suit = null;
       state.phase = 'lead';
-      emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId });
+      state.turnEndsAt = now + turnMs(state);
+      emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId, turnEndsAt: state.turnEndsAt });
     }
   }
 
-  /* Suit is known: anyone who can't follow while the deck is already empty is stuck. */
+  /* The suit is known: start the clock. Anyone who can't follow while the
+     deck is already empty is stuck straight away. */
   function beginFollow(state, now) {
+    state.turnEndsAt = now + turnMs(state);
     if (state.deck.length === 0) markStuck(state, now);
     checkFollowComplete(state, now);
   }
@@ -1155,7 +1159,6 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     followers(state).forEach(function (p) {
       if (!state.committed[p.id] && !isTaker(state, p.id) && !CT.hasSuit(p.hand, state.suit)) {
         state.takers.push(p.id);
-        addVoid(state, p.id, state.suit);
         stuck.push(p.id);
       }
     });
@@ -1165,12 +1168,8 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
 
   /* When every follower has a card in (or is stuck), reveal the set. */
   function checkFollowComplete(state, now) {
-    if (state.phase !== 'follow') return;
-    var waiting = followers(state).filter(function (p) {
-      return !state.committed[p.id] && !isTaker(state, p.id);
-    });
-    if (waiting.length) return;
-
+    if (state.phase !== 'follow' || pending(state).length) return;
+    state.turnEndsAt = null;
     state.revealed = true;
     emit(state, now, {
       type: 'reveal',
@@ -1185,14 +1184,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     }
   }
 
+  /* A taker picks a card up from the set into their hand. It still counts
+     for the player who played it when the set is decided. */
   function applyTake(state, pid, entry, now, auto) {
     entry.takenBy = pid;
+    entry.gone = true;
     state.taken[pid] = entry.card.id;
-    if (state.options.deckEmpty === 'pickUp') {
-      entry.gone = true;
-      player(state, pid).hand.push(entry.card);
-      removeVoid(state, pid, entry.card.suit);
-    }
+    player(state, pid).hand.push(entry.card);
     emit(state, now, { type: 'take', player: pid, card: entry.card, from: entry.owner, auto: !!auto });
   }
 
@@ -1202,16 +1200,11 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   }
 
   function finishSet(state, now) {
-    var steal = state.options.deckEmpty === 'takeAndPlay';
-
-    // Highest card in the set. With "Pick up" a picked-up card still counts for
-    // the player who played it; with "Take and play" it counts for the taker.
-    // The starter card only sets the suit and never wins on its own.
+    // Highest card in the set wins it. The starter card only sets the suit.
     var best = null;
     state.table.forEach(function (e) {
-      var holder = steal ? (e.takenBy || e.owner) : e.owner;
-      if (!holder) return;
-      if (!best || value(state, e.card) > value(state, best.card)) best = { player: holder, card: e.card };
+      if (!e.owner) return;
+      if (!best || value(e.card) > value(best.card)) best = { player: e.owner, card: e.card };
     });
 
     var out = state.players.filter(function (p) { return p.hand.length === 0; });
@@ -1219,7 +1212,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       // Two players went out on the same set: the higher card they played wins.
       var playedValue = function (pid) {
         for (var i = 0; i < state.table.length; i++) {
-          if (state.table[i].owner === pid) return value(state, state.table[i].card);
+          if (state.table[i].owner === pid) return value(state.table[i].card);
         }
         return -1;
       };
@@ -1254,25 +1247,51 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     return hands;
   }
 
+  /* ---------- moves shared by actions and time-outs ---------------------- */
+
+  function lead(state, p, card, now, auto) {
+    p.hand.splice(p.hand.indexOf(card), 1);
+    state.table.push({ card: card, owner: p.id, via: 'lead', auto: !!auto });
+    state.committed[p.id] = true;
+    state.suit = card.suit;
+    state.phase = 'follow';
+    var faceUp = state.options.leadCard === 'faceUp';
+    emit(state, now, { type: 'lead', player: p.id, suit: card.suit, card: faceUp ? card : null, auto: !!auto }, secretFor(p.id, { card: card }));
+    beginFollow(state, now);
+  }
+
+  function commit(state, p, card, now, auto) {
+    p.hand.splice(p.hand.indexOf(card), 1);
+    state.table.push({ card: card, owner: p.id, via: 'hand', auto: !!auto });
+    state.committed[p.id] = true;
+    emit(state, now, { type: 'commit', player: p.id, auto: !!auto }, secretFor(p.id, { card: card }));
+  }
+
+  /* Draws go into the hand. Players see their own card; everyone else only
+     sees that a card was drawn. */
+  function drawOne(state, p, now, auto) {
+    var card = state.deck.pop();
+    var n = (state.drawn[p.id] || 0) + 1;
+    state.drawn[p.id] = n;
+    p.hand.push(card);
+    var matched = card.suit === state.suit;
+    emit(state, now, { type: 'draw', player: p.id, n: n, deckLeft: state.deck.length, auto: !!auto }, secretFor(p.id, { card: card, matched: matched }));
+    if (!state.deck.length) {
+      emit(state, now, { type: 'deckEmpty' });
+      markStuck(state, now);
+    }
+    return card;
+  }
+
   /* ---------- actions ---------------------------------------------------- */
 
   function actLead(state, pid, payload, now) {
     if (state.phase !== 'lead') return CT.fail('not-now', 'Wait for the next set to start.');
     if (pid !== state.leader) return CT.fail('not-leader', 'Only the winner of the last set leads.');
     var p = player(state, pid);
-    var idx = p.hand.findIndex(function (c) { return c.id === payload.cardId; });
-    if (idx < 0) return CT.fail('no-card', 'That card is not in your hand.');
-    var card = p.hand.splice(idx, 1)[0];
-    state.table.push({ card: card, owner: pid, via: 'lead' });
-    state.committed[pid] = true;
-    state.suit = card.suit;
-    state.phase = 'follow';
-    removeVoid(state, pid, card.suit);
-    var faceUp = state.options.leadCard === 'faceUp';
-    emit(state, now, { type: 'lead', player: pid, suit: card.suit, card: faceUp ? card : null }, (function () {
-      var s = {}; s[pid] = { card: card }; return s;
-    })());
-    beginFollow(state, now);
+    var card = p.hand.filter(function (c) { return c.id === payload.cardId; })[0];
+    if (!card) return CT.fail('no-card', 'That card is not in your hand.');
+    lead(state, p, card, now, false);
     return CT.ok();
   }
 
@@ -1289,54 +1308,33 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     var bad = followGuard(state, pid);
     if (bad) return bad;
     var p = player(state, pid);
-    var idx = p.hand.findIndex(function (c) { return c.id === payload.cardId; });
-    if (idx < 0) return CT.fail('no-card', 'That card is not in your hand.');
-    var card = p.hand[idx];
+    var card = p.hand.filter(function (c) { return c.id === payload.cardId; })[0];
+    if (!card) return CT.fail('no-card', 'That card is not in your hand.');
     if (card.suit !== state.suit) return CT.fail('wrong-suit', 'You must play a ' + suitName(state.suit) + '.');
-    p.hand.splice(idx, 1);
-    state.table.push({ card: card, owner: pid, via: 'hand' });
-    state.committed[pid] = true;
-    var s = {}; s[pid] = { card: card };
-    emit(state, now, { type: 'commit', player: pid, via: 'hand' }, s);
+    commit(state, p, card, now, false);
     checkFollowComplete(state, now);
     return CT.ok();
   }
 
+  /* Only players who started the set without the suit may draw. Once a card
+     of the suit turns up they can play it or keep drawing for a better one. */
   function actDraw(state, pid, payload, now) {
     var bad = followGuard(state, pid);
     if (bad) return bad;
     var p = player(state, pid);
-    if (CT.hasSuit(p.hand, state.suit)) return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it instead of drawing.');
+    if (CT.hasSuit(p.hand, state.suit) && !state.drawn[pid]) {
+      return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it. Only players who start the set without the suit may draw.');
+    }
     if (!state.deck.length) return CT.fail('deck-empty', 'The deck is empty.');
     var last = state.lastDrawAt[pid];
     var gap = state.timing.drawCooldownMs;
     if (last != null && now - last < gap) {
       return CT.fail('cooldown', 'Drawing too fast.', { retryInMs: Math.ceil(gap - (now - last)) });
     }
-
-    var card = state.deck.pop();
     state.lastDrawAt[pid] = now;
-    var n = (state.drawn[pid] || 0) + 1;
-    state.drawn[pid] = n;
-    if (n === 1) addVoid(state, pid, state.suit);   // everyone now knows they lacked it
-
-    var matched = card.suit === state.suit;
-    if (matched) {
-      state.table.push({ card: card, owner: pid, via: 'draw' });
-      state.committed[pid] = true;
-    } else {
-      p.hand.push(card);
-      keepOnlyVoid(state, pid, state.suit);           // the new card may fill other gaps
-    }
-    var s = {}; s[pid] = { card: card };
-    emit(state, now, { type: 'draw', player: pid, n: n, matched: matched, deckLeft: state.deck.length }, s);
-
-    if (!state.deck.length) {
-      emit(state, now, { type: 'deckEmpty' });
-      markStuck(state, now);
-    }
+    var card = drawOne(state, p, now, false);
     checkFollowComplete(state, now);
-    return CT.ok({ card: card, matched: matched });
+    return CT.ok({ card: card, matched: card.suit === state.suit });
   }
 
   function actTake(state, pid, payload, now) {
@@ -1366,6 +1364,31 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
 
   /* ---------- timed steps ------------------------------------------------ */
 
+  /* Time ran out: finish the turn for anyone still deciding. A random card is
+     played for them; if they have none of the suit, they draw until one turns
+     up and it is played (or, if the deck runs out, they take from the set). */
+  function timeOut(state, now) {
+    if (state.phase === 'lead') {
+      var leader = player(state, state.leader);
+      emit(state, now, { type: 'timeout', phase: 'lead', players: [leader.id] });
+      lead(state, leader, CT.pickRandom(leader.hand, state), now, true);
+      return;
+    }
+    var late = pending(state);
+    emit(state, now, { type: 'timeout', phase: 'follow', players: late.map(function (p) { return p.id; }) });
+    late.forEach(function (p) {
+      if (state.committed[p.id] || isTaker(state, p.id)) return;
+      var suited = p.hand.filter(function (c) { return c.suit === state.suit; });
+      if (suited.length) { commit(state, p, CT.pickRandom(suited, state), now, true); return; }
+      while (state.deck.length && !isTaker(state, p.id)) {
+        var card = drawOne(state, p, now, true);
+        if (card.suit === state.suit) { commit(state, p, card, now, true); return; }
+      }
+    });
+    checkFollowComplete(state, now);
+    if (state.phase === 'follow' && pending(state).length) state.turnEndsAt = now + 1000;  // safety net
+  }
+
   function tick(state, now) {
     if (state.phase === 'dealing' && now >= state.phaseEndsAt) {
       var flush = state.players.filter(function (p) {
@@ -1384,9 +1407,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       return true;
     }
 
+    if ((state.phase === 'lead' || state.phase === 'follow') && state.turnEndsAt != null && now >= state.turnEndsAt) {
+      timeOut(state, now);
+      return true;
+    }
+
     if (state.phase === 'take' && now >= state.takeEndsAt) {
-      // Time's up: anyone who didn't choose gets a random card, in random order,
-      // while cards last.
+      // Anyone who didn't choose gets a random card, in random order, while cards last.
       var waiting = CT.shuffle(state.takers.filter(function (pid) { return !state.taken[pid]; }), state);
       waiting.forEach(function (pid) {
         var left = cardsOnTable(state);
@@ -1425,8 +1452,9 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       leader: state.leader,
       suit: state.suit,
       options: state.options,
-      timing: { drawCooldownMs: state.timing.drawCooldownMs, takeWindowMs: state.timing.takeWindowMs },
+      timing: { drawCooldownMs: state.timing.drawCooldownMs, takeWindowMs: state.timing.takeWindowMs, turnMs: turnMs(state) },
       phaseEndsAt: state.phaseEndsAt,
+      turnEndsAt: state.turnEndsAt,
       takeEndsAt: state.takeEndsAt,
       revealed: state.revealed,
       deckCount: state.deck.length,
@@ -1445,12 +1473,11 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
           drew: state.drawn[p.id] || 0,
           isTaker: isTaker(state, p.id),
           took: state.taken[p.id] || null,
-          voids: (state.voids[p.id] || []).slice(),
           hand: over ? p.hand.slice() : undefined
         };
       }),
       table: state.table.map(function (e) {
-        return { owner: e.owner, via: e.via, takenBy: e.takenBy || null, gone: !!e.gone, card: visible(e) ? e.card : null };
+        return { owner: e.owner, via: e.via, auto: !!e.auto, takenBy: e.takenBy || null, gone: !!e.gone, card: visible(e) ? e.card : null };
       }),
       setResult: state.setResult,
       winners: state.winners,
@@ -1460,9 +1487,12 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     };
 
     var mine = me && state.phase === 'follow' && pid !== state.leader && !state.committed[pid] && !isTaker(state, pid);
+    var hasIt = !!mine && CT.hasSuit(hand, state.suit);
     v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
-    v.canFollow = !!mine && CT.hasSuit(hand, state.suit);
-    v.mustDraw = !!mine && !v.canFollow && state.deck.length > 0;
+    v.canFollow = hasIt;
+    v.canDraw = !!mine && state.deck.length > 0 && (!hasIt || (state.drawn[pid] || 0) > 0);
+    v.mustDraw = v.canDraw && !hasIt;
+    v.mayDraw = v.canDraw && hasIt;   // found the suit while drawing: play it or keep going
     v.canTake = !!me && state.phase === 'take' && isTaker(state, pid) && !state.taken[pid];
     v.playable = v.canLead ? hand.map(function (c) { return c.id; })
       : v.canFollow ? hand.filter(function (c) { return c.suit === state.suit; }).map(function (c) { return c.id; })
@@ -1484,19 +1514,18 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
 
   function rules(options) {
     var o = CT.resolveOptions(OPTIONS, options);
-    var deckEmptyText = o.deckEmpty === 'pickUp'
-      ? 'Instead, take one card from the set into your hand and sit out that set. Its card still counts for whoever played it.'
-      : 'Instead, take one card from the set and play it as your own. It can win you the set.';
     var leadText = o.leadCard === 'suitOnly'
       ? 'Everyone sees the suit that was led; the card itself stays hidden until the reveal.'
       : 'The lead card is shown to everyone straight away.';
+    var secs = Number(o.turnTime) || 30;
     return [
       { title: 'The deal', text: 'Everyone gets 4 cards from a standard 52-card deck. One more card is turned face up. Its suit must be followed in the first set.' },
       { title: 'Flush', text: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.' },
       { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
-      { title: 'Winning a set', text: 'The highest card wins the set (Ace is high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
-      { title: 'Can’t follow?', text: 'Draw from the deck until you find a card of the suit, then it is played for you. Everyone who needs to draws at the same time, with a short pause between draws.' },
-      { title: 'Deck empty', text: 'If the deck runs out before you find the suit, you can’t draw. ' + deckEmptyText + ' You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
+      { title: 'Winning a set', text: 'The highest card wins the set. Cards rank 2 (low) up to 10, Jack, Queen, King and Ace (high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
+      { title: 'Can’t follow?', text: 'If you start a set without the suit, draw from the deck until a card of the suit turns up. Then you can play it, or keep drawing for a better one, but every card you draw stays in your hand. Everyone who needs to draws at the same time, with a short pause between draws. Players who start the set with the suit can’t draw.' },
+      { title: 'Deck empty', text: 'If the deck runs out before you have a card of the suit, take one card from the set into your hand instead and sit out that set. The card still counts for whoever played it. You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
+      { title: 'Time limit', text: 'The leader has ' + secs + ' seconds to lead, then everyone has ' + secs + ' seconds to play. When time runs out, a random card of the suit is played for anyone still deciding. If they have none, they draw until one turns up and it is played.' },
       { title: 'Winning the game', text: 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.' }
     ];
   }
@@ -1524,7 +1553,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
    GAME MODE · BURNS — computer players
    A bot only ever sees its own view (the same one a human gets), so it can't
    peek at hands or the deck. It counts cards that have been revealed and
-   remembers which suits opponents are known to be out of.
+   estimates which suits opponents are likely to be short of.
    ========================================================================== */
 (function (CT) {
   'use strict';
@@ -1548,6 +1577,17 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     return n;
   }
 
+  /* Chance that a hand of `size` unseen cards holds none of `suit`. */
+  function chanceShort(suit, size, seen) {
+    var unseen = 52 - Object.keys(seen).length;
+    var unseenSuit = 13;
+    CT.RANKS.forEach(function (r) { if (seen[r + suit]) unseenSuit--; });
+    if (unseen <= 0 || size <= 0) return 0;
+    var p = 1;
+    for (var i = 0; i < size; i++) p *= Math.max(0, unseen - unseenSuit - i) / Math.max(1, unseen - i);
+    return p;
+  }
+
   function me(v) {
     for (var i = 0; i < v.players.length; i++) if (v.players[i].id === v.me) return v.players[i];
     return null;
@@ -1557,16 +1597,16 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     var opps = v.players.filter(function (p) { return p.id !== v.me; });
     var seen = seenIds(v);
     var deckEmpty = v.deckCount === 0;
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var bySuit = {};
     v.hand.forEach(function (c) { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
 
     var best = null, bestScore = -Infinity;
     v.hand.forEach(function (c) {
       var score = 0;
-      var voidOpps = opps.filter(function (o) { return o.voids.indexOf(c.suit) >= 0; }).length;
-      if (!deckEmpty) score += voidOpps * 2.2;          // they will have to draw
-      else score += steal ? -voidOpps * 1.5 : voidOpps * 1.2;
+      // Opponents likely to be short of this suit will have to draw (or pick up).
+      var forced = 0;
+      opps.forEach(function (o) { forced += chanceShort(c.suit, o.handCount, seen); });
+      score += forced * (deckEmpty ? 1.2 : 2.2);
       var higher = unseenHigher(c, seen);
       var sure = higher === 0;
       score += sure ? 3 : Math.max(0, 1.5 - higher * 0.6);
@@ -1581,19 +1621,43 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     return best;
   }
 
-  function chooseFollow(v, rnd) {
-    var mine = v.hand.filter(function (c) { return c.suit === v.suit; })
-      .sort(function (a, b) { return val(a) - val(b); });
-    var seen = seenIds(v);
-    var toBeat = 0;
-    v.table.forEach(function (e) { if (e.card && e.owner && e.owner !== v.me) toBeat = Math.max(toBeat, val(e.card)); });
+  function suited(v) {
+    return v.hand.filter(function (c) { return c.suit === v.suit; }).sort(function (a, b) { return val(a) - val(b); });
+  }
 
-    var sure = mine.filter(function (c) { return val(c) > toBeat && unseenHigher(c, seen) === 0; });
+  function toBeat(v) {
+    var t = 0;
+    v.table.forEach(function (e) { if (e.card && e.owner && e.owner !== v.me) t = Math.max(t, val(e.card)); });
+    return t;
+  }
+
+  function chooseFollow(v, rnd) {
+    var mine = suited(v);
+    var seen = seenIds(v);
+    var beat = toBeat(v);
+    var sure = mine.filter(function (c) { return val(c) > beat && unseenHigher(c, seen) === 0; });
     if (sure.length) return sure[0];
     var top = mine[mine.length - 1];
-    if (v.hand.length <= 3 && val(top) > toBeat) return top;   // close to going out: chase the lead
+    if (v.hand.length <= 3 && val(top) > beat) return top;   // close to going out: chase the lead
     if (rnd() < 0.12) return mine[Math.floor(rnd() * mine.length)];
     return mine[0];
+  }
+
+  /* Found the suit while drawing: play the best one, or draw again hoping for
+     a winner. Every extra draw stays in the hand, so don't push it far. */
+  function playOrKeepDrawing(v, memory, rnd) {
+    if (memory.set !== v.setNo) { memory.set = v.setNo; memory.matchAt = null; }
+    var drew = me(v).drew;
+    if (memory.matchAt == null) memory.matchAt = drew;
+    var extra = drew - memory.matchAt;
+    var mine = suited(v);
+    var best = mine[mine.length - 1];
+    var seen = seenIds(v);
+    var play = { type: 'follow', payload: { cardId: best.id } };
+    if (val(best) > toBeat(v) && unseenHigher(best, seen) === 0) return play;  // already a sure winner
+    if (v.deckCount < 3 || extra >= 2 || val(best) >= 10 || v.hand.length >= 9) return play;
+    var keepGoing = val(best) <= 6 ? 0.5 : 0.25;
+    return rnd() < keepGoing ? { type: 'draw', payload: {} } : play;
   }
 
   function chooseTake(v, rnd) {
@@ -1607,12 +1671,11 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   var BurnsBot = {
     /* What this bot needs to do right now; the key changes whenever a new decision is due. */
     intent: function (v) {
+      var drew = v.canDraw || v.canFollow ? me(v).drew : 0;
       if (v.canLead) return { kind: 'lead', key: 'L' + v.setNo };
-      if (v.canFollow) return { kind: 'follow', key: 'F' + v.setNo };
-      if (v.mustDraw) {
-        var drew = me(v).drew;
-        return { kind: 'draw', key: 'D' + v.setNo + ':' + drew, first: drew === 0 };
-      }
+      if (v.mustDraw) return { kind: 'draw', key: 'D' + v.setNo + ':' + drew, first: drew === 0 };
+      if (v.mayDraw) return { kind: 'drawOrPlay', key: 'P' + v.setNo + ':' + drew };
+      if (v.canFollow) return { kind: 'follow', key: 'F' + v.setNo + ':' + drew };
       if (v.canTake) return { kind: 'take', key: 'T' + v.setNo };
       return null;
     },
@@ -1623,6 +1686,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         case 'lead': return 900 + rnd() * 1300;
         case 'follow': return 650 + rnd() * 1500;
         case 'draw': return intent.first ? 450 + rnd() * 500 : v.timing.drawCooldownMs + 60 + rnd() * 380;
+        case 'drawOrPlay': return v.timing.drawCooldownMs + 250 + rnd() * 600;
         case 'take': return 1400 + rnd() * 4800;
       }
       return 800;
@@ -1633,11 +1697,12 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         var lead = chooseLead(v, rnd);
         return lead ? { type: 'lead', payload: { cardId: lead.id } } : null;
       }
+      if (v.mustDraw) return { type: 'draw', payload: {} };
+      if (v.mayDraw) return playOrKeepDrawing(v, memory, rnd);
       if (v.canFollow) {
         var follow = chooseFollow(v, rnd);
         return follow ? { type: 'follow', payload: { cardId: follow.id } } : null;
       }
-      if (v.mustDraw) return { type: 'draw', payload: {} };
       if (v.canTake) {
         var take = chooseTake(v, rnd);
         return take ? { type: 'take', payload: { cardId: take.id } } : null;
@@ -1852,8 +1917,232 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     soundOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/></svg>',
     soundOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
+    musicOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V6.5l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15" r="2.6" fill="currentColor" stroke="none"/></svg>',
+    musicOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V6.5l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15" r="2.6" fill="currentColor" stroke="none"/><path d="M3.5 3.5l17 17"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><path d="M4 4l16 16"/></svg>',
     flame: '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flame"/></svg>'
+  };
+})(window.CT);
+
+/* ---- src/ui/music.js ---- */
+/* ==========================================================================
+   BACKGROUND MUSIC — composed live with WebAudio, no audio files.
+   A slow, warm loop: soft electric-piano pads, a round bass, and a sparse
+   steel-pan melody that wanders a pentatonic scale, so it never repeats
+   exactly. Starts after the first tap (browsers require it), fades out when
+   the app goes to the background.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var Sound = UI.Sound;
+
+  var BPM = 74;
+  var BEAT = 60 / BPM;
+  var BAR = BEAT * 4;
+
+  function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+  // Voicings sit in the range phone speakers carry well.
+  var CHORDS = {
+    Cmaj9: { bass: 48, pad: [64, 67, 71, 74] },
+    Am9: { bass: 45, pad: [64, 67, 71, 72] },
+    Dm9: { bass: 50, pad: [64, 65, 69, 72] },
+    G9sus: { bass: 43, pad: [65, 69, 72, 74] },
+    Fmaj9: { bass: 41, pad: [64, 67, 69, 72] },
+    Em7: { bass: 52, pad: [62, 64, 67, 71] },
+    G69: { bass: 43, pad: [62, 64, 69, 71] }
+  };
+  var PHRASES = [
+    ['Cmaj9', 'Am9', 'Dm9', 'G9sus'],
+    ['Cmaj9', 'Am9', 'Fmaj9', 'G69'],
+    ['Fmaj9', 'Em7', 'Dm9', 'G9sus'],
+    ['Cmaj9', 'Am9', 'Fmaj9', 'G69']
+  ];
+  var SCALE = [72, 74, 76, 79, 81, 84, 86, 88];   // C major pentatonic, C5 to E6
+
+  var Music = UI.Music = {
+    on: true,
+    playing: false,
+    level: 0.7,
+    bus: null,
+    timer: null,
+    nextBar: 0,
+    bar: 0,
+    note: 3,
+
+    start: function () {
+      if (!this.on || this.playing || document.hidden) return;
+      Sound.unlock();
+      var ctx = Sound.ctx;
+      if (!ctx) return;
+      var self = this;
+      if (ctx.state !== 'running') {
+        try { ctx.resume().then(function () { if (self.on && !self.playing && !document.hidden) self.start(); }, function () {}); } catch (e) { /* wait for a tap */ }
+        return;
+      }
+      try { this.build(ctx); } catch (e) { return; }
+      this.playing = true;
+      this.nextBar = ctx.currentTime + 0.2;
+      this.timer = setInterval(function () { self.schedule(); }, 200);
+      this.schedule();
+    },
+
+    stop: function () {
+      if (!this.playing) return;
+      this.playing = false;
+      clearInterval(this.timer);
+      this.timer = null;
+      var ctx = Sound.ctx, bus = this.bus;
+      this.bus = null;
+      if (!ctx || !bus) return;
+      var t = ctx.currentTime;
+      try {
+        bus.out.gain.cancelScheduledValues(t);
+        bus.out.gain.setValueAtTime(Math.max(0.0001, bus.out.gain.value), t);
+        bus.out.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        bus.lfo.stop(t + 1);
+      } catch (e) { /* already gone */ }
+      setTimeout(function () { try { bus.out.disconnect(); } catch (e) { /* ignore */ } }, 1100);
+    },
+
+    setOn: function (on) {
+      this.on = on;
+      if (on) this.start(); else this.stop();
+    },
+
+    /* One fresh signal chain per start, so notes already scheduled by a
+       stopped run can never leak into the next one. */
+    build: function (ctx) {
+      var t = ctx.currentTime;
+      var out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.exponentialRampToValueAtTime(this.level, t + 3);
+      var comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 3;
+      comp.attack.value = 0.02; comp.release.value = 0.4;
+      out.connect(comp);
+      comp.connect(ctx.destination);
+
+      var mix = ctx.createGain();
+      var dry = ctx.createGain(); dry.gain.value = 0.8;
+      var verb = ctx.createConvolver(); verb.buffer = this.impulse(ctx);
+      var wet = ctx.createGain(); wet.gain.value = 0.32;
+      mix.connect(dry); dry.connect(out);
+      mix.connect(verb); verb.connect(wet); wet.connect(out);
+
+      var pad = ctx.createBiquadFilter();
+      pad.type = 'lowpass'; pad.frequency.value = 1250; pad.Q.value = 0.4;
+      pad.connect(mix);
+      var lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.05;
+      var depth = ctx.createGain(); depth.gain.value = 320;
+      lfo.connect(depth); depth.connect(pad.frequency);
+      lfo.start(t);
+
+      var low = ctx.createBiquadFilter();
+      low.type = 'lowpass'; low.frequency.value = 520;
+      low.connect(out);
+
+      this.bus = { out: out, mix: mix, pad: pad, low: low, lfo: lfo };
+    },
+
+    impulse: function (ctx) {
+      if (this.ir && this.ir.sampleRate === ctx.sampleRate) return this.ir;
+      var len = Math.floor(ctx.sampleRate * 2.6);
+      var buf = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (var ch = 0; ch < 2; ch++) {
+        var d = buf.getChannelData(ch);
+        for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+      }
+      this.ir = buf;
+      return buf;
+    },
+
+    schedule: function () {
+      var ctx = Sound.ctx;
+      if (!this.playing || !ctx || !this.bus || ctx.state !== 'running') return;
+      // After a stall (throttled tab) skip ahead rather than pile notes up.
+      if (this.nextBar < ctx.currentTime - 0.25) this.nextBar = ctx.currentTime + 0.1;
+      while (this.nextBar < ctx.currentTime + 0.6) {
+        this.playBar(ctx, this.nextBar, this.bar);
+        this.nextBar += BAR;
+        this.bar++;
+      }
+    },
+
+    playBar: function (ctx, t, n) {
+      var bus = this.bus;
+      var chord = CHORDS[PHRASES[Math.floor(n / 4) % PHRASES.length][n % 4]];
+      this.pad(ctx, bus, t, BAR, chord.pad);
+      this.bass(ctx, bus, t, chord.bass, 0.12);
+      this.bass(ctx, bus, t + 2 * BEAT, chord.bass + (n % 2 ? 7 : 0), 0.08);
+      if (Math.random() < 0.3) this.bass(ctx, bus, t + 3.5 * BEAT, chord.bass + 12, 0.045);
+
+      // A sparse steel-pan line. Leave whole bars empty now and then.
+      if (n < 2 || n % 8 === 7 || Math.random() < 0.18) return;
+      for (var i = 0; i < 8; i++) {
+        var chance = i === 0 ? 0.55 : (i % 2 ? 0.2 : 0.34);
+        if (Math.random() > chance) continue;
+        var step = [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)];
+        this.note = Math.max(0, Math.min(SCALE.length - 1, this.note + step));
+        var lilt = i % 2 ? BEAT * 0.09 : 0;
+        this.pan(ctx, bus, t + i * BEAT / 2 + lilt, SCALE[this.note], 0.05 + Math.random() * 0.03);
+      }
+      if (n % 4 === 3 && Math.random() < 0.45) {
+        // a soft roll on the last beat of the phrase, the way pan players hold a note
+        var m = SCALE[this.note];
+        for (var r = 0; r < 5; r++) this.pan(ctx, bus, t + 3 * BEAT + r * 0.08, m, 0.032 - r * 0.005);
+      }
+    },
+
+    pan: function (ctx, bus, t, midi, vel) {
+      var f = mtof(midi);
+      // fundamental, octave and a slightly stretched twelfth: a mellow pan tone
+      [[1, 1, 1.5], [2, 0.42, 0.85], [3.01, 0.13, 0.45], [4.2, 0.05, 0.22]].forEach(function (p) {
+        var o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f * p[0] * 1.01, t);
+        o.frequency.exponentialRampToValueAtTime(f * p[0], t + 0.04);
+        var g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vel * p[1], t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + p[2]);
+        o.connect(g); g.connect(bus.mix);
+        o.start(t); o.stop(t + p[2] + 0.05);
+      });
+    },
+
+    pad: function (ctx, bus, t, dur, notes) {
+      notes.forEach(function (m) {
+        var f = mtof(m);
+        [['triangle', -6, 0.011], ['sine', 6, 0.009]].forEach(function (v) {
+          var o = ctx.createOscillator();
+          o.type = v[0];
+          o.frequency.value = f;
+          o.detune.value = v[1];
+          var g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(v[2], t + 1.1);
+          g.gain.setValueAtTime(v[2], t + dur - 0.3);
+          g.gain.linearRampToValueAtTime(0.0001, t + dur + 1.5);
+          o.connect(g); g.connect(bus.pad);
+          o.start(t); o.stop(t + dur + 1.6);
+        });
+      });
+    },
+
+    bass: function (ctx, bus, t, midi, vel) {
+      var o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = mtof(midi);
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vel, t + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      o.connect(g); g.connect(bus.low);
+      o.start(t); o.stop(t + 1.25);
+    }
   };
 })(window.CT);
 
@@ -1869,6 +2158,8 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   var UI = CT.UI;
   var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
   var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  var RING = 295.3;          // circumference of the countdown ring
+  var SHOW_SECS_AT = 10000;  // show the seconds when this little time is left
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -1936,6 +2227,11 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     return p ? UI.esc(p.name) : 'Someone';
   };
 
+  BurnsTable.prototype.mine = function (v) {
+    var me = this.me;
+    return v.players.filter(function (p) { return p.id === me; })[0];
+  };
+
   /* ---------- static layout ---------- */
 
   BurnsTable.prototype.build = function () {
@@ -1947,9 +2243,9 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         '<button class="icon-btn" id="t-menu" type="button" aria-label="Game menu">' + UI.icon.menu + '</button>' +
         '<span class="wordmark">BURNS</span>' +
         '<span class="chip" id="t-set">Dealing</span>' +
-        '<span class="chip chip-warn" id="t-empty" hidden>Deck empty</span>' +
         '<span class="spacer"></span>' +
-        '<button class="icon-btn" id="t-sound" type="button" aria-label="Sound"></button>' +
+        '<button class="icon-btn" id="t-music" type="button"></button>' +
+        '<button class="icon-btn" id="t-sound" type="button"></button>' +
       '</header>' +
       '<div class="seats" id="t-seats"></div>' +
       '<div class="rail-zone">' +
@@ -1960,7 +2256,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
             '<span class="deck-count" id="t-deckcount"></span>' +
           '</button>' +
           '<div class="lead-spot" id="t-lead">' +
-            '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="bg" cx="50" cy="50" r="47"/><circle class="fg" cx="50" cy="50" r="47" stroke-dasharray="295.3" stroke-dashoffset="0"/></svg>' +
+            '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="bg" cx="50" cy="50" r="47"/><circle class="fg" cx="50" cy="50" r="47" stroke-dasharray="' + RING + '" stroke-dashoffset="0"/></svg>' +
             '<div class="lead-content" id="t-leadcontent"></div>' +
             '<span class="timer-num" id="t-timer" hidden></span>' +
             '<span class="lead-label" id="t-leadlabel"></span>' +
@@ -1991,8 +2287,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         '<span class="seat-count"><span class="mini-back"></span><b></b></span></div>' +
         '<span class="seat-name">' + UI.esc(p.name) + '</span>' +
         '<div class="slot" id="slot-' + p.id + '"></div>' +
-        '<span class="seat-chip"></span>' +
-        '<span class="seat-voids"></span>';
+        '<span class="seat-chip"></span>';
       seats.appendChild(seat);
       self.seatEls[p.id] = {
         seat: seat,
@@ -2000,14 +2295,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         mini: seat.querySelector('.mini-back'),
         count: seat.querySelector('.seat-count b'),
         chip: seat.querySelector('.seat-chip'),
-        voids: seat.querySelector('.seat-voids'),
         slot: seat.querySelector('.slot')
       };
     });
 
     this.el = {
       set: this.root.querySelector('#t-set'),
-      empty: this.root.querySelector('#t-empty'),
+      music: this.root.querySelector('#t-music'),
       sound: this.root.querySelector('#t-sound'),
       deck: this.root.querySelector('#t-deck'),
       deckTop: this.root.querySelector('#t-deck .deck-stack .card:last-child'),
@@ -2030,11 +2324,12 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       handWrap: this.root.querySelector('#t-handwrap'),
       hand: this.root.querySelector('#t-hand')
     };
-    this.renderSound();
+    this.renderAudio();
 
     // input
     this.root.querySelector('#t-menu').addEventListener('click', function () { self.app.openMenu(); });
-    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderSound(); });
+    this.el.music.addEventListener('click', function () { self.app.toggleMusic(); self.renderAudio(); });
+    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderAudio(); });
     this.el.hand.addEventListener('click', function (e) {
       var btn = e.target.closest('.hcard');
       if (btn) self.tapCard(btn.dataset.id, btn);
@@ -2050,10 +2345,14 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     });
   };
 
-  BurnsTable.prototype.renderSound = function () {
-    var on = UI.Sound.on;
-    this.el.sound.innerHTML = on ? UI.icon.soundOn : UI.icon.soundOff;
-    this.el.sound.setAttribute('aria-label', on ? 'Sound on. Tap to mute.' : 'Sound off. Tap to turn on.');
+  BurnsTable.prototype.renderAudio = function () {
+    var m = UI.Music.on, s = UI.Sound.on;
+    this.el.music.innerHTML = m ? UI.icon.musicOn : UI.icon.musicOff;
+    this.el.music.setAttribute('aria-label', m ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+    this.el.music.classList.toggle('off', !m);
+    this.el.sound.innerHTML = s ? UI.icon.soundOn : UI.icon.soundOff;
+    this.el.sound.setAttribute('aria-label', s ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+    this.el.sound.classList.toggle('off', !s);
   };
 
   /* ---------- update cycle ---------- */
@@ -2088,14 +2387,12 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     var pre = { hand: {}, table: [] };
     for (var id in this.handEls) pre.hand[id] = this.handEls[id].getBoundingClientRect();
     var self = this;
-    var steal = prev.options.deckEmpty === 'takeAndPlay';
     prev.table.forEach(function (e) {
       if (!e.card) return;
       var el = null;
-      if (e.via === 'starter' && !(steal && e.takenBy)) el = self.el.leadContent.querySelector('.starter-card .flip');
+      if (e.via === 'starter') el = self.el.leadContent.querySelector('.starter-card .flip');
       else {
-        var holder = steal ? (e.takenBy || e.owner) : e.owner;
-        var st = self.slotState[holder];
+        var st = self.slotState[e.owner];
         if (st && st.flip) el = st.flip;
       }
       if (el) pre.table.push({ card: e.card, rect: el.getBoundingClientRect(), gone: e.gone });
@@ -2108,8 +2405,8 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     var me = this.me;
     var flights = [];
     var self = this;
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var intoSlots = false;
+    var drawsBy = {};
     function preTable(cardId) {
       if (!pre) return null;
       for (var i = 0; i < pre.table.length; i++) if (pre.table[i].card.id === cardId) return pre.table[i];
@@ -2139,28 +2436,29 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         self.dealDoneAt = performance.now() + 120 + k * 70 + 340;
       } else if (e.type === 'setStart' && pre) {
         pre.table.forEach(function (t, i) {
-          if (!t.gone) add({ fromRect: t.rect, to: 'aside', card: t.card, delay: i * 45, duration: 420, spin: 0 });
+          if (!t.gone) add({ fromRect: t.rect, to: 'aside', card: t.card, delay: i * 45, duration: 420 });
         });
       } else if (e.type === 'lead' || e.type === 'commit') {
         if (e.player === me && e.mine) {
+          // a card drawn in this same batch (time ran out) starts from the deck
           var r1 = pre && pre.hand[e.mine.card.id];
-          add({ fromRect: r1, to: 'slot:' + me, card: e.mine.card, duration: 300, hide: 'slot:' + me });
+          if (r1) add({ fromRect: r1, to: 'slot:' + me, card: e.mine.card, duration: 300, hide: 'slot:' + me });
+          else add({ from: 'deck', to: 'slot:' + me, card: e.mine.card, duration: 360, delay: (drawsBy[me] || 0) * 90, hide: 'slot:' + me });
         } else {
-          add({ from: 'seat:' + e.player, to: 'slot:' + e.player, card: e.card || null, duration: 340, hide: 'slot:' + e.player });
+          add({ from: 'seat:' + e.player, to: 'slot:' + e.player, card: e.card || null, duration: 340, delay: (drawsBy[e.player] || 0) * 90, hide: 'slot:' + e.player });
         }
       } else if (e.type === 'draw') {
+        var n = drawsBy[e.player] = (drawsBy[e.player] || 0) + 1;
+        var delay = (n - 1) * 90;
         if (e.player === me && e.mine) {
-          if (e.matched) add({ from: 'deck', to: 'slot:' + me, card: e.mine.card, duration: 360, hide: 'slot:' + me });
-          else add({ from: 'deck', to: 'h:' + e.mine.card.id, card: e.mine.card, duration: 330, hide: 'h:' + e.mine.card.id });
+          add({ from: 'deck', to: 'h:' + e.mine.card.id, card: e.mine.card, duration: 330, delay: delay, hide: 'h:' + e.mine.card.id });
         } else {
-          if (e.matched) add({ from: 'deck', to: 'slot:' + e.player, card: null, duration: 340, hide: 'slot:' + e.player });
-          else add({ from: 'deck', to: 'seat:' + e.player, card: null, duration: 300 });
+          add({ from: 'deck', to: 'seat:' + e.player, card: null, duration: 300, delay: delay });
         }
       } else if (e.type === 'take') {
         var src = preTable(e.card.id);
         var fromRect = src ? src.rect : null;
-        if (steal) add({ fromRect: fromRect, to: 'slot:' + e.player, card: e.card, duration: 380, hide: 'slot:' + e.player });
-        else if (e.player === me) add({ fromRect: fromRect, to: 'h:' + e.card.id, card: e.card, duration: 380, hide: 'h:' + e.card.id });
+        if (e.player === me) add({ fromRect: fromRect, to: 'h:' + e.card.id, card: e.card, duration: 380, hide: 'h:' + e.card.id });
         else add({ fromRect: fromRect, to: 'seat:' + e.player, card: e.card, duration: 380 });
       }
     });
@@ -2188,7 +2486,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       var from = f.fromRect ? null : (f.from.indexOf('seat:') === 0 ? (self.seatEls[f.from.slice(5)] || {}).avatar : self.target(f.from));
       var to = self.target(f.to);
       if (f.sound) setTimeout(function () { UI.Sound.play(f.sound); }, f.delay || 0);
-      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration, spin: f.spin })
+      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration })
         .then(function () { if (f.hide) self.unhide(f.hide); });
     });
   };
@@ -2215,18 +2513,10 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
 
   BurnsTable.prototype.renderTop = function (v) {
     this.el.set.textContent = v.phase === 'dealing' ? 'Dealing' : 'Set ' + v.setNo;
-    this.el.empty.hidden = !(v.deckCount === 0 && v.phase !== 'dealing');
-  };
-
-  BurnsTable.prototype.holder = function (v, e) {
-    return v.options.deckEmpty === 'takeAndPlay' ? (e.takenBy || e.owner) : e.owner;
   };
 
   BurnsTable.prototype.entryFor = function (v, pid) {
-    for (var i = 0; i < v.table.length; i++) {
-      var e = v.table[i];
-      if (this.holder(v, e) === pid) return e;
-    }
+    for (var i = 0; i < v.table.length; i++) if (v.table[i].owner === pid) return v.table[i];
     return null;
   };
 
@@ -2244,14 +2534,6 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       var chip = self.chipFor(v, p);
       s.chip.textContent = chip.text;
       s.chip.className = 'seat-chip' + (chip.tone ? ' ' + chip.tone : '');
-      var vk = p.voids.join('') + (v.phase === 'over');
-      if (s.voids.dataset.k !== vk) {
-        s.voids.dataset.k = vk;
-        s.voids.innerHTML = p.voids.length && v.phase !== 'over'
-          ? 'no&nbsp;' + p.voids.map(UI.suit).join('')
-          : '';
-        s.voids.title = p.voids.length ? p.name + ' is known to be out of ' + p.voids.map(UI.suitPlural).join(' and ') : '';
-      }
       if (self.renderSlot(s.slot, p.id, v, plan, revealOrder)) revealOrder++;
     });
     this.revealCount = revealOrder;
@@ -2280,7 +2562,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       case 'reveal':
       case 'over':
         if (won) return { text: 'wins the set', tone: 'hot' };
-        if (p.took) return { text: v.options.deckEmpty === 'pickUp' ? 'picked one up' : 'took one' };
+        if (p.took) return { text: 'picked one up' };
         return { text: p.drew ? 'drew ' + p.drew : '' };
     }
     return { text: '' };
@@ -2289,22 +2571,16 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   /* Returns true when this slot flips face up in this render (for staggering). */
   BurnsTable.prototype.renderSlot = function (slotEl, pid, v, plan, order) {
     var st = this.slotState[pid] || (this.slotState[pid] = { flip: null, key: null, up: false });
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var entry = this.entryFor(v, pid);
     var flipped = false;
     var tag = null;
-
-    // A card this player played was taken away by someone else ("Take and play").
-    var lostTo = null;
-    if (steal) v.table.forEach(function (e) { if (e.owner === pid && e.takenBy && e.takenBy !== pid) lostTo = e.takenBy; });
 
     if (!entry) {
       if (st.flip) { st.flip.parentNode && st.flip.parentNode.removeChild(st.flip); st.flip = null; st.key = null; st.up = false; }
       slotEl.classList.remove('winner', 'takeable', 'gone');
       slotEl.removeAttribute('data-take');
-      if (lostTo) tag = { text: 'taken', tone: '' };
     } else {
-      var key = v.setNo + '|' + (entry.owner || 'starter') + '|' + entry.via;
+      var key = v.setNo + '|' + entry.owner + '|' + entry.via;
       if (st.key !== key) {
         if (st.flip && st.flip.parentNode) st.flip.parentNode.removeChild(st.flip);
         var f = makeFlip();
@@ -2315,8 +2591,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       if (card) UI.setCard(st.front, card);
       var wantUp = !!card;
       if (wantUp !== st.up) {
-        var isReveal = wantUp && v.revealed && entry.owner !== this.me && entry.via !== 'starter' &&
-          !(entry.via === 'lead' && v.options.leadCard === 'faceUp') && !(steal && entry.takenBy === pid);
+        var isReveal = wantUp && v.revealed && entry.owner !== this.me && !(entry.via === 'lead' && v.options.leadCard === 'faceUp');
         if (isReveal && !this.quiet) {
           st.flip.classList.remove('no-anim');
           void st.flip.offsetWidth;
@@ -2357,7 +2632,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     var tagEl = slotEl.querySelector('.slot-tag');
     if (tag) {
       if (!tagEl) { tagEl = document.createElement('span'); slotEl.appendChild(tagEl); }
-      tagEl.className = 'slot-tag' + (tag.tone ? ' ' + tag.tone : '') + (tag.top ? ' top' : '');
+      tagEl.className = 'slot-tag' + (tag.tone ? ' ' + tag.tone : '');
       tagEl.innerHTML = tag.text;
     } else if (tagEl) tagEl.parentNode.removeChild(tagEl);
     return flipped;
@@ -2366,28 +2641,29 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   BurnsTable.prototype.renderRail = function (v) {
     var deck = this.el.deck;
     deck.classList.toggle('can-draw', !!v.mustDraw);
+    deck.classList.toggle('may-draw', !!v.mayDraw);
     deck.classList.toggle('empty', v.deckCount === 0);
     this.el.deckCount.textContent = v.deckCount === 0 ? 'empty' : v.deckCount + ' left';
-    deck.setAttribute('aria-label', v.mustDraw ? 'Deck, ' + v.deckCount + ' cards. Tap to draw.' : 'Deck, ' + v.deckCount + ' cards');
+    deck.setAttribute('aria-label', v.canDraw ? 'Deck, ' + v.deckCount + ' cards. Tap to draw.' : 'Deck, ' + v.deckCount + ' cards');
 
     this.el.aside.classList.toggle('empty', v.discard.length === 0);
     this.el.asideCount.textContent = v.discard.length + ' aside';
 
     // middle of the rail: starter card, suit to follow, or who leads
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var starterEntry = null;
     v.table.forEach(function (e) { if (e.via === 'starter') starterEntry = e; });
     var content = this.el.leadContent;
     var label = { text: '', tone: '' };
+    var acting = v.canFollow || v.canDraw;
     var key, html = null;
 
     if ((v.phase === 'dealing' || (v.phase === 'over' && v.winReason === 'flush')) && v.starter) {
       key = 'starter-deal:' + v.starter.id;
       label.text = 'Starter';
-    } else if (starterEntry && !(steal && starterEntry.takenBy)) {
+    } else if (starterEntry) {
       key = 'starter:' + starterEntry.card.id;
       label.text = 'Follow ' + UI.suitPlural(v.suit);
-      label.tone = v.canFollow || v.mustDraw ? 'hot' : '';
+      label.tone = acting ? 'hot' : '';
     } else if (v.phase === 'lead') {
       key = 'lead';
       html = '<div class="roundel empty"><span class="q">?</span></div>';
@@ -2397,7 +2673,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       key = 'suit:' + v.suit;
       html = '<div class="roundel ' + (UI.isRed(v.suit) ? 'red' : '') + '" aria-label="Suit in play: ' + UI.suitPlural(v.suit) + '">' + UI.suitSvg(v.suit) + '</div>';
       label.text = 'Follow ' + UI.suitPlural(v.suit);
-      label.tone = v.canFollow || v.mustDraw ? 'hot' : '';
+      label.tone = acting ? 'hot' : '';
     } else {
       key = 'blank';
       html = '<div class="roundel empty"></div>';
@@ -2418,7 +2694,6 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         UI.setCard(f.front, card);
         wrap.appendChild(f.flip);
         content.appendChild(wrap);
-        this.starterFlip = f;
         if (v.phase === 'dealing' && !this.quiet) {
           // turn the starter face up once the deal has landed
           var wait = Math.max(0, (this.dealDoneAt || performance.now()) - performance.now());
@@ -2440,24 +2715,30 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       if (takeable) starterWrap.dataset.take = starterEntry.card.id; else starterWrap.removeAttribute('data-take');
       if (starterEntry.gone && starterEntry.takenBy) { label.text = '→ ' + this.name(starterEntry.takenBy); label.tone = ''; }
     }
-    this.el.leadLabel.textContent = '';
     this.el.leadLabel.innerHTML = label.text;
     this.el.leadLabel.className = 'lead-label' + (label.tone ? ' ' + label.tone : '');
     this.el.leadLabel.hidden = !label.text;
-
-    var timing = v.phase === 'take';
-    this.el.ring.hidden = !timing;
-    this.el.timer.hidden = !timing;
-    if (!timing) this.el.lead.classList.remove('urgent');
     this.frame();
+  };
+
+  /* The clock that matters right now: the take window, or the set's time limit. */
+  BurnsTable.prototype.clock = function (v) {
+    if (v.phase === 'take' && v.takeEndsAt) return { endsAt: v.takeEndsAt, total: v.timing.takeWindowMs, take: true };
+    if ((v.phase === 'lead' || v.phase === 'follow') && v.turnEndsAt) return { endsAt: v.turnEndsAt, total: v.timing.turnMs, take: false };
+    return null;
+  };
+
+  BurnsTable.prototype.myTurn = function (v) {
+    return v.canLead || v.canFollow || v.canDraw || v.canTake;
   };
 
   BurnsTable.prototype.statusFor = function (v) {
     var me = this.me, self = this;
-    var mine = v.players.filter(function (p) { return p.id === me; })[0];
+    var mine = this.mine(v);
     var s = v.suit;
     var P = s ? UI.suit(s) + ' ' + UI.suitPlural(s) : '';
     var one = s ? UI.suitSingle(s) : '';
+    var secs = ' <span class="secs"></span>';
     var waitingOn = v.players.filter(function (p) { return p.id !== v.leader && !p.committed && !p.isTaker && p.id !== me; })
       .map(function (p) { return self.name(p.id); });
 
@@ -2465,15 +2746,24 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       case 'dealing':
         return { main: 'Dealing…', sub: 'Four cards each. A Flush (one of every suit) wins on the spot.' };
       case 'lead':
-        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.', sub: 'Its suit is the one everyone must follow.' };
+        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.' + secs, sub: 'Its suit is the one everyone must follow.' };
         return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
       case 'follow': {
         var intro = v.setNo === 1 ? 'The starter card sets the suit.' : this.name(v.leader) + ' led ' + UI.suit(s) + '.';
-        if (v.canFollow) return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>', sub: intro + ' Cards stay hidden until everyone has played.' };
+        if (v.mayDraw) {
+          return {
+            main: 'You found a ' + UI.suit(s) + ' ' + one + '. <span class="hl">Play it, or keep drawing.</span>' + secs,
+            sub: 'A higher ' + one + ' could win the set, but every card you draw stays in your hand.'
+          };
+        }
+        if (v.canFollow) {
+          if (mine.drew) return { main: '<span class="hl">Play a ' + one + '.</span> The deck is empty.' + secs, sub: 'Cards stay hidden until everyone has played.' };
+          return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>' + secs, sub: intro + ' Cards stay hidden until everyone has played.' };
+        }
         if (v.mustDraw) {
           return {
-            main: 'No ' + P + '. <span class="hl">Tap the deck to draw.</span>',
-            sub: mine.drew ? 'Drawn ' + mine.drew + ' so far. Keep going until a ' + one + ' turns up.' : 'Draw until a ' + one + ' turns up. It is played for you.'
+            main: 'No ' + P + '. <span class="hl">Tap the deck to draw.</span>' + secs,
+            sub: mine.drew ? 'Drawn ' + mine.drew + ' so far. Keep going until a ' + one + ' turns up.' : 'When a ' + one + ' turns up, play it or keep drawing for a better one.'
           };
         }
         if (mine && mine.isTaker) return { main: '<span class="em">No ' + P + ' and the deck is empty.</span>', sub: 'Once everyone else is in, you take a card from the set.' };
@@ -2482,11 +2772,10 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       case 'take': {
         var takers = v.players.filter(function (p) { return p.isTaker; });
         var pending = takers.filter(function (p) { return !p.took && p.id !== me; }).map(function (p) { return self.name(p.id); });
-        var verb = v.options.deckEmpty === 'pickUp' ? 'It goes into your hand.' : 'You play it as your own.';
-        if (v.canTake) return { main: '<span class="hl">Take a card from the set</span> <span class="secs"></span>', sub: verb + ' Each card can only be taken once.' };
+        if (v.canTake) return { main: '<span class="hl">Take a card from the set</span>' + secs, sub: 'It goes into your hand. Each card can only be taken once.' };
         if (mine && mine.isTaker) return { main: 'Got it.', sub: pending.length ? 'Waiting for ' + list(pending) + '.' : '' };
         var names = takers.map(function (p) { return self.name(p.id); });
-        return { main: list(names) + (names.length > 1 ? ' are' : ' is') + ' taking from the set <span class="secs"></span>', sub: 'The deck is empty, so they take from the cards just played.' };
+        return { main: list(names) + (names.length > 1 ? ' are' : ' is') + ' taking from the set' + secs, sub: 'The deck is empty, so they pick up from the cards just played.' };
       }
       case 'reveal': {
         var r = v.setResult;
@@ -2511,11 +2800,10 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   };
 
   BurnsTable.prototype.renderMe = function (v, plan) {
-    var me = this.me;
-    var mine = v.players.filter(function (p) { return p.id === me; })[0];
+    var mine = this.mine(v);
     this.el.me.classList.toggle('is-leader', !!(mine && mine.isLeader));
     this.el.myCount.textContent = v.hand.length === 1 ? '1 card' : v.hand.length + ' cards';
-    this.renderSlot(this.el.mySlot, me, v, plan, this.revealCount || 0);
+    this.renderSlot(this.el.mySlot, this.me, v, plan, this.revealCount || 0);
     var sel = this.selected && v.playable.indexOf(this.selected) >= 0 ? this.selected : null;
     var card = sel && v.hand.filter(function (c) { return c.id === sel; })[0];
     if (card) {
@@ -2548,7 +2836,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         self.handEls[c.id] = el;
       }
       el.classList.toggle('playable', needAct && !!playable[c.id]);
-      el.classList.toggle('dim', (needAct && !playable[c.id]) || !!v.mustDraw || (v.canTake && true));
+      el.classList.toggle('dim', (needAct && !playable[c.id]) || !!v.mustDraw || !!v.canTake);
       el.classList.toggle('selected', self.selected === c.id);
       el.style.visibility = self.hidden['h:' + c.id] ? 'hidden' : '';
       el.style.zIndex = String(i + 1);
@@ -2558,13 +2846,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     }
     this.layoutHand(cards);
 
-    // bring the first playable card into view when it's your turn on a long hand
-    var turnKey = needAct ? v.setNo + v.phase : null;
+    // bring the first playable card into view when it becomes playable on a long hand
+    var firstPlayable = cards.filter(function (c) { return playable[c.id]; })[0];
+    var turnKey = needAct && firstPlayable ? v.setNo + v.phase + firstPlayable.id : null;
     if (turnKey && turnKey !== this.turnKey) {
-      var first = cards.filter(function (c) { return playable[c.id]; })[0];
       var wrap = this.el.handWrap;
-      if (first && wrap.scrollWidth > wrap.clientWidth) {
-        var left = parseFloat(this.handEls[first.id].style.left) || 0;
+      if (wrap.scrollWidth > wrap.clientWidth) {
+        var left = parseFloat(this.handEls[firstPlayable.id].style.left) || 0;
         wrap.scrollTo({ left: Math.max(0, left - 24), behavior: 'smooth' });
       }
     }
@@ -2590,22 +2878,35 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     });
   };
 
-  /* Called ~20×/s by the app loop for live timers. */
+  /* Called ~20×/s by the app loop for the countdown ring and seconds. */
   BurnsTable.prototype.frame = function () {
     var v = this.v;
-    if (!v || v.phase !== 'take' || !v.takeEndsAt) return;
-    var left = Math.max(0, v.takeEndsAt - this.session.now());
-    var frac = left / (v.timing.takeWindowMs || 10000);
-    this.el.ringFg.setAttribute('stroke-dashoffset', String(295.3 * (1 - frac)));
+    if (!v) return;
+    var c = this.clock(v);
+    var lead = this.el.lead;
+    // the ring is an <svg>, which has no .hidden property: toggle the attribute
+    if (c) this.el.ring.removeAttribute('hidden'); else this.el.ring.setAttribute('hidden', '');
+    if (!c) {
+      this.el.timer.hidden = true;
+      lead.classList.remove('urgent', 'turn', 'late');
+      return;
+    }
+    var left = Math.max(0, c.endsAt - this.session.now());
+    var frac = c.total ? left / c.total : 0;
+    this.el.ringFg.setAttribute('stroke-dashoffset', String(RING * (1 - frac)));
     var secs = Math.ceil(left / 1000);
+    var showSecs = c.take || left <= SHOW_SECS_AT;
+    var urgent = left <= (c.take ? 3000 : 5000);
+    lead.classList.toggle('turn', !c.take);
+    lead.classList.toggle('late', !c.take && left <= SHOW_SECS_AT);
+    lead.classList.toggle('urgent', urgent);
+    this.el.timer.hidden = !showSecs;
     this.el.timer.textContent = secs + 's';
-    var urgent = left <= 3000;
-    this.el.lead.classList.toggle('urgent', urgent);
     var span = this.el.statusMain.querySelector('.secs');
-    if (span) span.textContent = '· ' + secs + 's';
+    if (span) span.textContent = showSecs ? '· ' + secs + 's' : '';
     if (secs !== this.lastSecs) {
       this.lastSecs = secs;
-      if (urgent && secs > 0 && v.canTake) UI.Sound.play('tick');
+      if (urgent && secs > 0 && this.myTurn(v)) UI.Sound.play('tick');
     }
   };
 
@@ -2631,7 +2932,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     }
     if (v.mustDraw) {
       this.shake(el);
-      UI.toast('No ' + UI.suit(v.suit) + ' ' + UI.suitPlural(v.suit) + '. Draw from the deck.');
+      UI.toast('No ' + UI.suit(v.suit) + ' ' + UI.suitPlural(v.suit) + ' yet. Draw from the deck.');
       return;
     }
     if (v.canTake) { UI.toast('Tap a glowing card on the table to take it.'); return; }
@@ -2658,8 +2959,8 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     if (!v) return;
     UI.Sound.unlock();
     var deck = this.el.deck;
-    if (!v.mustDraw) {
-      if (v.canFollow) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
+    if (!v.canDraw) {
+      if (v.canFollow && !this.mine(v).drew) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
       return;
     }
     var res = this.session.act(this.me, 'draw');
@@ -2673,7 +2974,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       this.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
       UI.Sound.play('draw');
       UI.buzz(8);
-      if (res.matched) UI.toast('Drew ' + UI.cardText(res.card) + ' — played for you.');
+      if (res.matched) UI.toast('Found ' + UI.cardText(res.card) + '. Play it, or keep drawing.', 2400);
     } else if (res.code === 'cooldown') {
       deck.classList.remove('wiggle');
       void deck.offsetWidth;
@@ -2695,7 +2996,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
   /* ---------- sounds and notices for things other players did ---------- */
 
   BurnsTable.prototype.react = function (events, v) {
-    var me = this.me, self = this;
+    var me = this.me;
     events.forEach(function (e) {
       switch (e.type) {
         case 'lead':
@@ -2703,7 +3004,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
           if (e.player !== me) UI.Sound.play('play');
           break;
         case 'draw':
-          if (e.player !== me) UI.Sound.play('draw');
+          if (e.player !== me || e.auto) UI.Sound.play('draw');
           break;
         case 'reveal':
           setTimeout(function () { UI.Sound.play('flip'); }, 420);
@@ -2717,12 +3018,18 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         case 'stuck':
           if (e.players.indexOf(me) >= 0) UI.toast('No ' + UI.suit(e.suit) + ' and the deck is empty. You’ll take from the set.', 2600);
           break;
+        case 'timeout':
+          if (e.players.indexOf(me) >= 0) {
+            UI.toast(e.phase === 'lead' ? 'Time’s up. A random card was led for you.' : 'Time’s up. A random card was played for you.', 2600);
+            UI.Sound.play('nope');
+          }
+          break;
         case 'takeStart':
           if (e.takers.indexOf(me) >= 0) UI.Sound.play('alert');
           break;
         case 'take':
           if (e.player !== me) UI.Sound.play('draw');
-          if (e.player === me && e.auto) UI.toast('Time’s up — you got ' + UI.cardText(e.card) + '.');
+          if (e.player === me && e.auto) UI.toast('Time’s up. You picked up ' + UI.cardText(e.card) + '.');
           break;
         case 'gameOver':
           var iWon = e.winners.indexOf(me) >= 0;
@@ -2745,6 +3052,7 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     var self = this;
     var me = this.me;
     var N = function (pid) { return self.name(pid); };
+    var timed = ' (time ran out, so it was picked at random)';
     switch (e.type) {
       case 'deal':
         this.pushLog('Dealt ' + e.handSize + ' cards to each of ' + e.order.length + ' players.', 'set');
@@ -2760,12 +3068,15 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         if (e.setNo === 1) this.pushLog('Set 1 · starter card ' + UI.cardText(e.starter) + ', so everyone follows ' + UI.suit(e.suit) + '.', 'set');
         else this.pushLog('Set ' + e.setNo + ' · ' + N(e.leader) + ' to lead.', 'set');
         break;
+      case 'timeout':
+        this.pushLog('Time ran out for ' + list(e.players.map(function (p) { return N(p) === 'You' ? 'you' : N(p); })) + '.');
+        break;
       case 'lead':
-        if (e.player === me && e.mine) this.pushLog('You led ' + UI.cardText(e.mine.card) + (e.card ? '.' : ' (others only see the suit).'));
-        else this.pushLog(N(e.player) + ' led ' + (e.card ? UI.cardText(e.card) : UI.suit(e.suit) + ' (card hidden)') + '.');
+        if (e.player === me && e.mine) this.pushLog('You led ' + UI.cardText(e.mine.card) + (e.auto ? timed : '') + (e.card ? '.' : ' Others only see the suit.'));
+        else this.pushLog(N(e.player) + ' led ' + (e.card ? UI.cardText(e.card) : UI.suit(e.suit) + ' (card hidden)') + (e.auto ? timed : '') + '.');
         break;
       case 'commit':
-        this.pushLog(e.player === me && e.mine ? 'You played ' + UI.cardText(e.mine.card) + '.' : N(e.player) + ' played a card.');
+        this.pushLog((e.player === me && e.mine ? 'You played ' + UI.cardText(e.mine.card) : N(e.player) + ' played a card') + (e.auto ? timed : '') + '.');
         break;
       case 'draw': {
         var k = this.lastSetNo + ':' + e.player;
@@ -2773,15 +3084,9 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         if (!d) d = this.drawLog[k] = { item: this.pushLog(''), n: 0, cards: [] };
         d.n = e.n;
         if (e.mine) d.cards.push(e.mine.card);
-        var text;
-        if (e.player === me) {
-          text = 'You drew ' + d.cards.map(UI.cardText).join(', ');
-          if (e.matched) text += ' — played the ' + UI.cardText(e.mine.card) + '.';
-        } else {
-          text = N(e.player) + ' drew ' + d.n + (d.n === 1 ? ' card' : ' cards');
-          if (e.matched) text += d.n === 1 ? ', which matched and was played.' : '; the last one matched and was played.';
-        }
-        d.item.html = text;
+        d.item.html = e.player === me
+          ? 'You drew ' + d.cards.map(UI.cardText).join(', ') + '.'
+          : N(e.player) + ' drew ' + d.n + (d.n === 1 ? ' card.' : ' cards.');
         break;
       }
       case 'deckEmpty':
@@ -2799,8 +3104,8 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
         this.pushLog(list(e.takers.map(N)) + (e.takers.length > 1 ? ' have' : ' has') + ' 10 seconds to take a card from the set.');
         break;
       case 'take':
-        this.pushLog(N(e.player) + (v.options.deckEmpty === 'pickUp' ? ' picked up ' : ' took and played ') + UI.cardText(e.card) +
-          (e.from ? ' (' + N(e.from).replace(/^You$/, 'yours') + (e.from === me ? '' : '’s') + ')' : ' (the starter)') +
+        this.pushLog(N(e.player) + ' picked up ' + UI.cardText(e.card) +
+          (e.from ? ' (' + (e.from === me ? 'yours' : N(e.from) + '’s') + ')' : ' (the starter)') +
           (e.auto ? ', picked at random when time ran out.' : '.'));
         break;
       case 'setWon':
@@ -2861,8 +3166,13 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       this.settings = UI.store.get(SETTINGS_KEY, {}) || {};
       this.stats = UI.store.get(STATS_KEY, {}) || {};
       UI.Sound.on = this.settings.sound !== false;
+      UI.Music.on = this.settings.music !== false;
 
-      document.addEventListener('pointerdown', function () { UI.Sound.unlock(); }, true);
+      // Browsers only allow audio after a tap; start the music on the first one.
+      document.addEventListener('pointerdown', function () {
+        UI.Sound.unlock();
+        if (UI.Music.on && !UI.Music.playing) UI.Music.start();
+      }, true);
       document.addEventListener('visibilitychange', function () { self.onVisibility(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && self.sheet && self.sheet !== 'result') self.closeSheet(); });
       $('overlay').addEventListener('click', function (e) { if (e.target === this && self.sheet !== 'confirm') self.closeSheet(); });
@@ -2898,6 +3208,8 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
       var modes = CT.listModes();
       var html =
         '<header class="home-head"><p class="eyebrow">Card table</p>' +
+        '<span class="spacer"></span>' +
+        '<button class="icon-btn" id="h-music" type="button"></button>' +
         '<button class="icon-btn" id="h-sound" type="button"></button></header>' +
         '<h1 class="home-title">Pick a game</h1>';
       if (save) {
@@ -2936,13 +3248,18 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
           fan.appendChild(UI.makeCard(c));
         });
       });
-      var snd = $('h-sound');
-      var paintSound = function () {
+      var snd = $('h-sound'), mus = $('h-music');
+      var paintAudio = function () {
+        mus.innerHTML = UI.Music.on ? UI.icon.musicOn : UI.icon.musicOff;
+        mus.setAttribute('aria-label', UI.Music.on ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+        mus.classList.toggle('off', !UI.Music.on);
         snd.innerHTML = UI.Sound.on ? UI.icon.soundOn : UI.icon.soundOff;
-        snd.setAttribute('aria-label', UI.Sound.on ? 'Sound on. Tap to mute.' : 'Sound off. Tap to turn on.');
+        snd.setAttribute('aria-label', UI.Sound.on ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+        snd.classList.toggle('off', !UI.Sound.on);
       };
-      paintSound();
-      snd.addEventListener('click', function () { self.toggleSound(); paintSound(); });
+      paintAudio();
+      mus.addEventListener('click', function () { self.toggleMusic(); paintAudio(); });
+      snd.addEventListener('click', function () { self.toggleSound(); paintAudio(); });
       if (save) $('h-resume').addEventListener('click', function () { self.resume(save); });
       home.querySelectorAll('[data-play]').forEach(function (b) {
         b.addEventListener('click', function () { self.openSetup(b.dataset.play); });
@@ -3089,9 +3406,20 @@ CT.BUILD = {"version":"0.1.0","id":"3e623f5","target":"app"};
     },
 
     onVisibility: function () {
-      if (!this.session) return;
-      if (document.hidden) { this.session.pause(); this.save(); }
-      else if (!this.sheet && this.screen === 'table') this.session.resume();
+      if (document.hidden) {
+        UI.Music.stop();
+        if (this.session) { this.session.pause(); this.save(); }
+        return;
+      }
+      if (UI.Music.on) UI.Music.start();
+      if (this.session && !this.sheet && this.screen === 'table') this.session.resume();
+    },
+
+    toggleMusic: function () {
+      UI.Sound.unlock();
+      UI.Music.setOn(!UI.Music.on);
+      this.settings.music = UI.Music.on;
+      UI.store.set(SETTINGS_KEY, this.settings);
     },
 
     toggleSound: function () {

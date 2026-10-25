@@ -8,12 +8,13 @@
         └──► set 1: starter card sets the suit ─► follow ─► [take] ─► reveal
      reveal ──► lead (set winner plays any suit) ─► follow ─► [take] ─► reveal …
      A set ends with everyone's card revealed; whoever has emptied their hand
-     at that point wins.
+     at that point wins. Lead and follow each have a time limit so an idle
+     player can't hold up the table.
    ========================================================================== */
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 1;
+  var ENGINE_VERSION = 2;
   var HAND_SIZE = 4;
 
   var DEFAULT_TIMING = {
@@ -27,21 +28,22 @@
      rules here; the setup screen and the rules text pick them up. */
   var OPTIONS = [
     {
-      id: 'deckEmpty',
-      label: 'When the deck runs out',
-      default: 'pickUp',
-      choices: [
-        { value: 'pickUp', label: 'Pick up', help: 'Players who can’t follow take one card from the set into their hand and sit out that set.' },
-        { value: 'takeAndPlay', label: 'Take and play', help: 'Players who can’t follow take one card from the set and play it as their own, so it can win them the set.' }
-      ]
-    },
-    {
       id: 'leadCard',
       label: 'The leader’s card',
       default: 'suitOnly',
       choices: [
         { value: 'suitOnly', label: 'Suit only', help: 'Everyone sees which suit was led. The card itself stays hidden until the reveal.' },
         { value: 'faceUp', label: 'Face up', help: 'The lead card is shown to everyone as soon as it is played.' }
+      ]
+    },
+    {
+      id: 'turnTime',
+      label: 'Time to play',
+      default: '30',
+      choices: [
+        { value: '15', label: '15 sec', help: 'The leader has 15 seconds to lead, then everyone has 15 seconds to play. When time runs out, a random card is played for anyone still deciding.' },
+        { value: '30', label: '30 sec', help: 'The leader has 30 seconds to lead, then everyone has 30 seconds to play. When time runs out, a random card is played for anyone still deciding.' },
+        { value: '60', label: '60 sec', help: 'The leader has 60 seconds to lead, then everyone has 60 seconds to play. When time runs out, a random card is played for anyone still deciding.' }
       ]
     }
   ];
@@ -59,9 +61,13 @@
 
   function isTaker(state, pid) { return state.takers.indexOf(pid) >= 0; }
 
-  function value(state, card) { return CT.rankValue(card.rank, true); }
+  function value(card) { return CT.rankValue(card.rank, true); }
 
   function suitName(suit) { return CT.SUIT_INFO[suit].single; }
+
+  function turnMs(state) { return (Number(state.options.turnTime) || 30) * 1000; }
+
+  function secretFor(pid, data) { var s = {}; s[pid] = data; return s; }
 
   function emit(state, now, ev, secret) {
     state.seq += 1;
@@ -72,21 +78,12 @@
     if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
   }
 
-  /* Public knowledge: suits a player is certainly out of. */
-  function addVoid(state, pid, suit) {
-    var v = state.voids[pid] || (state.voids[pid] = []);
-    if (v.indexOf(suit) < 0) v.push(suit);
-  }
-  function removeVoid(state, pid, suit) {
-    var v = state.voids[pid];
-    if (v) state.voids[pid] = v.filter(function (s) { return s !== suit; });
-  }
-  function keepOnlyVoid(state, pid, suit) {
-    var v = state.voids[pid] || [];
-    state.voids[pid] = v.indexOf(suit) >= 0 ? [suit] : [];
-  }
-
   function cardsOnTable(state) { return state.table.filter(function (e) { return !e.takenBy; }); }
+
+  /* Followers who still owe a card this set (not in yet, not stuck). */
+  function pending(state) {
+    return followers(state).filter(function (p) { return !state.committed[p.id] && !isTaker(state, p.id); });
+  }
 
   /* ---------- setup ------------------------------------------------------ */
 
@@ -113,9 +110,10 @@
       setNo: 0,
       phase: 'dealing',
       phaseEndsAt: now + timing.dealHoldMs,
+      turnEndsAt: null, // time limit for leading, then for following
       leader: null,
       suit: null,
-      table: [],        // [{ card, owner, via: 'starter'|'lead'|'hand'|'draw', takenBy? }]
+      table: [],        // [{ card, owner, via: 'starter'|'lead'|'hand', auto?, takenBy?, gone? }]
       committed: {},    // pid → true once their card for this set is in
       drawn: {},        // pid → cards drawn this set
       takers: [],       // pids who must take a card from the set (deck empty)
@@ -123,7 +121,6 @@
       takeEndsAt: null,
       revealed: false,
       lastDrawAt: {},
-      voids: {},
       setResult: null,
       winners: null,
       winReason: null,
@@ -171,12 +168,15 @@
       state.leader = leaderId;
       state.suit = null;
       state.phase = 'lead';
-      emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId });
+      state.turnEndsAt = now + turnMs(state);
+      emit(state, now, { type: 'setStart', setNo: state.setNo, leader: leaderId, turnEndsAt: state.turnEndsAt });
     }
   }
 
-  /* Suit is known: anyone who can't follow while the deck is already empty is stuck. */
+  /* The suit is known: start the clock. Anyone who can't follow while the
+     deck is already empty is stuck straight away. */
   function beginFollow(state, now) {
+    state.turnEndsAt = now + turnMs(state);
     if (state.deck.length === 0) markStuck(state, now);
     checkFollowComplete(state, now);
   }
@@ -186,7 +186,6 @@
     followers(state).forEach(function (p) {
       if (!state.committed[p.id] && !isTaker(state, p.id) && !CT.hasSuit(p.hand, state.suit)) {
         state.takers.push(p.id);
-        addVoid(state, p.id, state.suit);
         stuck.push(p.id);
       }
     });
@@ -196,12 +195,8 @@
 
   /* When every follower has a card in (or is stuck), reveal the set. */
   function checkFollowComplete(state, now) {
-    if (state.phase !== 'follow') return;
-    var waiting = followers(state).filter(function (p) {
-      return !state.committed[p.id] && !isTaker(state, p.id);
-    });
-    if (waiting.length) return;
-
+    if (state.phase !== 'follow' || pending(state).length) return;
+    state.turnEndsAt = null;
     state.revealed = true;
     emit(state, now, {
       type: 'reveal',
@@ -216,14 +211,13 @@
     }
   }
 
+  /* A taker picks a card up from the set into their hand. It still counts
+     for the player who played it when the set is decided. */
   function applyTake(state, pid, entry, now, auto) {
     entry.takenBy = pid;
+    entry.gone = true;
     state.taken[pid] = entry.card.id;
-    if (state.options.deckEmpty === 'pickUp') {
-      entry.gone = true;
-      player(state, pid).hand.push(entry.card);
-      removeVoid(state, pid, entry.card.suit);
-    }
+    player(state, pid).hand.push(entry.card);
     emit(state, now, { type: 'take', player: pid, card: entry.card, from: entry.owner, auto: !!auto });
   }
 
@@ -233,16 +227,11 @@
   }
 
   function finishSet(state, now) {
-    var steal = state.options.deckEmpty === 'takeAndPlay';
-
-    // Highest card in the set. With "Pick up" a picked-up card still counts for
-    // the player who played it; with "Take and play" it counts for the taker.
-    // The starter card only sets the suit and never wins on its own.
+    // Highest card in the set wins it. The starter card only sets the suit.
     var best = null;
     state.table.forEach(function (e) {
-      var holder = steal ? (e.takenBy || e.owner) : e.owner;
-      if (!holder) return;
-      if (!best || value(state, e.card) > value(state, best.card)) best = { player: holder, card: e.card };
+      if (!e.owner) return;
+      if (!best || value(e.card) > value(best.card)) best = { player: e.owner, card: e.card };
     });
 
     var out = state.players.filter(function (p) { return p.hand.length === 0; });
@@ -250,7 +239,7 @@
       // Two players went out on the same set: the higher card they played wins.
       var playedValue = function (pid) {
         for (var i = 0; i < state.table.length; i++) {
-          if (state.table[i].owner === pid) return value(state, state.table[i].card);
+          if (state.table[i].owner === pid) return value(state.table[i].card);
         }
         return -1;
       };
@@ -285,25 +274,51 @@
     return hands;
   }
 
+  /* ---------- moves shared by actions and time-outs ---------------------- */
+
+  function lead(state, p, card, now, auto) {
+    p.hand.splice(p.hand.indexOf(card), 1);
+    state.table.push({ card: card, owner: p.id, via: 'lead', auto: !!auto });
+    state.committed[p.id] = true;
+    state.suit = card.suit;
+    state.phase = 'follow';
+    var faceUp = state.options.leadCard === 'faceUp';
+    emit(state, now, { type: 'lead', player: p.id, suit: card.suit, card: faceUp ? card : null, auto: !!auto }, secretFor(p.id, { card: card }));
+    beginFollow(state, now);
+  }
+
+  function commit(state, p, card, now, auto) {
+    p.hand.splice(p.hand.indexOf(card), 1);
+    state.table.push({ card: card, owner: p.id, via: 'hand', auto: !!auto });
+    state.committed[p.id] = true;
+    emit(state, now, { type: 'commit', player: p.id, auto: !!auto }, secretFor(p.id, { card: card }));
+  }
+
+  /* Draws go into the hand. Players see their own card; everyone else only
+     sees that a card was drawn. */
+  function drawOne(state, p, now, auto) {
+    var card = state.deck.pop();
+    var n = (state.drawn[p.id] || 0) + 1;
+    state.drawn[p.id] = n;
+    p.hand.push(card);
+    var matched = card.suit === state.suit;
+    emit(state, now, { type: 'draw', player: p.id, n: n, deckLeft: state.deck.length, auto: !!auto }, secretFor(p.id, { card: card, matched: matched }));
+    if (!state.deck.length) {
+      emit(state, now, { type: 'deckEmpty' });
+      markStuck(state, now);
+    }
+    return card;
+  }
+
   /* ---------- actions ---------------------------------------------------- */
 
   function actLead(state, pid, payload, now) {
     if (state.phase !== 'lead') return CT.fail('not-now', 'Wait for the next set to start.');
     if (pid !== state.leader) return CT.fail('not-leader', 'Only the winner of the last set leads.');
     var p = player(state, pid);
-    var idx = p.hand.findIndex(function (c) { return c.id === payload.cardId; });
-    if (idx < 0) return CT.fail('no-card', 'That card is not in your hand.');
-    var card = p.hand.splice(idx, 1)[0];
-    state.table.push({ card: card, owner: pid, via: 'lead' });
-    state.committed[pid] = true;
-    state.suit = card.suit;
-    state.phase = 'follow';
-    removeVoid(state, pid, card.suit);
-    var faceUp = state.options.leadCard === 'faceUp';
-    emit(state, now, { type: 'lead', player: pid, suit: card.suit, card: faceUp ? card : null }, (function () {
-      var s = {}; s[pid] = { card: card }; return s;
-    })());
-    beginFollow(state, now);
+    var card = p.hand.filter(function (c) { return c.id === payload.cardId; })[0];
+    if (!card) return CT.fail('no-card', 'That card is not in your hand.');
+    lead(state, p, card, now, false);
     return CT.ok();
   }
 
@@ -320,54 +335,33 @@
     var bad = followGuard(state, pid);
     if (bad) return bad;
     var p = player(state, pid);
-    var idx = p.hand.findIndex(function (c) { return c.id === payload.cardId; });
-    if (idx < 0) return CT.fail('no-card', 'That card is not in your hand.');
-    var card = p.hand[idx];
+    var card = p.hand.filter(function (c) { return c.id === payload.cardId; })[0];
+    if (!card) return CT.fail('no-card', 'That card is not in your hand.');
     if (card.suit !== state.suit) return CT.fail('wrong-suit', 'You must play a ' + suitName(state.suit) + '.');
-    p.hand.splice(idx, 1);
-    state.table.push({ card: card, owner: pid, via: 'hand' });
-    state.committed[pid] = true;
-    var s = {}; s[pid] = { card: card };
-    emit(state, now, { type: 'commit', player: pid, via: 'hand' }, s);
+    commit(state, p, card, now, false);
     checkFollowComplete(state, now);
     return CT.ok();
   }
 
+  /* Only players who started the set without the suit may draw. Once a card
+     of the suit turns up they can play it or keep drawing for a better one. */
   function actDraw(state, pid, payload, now) {
     var bad = followGuard(state, pid);
     if (bad) return bad;
     var p = player(state, pid);
-    if (CT.hasSuit(p.hand, state.suit)) return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it instead of drawing.');
+    if (CT.hasSuit(p.hand, state.suit) && !state.drawn[pid]) {
+      return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it. Only players who start the set without the suit may draw.');
+    }
     if (!state.deck.length) return CT.fail('deck-empty', 'The deck is empty.');
     var last = state.lastDrawAt[pid];
     var gap = state.timing.drawCooldownMs;
     if (last != null && now - last < gap) {
       return CT.fail('cooldown', 'Drawing too fast.', { retryInMs: Math.ceil(gap - (now - last)) });
     }
-
-    var card = state.deck.pop();
     state.lastDrawAt[pid] = now;
-    var n = (state.drawn[pid] || 0) + 1;
-    state.drawn[pid] = n;
-    if (n === 1) addVoid(state, pid, state.suit);   // everyone now knows they lacked it
-
-    var matched = card.suit === state.suit;
-    if (matched) {
-      state.table.push({ card: card, owner: pid, via: 'draw' });
-      state.committed[pid] = true;
-    } else {
-      p.hand.push(card);
-      keepOnlyVoid(state, pid, state.suit);           // the new card may fill other gaps
-    }
-    var s = {}; s[pid] = { card: card };
-    emit(state, now, { type: 'draw', player: pid, n: n, matched: matched, deckLeft: state.deck.length }, s);
-
-    if (!state.deck.length) {
-      emit(state, now, { type: 'deckEmpty' });
-      markStuck(state, now);
-    }
+    var card = drawOne(state, p, now, false);
     checkFollowComplete(state, now);
-    return CT.ok({ card: card, matched: matched });
+    return CT.ok({ card: card, matched: card.suit === state.suit });
   }
 
   function actTake(state, pid, payload, now) {
@@ -397,6 +391,31 @@
 
   /* ---------- timed steps ------------------------------------------------ */
 
+  /* Time ran out: finish the turn for anyone still deciding. A random card is
+     played for them; if they have none of the suit, they draw until one turns
+     up and it is played (or, if the deck runs out, they take from the set). */
+  function timeOut(state, now) {
+    if (state.phase === 'lead') {
+      var leader = player(state, state.leader);
+      emit(state, now, { type: 'timeout', phase: 'lead', players: [leader.id] });
+      lead(state, leader, CT.pickRandom(leader.hand, state), now, true);
+      return;
+    }
+    var late = pending(state);
+    emit(state, now, { type: 'timeout', phase: 'follow', players: late.map(function (p) { return p.id; }) });
+    late.forEach(function (p) {
+      if (state.committed[p.id] || isTaker(state, p.id)) return;
+      var suited = p.hand.filter(function (c) { return c.suit === state.suit; });
+      if (suited.length) { commit(state, p, CT.pickRandom(suited, state), now, true); return; }
+      while (state.deck.length && !isTaker(state, p.id)) {
+        var card = drawOne(state, p, now, true);
+        if (card.suit === state.suit) { commit(state, p, card, now, true); return; }
+      }
+    });
+    checkFollowComplete(state, now);
+    if (state.phase === 'follow' && pending(state).length) state.turnEndsAt = now + 1000;  // safety net
+  }
+
   function tick(state, now) {
     if (state.phase === 'dealing' && now >= state.phaseEndsAt) {
       var flush = state.players.filter(function (p) {
@@ -415,9 +434,13 @@
       return true;
     }
 
+    if ((state.phase === 'lead' || state.phase === 'follow') && state.turnEndsAt != null && now >= state.turnEndsAt) {
+      timeOut(state, now);
+      return true;
+    }
+
     if (state.phase === 'take' && now >= state.takeEndsAt) {
-      // Time's up: anyone who didn't choose gets a random card, in random order,
-      // while cards last.
+      // Anyone who didn't choose gets a random card, in random order, while cards last.
       var waiting = CT.shuffle(state.takers.filter(function (pid) { return !state.taken[pid]; }), state);
       waiting.forEach(function (pid) {
         var left = cardsOnTable(state);
@@ -456,8 +479,9 @@
       leader: state.leader,
       suit: state.suit,
       options: state.options,
-      timing: { drawCooldownMs: state.timing.drawCooldownMs, takeWindowMs: state.timing.takeWindowMs },
+      timing: { drawCooldownMs: state.timing.drawCooldownMs, takeWindowMs: state.timing.takeWindowMs, turnMs: turnMs(state) },
       phaseEndsAt: state.phaseEndsAt,
+      turnEndsAt: state.turnEndsAt,
       takeEndsAt: state.takeEndsAt,
       revealed: state.revealed,
       deckCount: state.deck.length,
@@ -476,12 +500,11 @@
           drew: state.drawn[p.id] || 0,
           isTaker: isTaker(state, p.id),
           took: state.taken[p.id] || null,
-          voids: (state.voids[p.id] || []).slice(),
           hand: over ? p.hand.slice() : undefined
         };
       }),
       table: state.table.map(function (e) {
-        return { owner: e.owner, via: e.via, takenBy: e.takenBy || null, gone: !!e.gone, card: visible(e) ? e.card : null };
+        return { owner: e.owner, via: e.via, auto: !!e.auto, takenBy: e.takenBy || null, gone: !!e.gone, card: visible(e) ? e.card : null };
       }),
       setResult: state.setResult,
       winners: state.winners,
@@ -491,9 +514,12 @@
     };
 
     var mine = me && state.phase === 'follow' && pid !== state.leader && !state.committed[pid] && !isTaker(state, pid);
+    var hasIt = !!mine && CT.hasSuit(hand, state.suit);
     v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
-    v.canFollow = !!mine && CT.hasSuit(hand, state.suit);
-    v.mustDraw = !!mine && !v.canFollow && state.deck.length > 0;
+    v.canFollow = hasIt;
+    v.canDraw = !!mine && state.deck.length > 0 && (!hasIt || (state.drawn[pid] || 0) > 0);
+    v.mustDraw = v.canDraw && !hasIt;
+    v.mayDraw = v.canDraw && hasIt;   // found the suit while drawing: play it or keep going
     v.canTake = !!me && state.phase === 'take' && isTaker(state, pid) && !state.taken[pid];
     v.playable = v.canLead ? hand.map(function (c) { return c.id; })
       : v.canFollow ? hand.filter(function (c) { return c.suit === state.suit; }).map(function (c) { return c.id; })
@@ -515,19 +541,18 @@
 
   function rules(options) {
     var o = CT.resolveOptions(OPTIONS, options);
-    var deckEmptyText = o.deckEmpty === 'pickUp'
-      ? 'Instead, take one card from the set into your hand and sit out that set. Its card still counts for whoever played it.'
-      : 'Instead, take one card from the set and play it as your own. It can win you the set.';
     var leadText = o.leadCard === 'suitOnly'
       ? 'Everyone sees the suit that was led; the card itself stays hidden until the reveal.'
       : 'The lead card is shown to everyone straight away.';
+    var secs = Number(o.turnTime) || 30;
     return [
       { title: 'The deal', text: 'Everyone gets 4 cards from a standard 52-card deck. One more card is turned face up. Its suit must be followed in the first set.' },
       { title: 'Flush', text: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.' },
       { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
-      { title: 'Winning a set', text: 'The highest card wins the set (Ace is high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
-      { title: 'Can’t follow?', text: 'Draw from the deck until you find a card of the suit, then it is played for you. Everyone who needs to draws at the same time, with a short pause between draws.' },
-      { title: 'Deck empty', text: 'If the deck runs out before you find the suit, you can’t draw. ' + deckEmptyText + ' You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
+      { title: 'Winning a set', text: 'The highest card wins the set. Cards rank 2 (low) up to 10, Jack, Queen, King and Ace (high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
+      { title: 'Can’t follow?', text: 'If you start a set without the suit, draw from the deck until a card of the suit turns up. Then you can play it, or keep drawing for a better one, but every card you draw stays in your hand. Everyone who needs to draws at the same time, with a short pause between draws. Players who start the set with the suit can’t draw.' },
+      { title: 'Deck empty', text: 'If the deck runs out before you have a card of the suit, take one card from the set into your hand instead and sit out that set. The card still counts for whoever played it. You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
+      { title: 'Time limit', text: 'The leader has ' + secs + ' seconds to lead, then everyone has ' + secs + ' seconds to play. When time runs out, a random card of the suit is played for anyone still deciding. If they have none, they draw until one turns up and it is played.' },
       { title: 'Winning the game', text: 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.' }
     ];
   }

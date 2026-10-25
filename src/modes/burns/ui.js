@@ -9,6 +9,8 @@
   var UI = CT.UI;
   var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB'];
   var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  var RING = 295.3;          // circumference of the countdown ring
+  var SHOW_SECS_AT = 10000;  // show the seconds when this little time is left
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -76,6 +78,11 @@
     return p ? UI.esc(p.name) : 'Someone';
   };
 
+  BurnsTable.prototype.mine = function (v) {
+    var me = this.me;
+    return v.players.filter(function (p) { return p.id === me; })[0];
+  };
+
   /* ---------- static layout ---------- */
 
   BurnsTable.prototype.build = function () {
@@ -87,9 +94,9 @@
         '<button class="icon-btn" id="t-menu" type="button" aria-label="Game menu">' + UI.icon.menu + '</button>' +
         '<span class="wordmark">BURNS</span>' +
         '<span class="chip" id="t-set">Dealing</span>' +
-        '<span class="chip chip-warn" id="t-empty" hidden>Deck empty</span>' +
         '<span class="spacer"></span>' +
-        '<button class="icon-btn" id="t-sound" type="button" aria-label="Sound"></button>' +
+        '<button class="icon-btn" id="t-music" type="button"></button>' +
+        '<button class="icon-btn" id="t-sound" type="button"></button>' +
       '</header>' +
       '<div class="seats" id="t-seats"></div>' +
       '<div class="rail-zone">' +
@@ -100,7 +107,7 @@
             '<span class="deck-count" id="t-deckcount"></span>' +
           '</button>' +
           '<div class="lead-spot" id="t-lead">' +
-            '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="bg" cx="50" cy="50" r="47"/><circle class="fg" cx="50" cy="50" r="47" stroke-dasharray="295.3" stroke-dashoffset="0"/></svg>' +
+            '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="bg" cx="50" cy="50" r="47"/><circle class="fg" cx="50" cy="50" r="47" stroke-dasharray="' + RING + '" stroke-dashoffset="0"/></svg>' +
             '<div class="lead-content" id="t-leadcontent"></div>' +
             '<span class="timer-num" id="t-timer" hidden></span>' +
             '<span class="lead-label" id="t-leadlabel"></span>' +
@@ -131,8 +138,7 @@
         '<span class="seat-count"><span class="mini-back"></span><b></b></span></div>' +
         '<span class="seat-name">' + UI.esc(p.name) + '</span>' +
         '<div class="slot" id="slot-' + p.id + '"></div>' +
-        '<span class="seat-chip"></span>' +
-        '<span class="seat-voids"></span>';
+        '<span class="seat-chip"></span>';
       seats.appendChild(seat);
       self.seatEls[p.id] = {
         seat: seat,
@@ -140,14 +146,13 @@
         mini: seat.querySelector('.mini-back'),
         count: seat.querySelector('.seat-count b'),
         chip: seat.querySelector('.seat-chip'),
-        voids: seat.querySelector('.seat-voids'),
         slot: seat.querySelector('.slot')
       };
     });
 
     this.el = {
       set: this.root.querySelector('#t-set'),
-      empty: this.root.querySelector('#t-empty'),
+      music: this.root.querySelector('#t-music'),
       sound: this.root.querySelector('#t-sound'),
       deck: this.root.querySelector('#t-deck'),
       deckTop: this.root.querySelector('#t-deck .deck-stack .card:last-child'),
@@ -170,11 +175,12 @@
       handWrap: this.root.querySelector('#t-handwrap'),
       hand: this.root.querySelector('#t-hand')
     };
-    this.renderSound();
+    this.renderAudio();
 
     // input
     this.root.querySelector('#t-menu').addEventListener('click', function () { self.app.openMenu(); });
-    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderSound(); });
+    this.el.music.addEventListener('click', function () { self.app.toggleMusic(); self.renderAudio(); });
+    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderAudio(); });
     this.el.hand.addEventListener('click', function (e) {
       var btn = e.target.closest('.hcard');
       if (btn) self.tapCard(btn.dataset.id, btn);
@@ -190,10 +196,14 @@
     });
   };
 
-  BurnsTable.prototype.renderSound = function () {
-    var on = UI.Sound.on;
-    this.el.sound.innerHTML = on ? UI.icon.soundOn : UI.icon.soundOff;
-    this.el.sound.setAttribute('aria-label', on ? 'Sound on. Tap to mute.' : 'Sound off. Tap to turn on.');
+  BurnsTable.prototype.renderAudio = function () {
+    var m = UI.Music.on, s = UI.Sound.on;
+    this.el.music.innerHTML = m ? UI.icon.musicOn : UI.icon.musicOff;
+    this.el.music.setAttribute('aria-label', m ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+    this.el.music.classList.toggle('off', !m);
+    this.el.sound.innerHTML = s ? UI.icon.soundOn : UI.icon.soundOff;
+    this.el.sound.setAttribute('aria-label', s ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+    this.el.sound.classList.toggle('off', !s);
   };
 
   /* ---------- update cycle ---------- */
@@ -228,14 +238,12 @@
     var pre = { hand: {}, table: [] };
     for (var id in this.handEls) pre.hand[id] = this.handEls[id].getBoundingClientRect();
     var self = this;
-    var steal = prev.options.deckEmpty === 'takeAndPlay';
     prev.table.forEach(function (e) {
       if (!e.card) return;
       var el = null;
-      if (e.via === 'starter' && !(steal && e.takenBy)) el = self.el.leadContent.querySelector('.starter-card .flip');
+      if (e.via === 'starter') el = self.el.leadContent.querySelector('.starter-card .flip');
       else {
-        var holder = steal ? (e.takenBy || e.owner) : e.owner;
-        var st = self.slotState[holder];
+        var st = self.slotState[e.owner];
         if (st && st.flip) el = st.flip;
       }
       if (el) pre.table.push({ card: e.card, rect: el.getBoundingClientRect(), gone: e.gone });
@@ -248,8 +256,8 @@
     var me = this.me;
     var flights = [];
     var self = this;
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var intoSlots = false;
+    var drawsBy = {};
     function preTable(cardId) {
       if (!pre) return null;
       for (var i = 0; i < pre.table.length; i++) if (pre.table[i].card.id === cardId) return pre.table[i];
@@ -279,28 +287,29 @@
         self.dealDoneAt = performance.now() + 120 + k * 70 + 340;
       } else if (e.type === 'setStart' && pre) {
         pre.table.forEach(function (t, i) {
-          if (!t.gone) add({ fromRect: t.rect, to: 'aside', card: t.card, delay: i * 45, duration: 420, spin: 0 });
+          if (!t.gone) add({ fromRect: t.rect, to: 'aside', card: t.card, delay: i * 45, duration: 420 });
         });
       } else if (e.type === 'lead' || e.type === 'commit') {
         if (e.player === me && e.mine) {
+          // a card drawn in this same batch (time ran out) starts from the deck
           var r1 = pre && pre.hand[e.mine.card.id];
-          add({ fromRect: r1, to: 'slot:' + me, card: e.mine.card, duration: 300, hide: 'slot:' + me });
+          if (r1) add({ fromRect: r1, to: 'slot:' + me, card: e.mine.card, duration: 300, hide: 'slot:' + me });
+          else add({ from: 'deck', to: 'slot:' + me, card: e.mine.card, duration: 360, delay: (drawsBy[me] || 0) * 90, hide: 'slot:' + me });
         } else {
-          add({ from: 'seat:' + e.player, to: 'slot:' + e.player, card: e.card || null, duration: 340, hide: 'slot:' + e.player });
+          add({ from: 'seat:' + e.player, to: 'slot:' + e.player, card: e.card || null, duration: 340, delay: (drawsBy[e.player] || 0) * 90, hide: 'slot:' + e.player });
         }
       } else if (e.type === 'draw') {
+        var n = drawsBy[e.player] = (drawsBy[e.player] || 0) + 1;
+        var delay = (n - 1) * 90;
         if (e.player === me && e.mine) {
-          if (e.matched) add({ from: 'deck', to: 'slot:' + me, card: e.mine.card, duration: 360, hide: 'slot:' + me });
-          else add({ from: 'deck', to: 'h:' + e.mine.card.id, card: e.mine.card, duration: 330, hide: 'h:' + e.mine.card.id });
+          add({ from: 'deck', to: 'h:' + e.mine.card.id, card: e.mine.card, duration: 330, delay: delay, hide: 'h:' + e.mine.card.id });
         } else {
-          if (e.matched) add({ from: 'deck', to: 'slot:' + e.player, card: null, duration: 340, hide: 'slot:' + e.player });
-          else add({ from: 'deck', to: 'seat:' + e.player, card: null, duration: 300 });
+          add({ from: 'deck', to: 'seat:' + e.player, card: null, duration: 300, delay: delay });
         }
       } else if (e.type === 'take') {
         var src = preTable(e.card.id);
         var fromRect = src ? src.rect : null;
-        if (steal) add({ fromRect: fromRect, to: 'slot:' + e.player, card: e.card, duration: 380, hide: 'slot:' + e.player });
-        else if (e.player === me) add({ fromRect: fromRect, to: 'h:' + e.card.id, card: e.card, duration: 380, hide: 'h:' + e.card.id });
+        if (e.player === me) add({ fromRect: fromRect, to: 'h:' + e.card.id, card: e.card, duration: 380, hide: 'h:' + e.card.id });
         else add({ fromRect: fromRect, to: 'seat:' + e.player, card: e.card, duration: 380 });
       }
     });
@@ -328,7 +337,7 @@
       var from = f.fromRect ? null : (f.from.indexOf('seat:') === 0 ? (self.seatEls[f.from.slice(5)] || {}).avatar : self.target(f.from));
       var to = self.target(f.to);
       if (f.sound) setTimeout(function () { UI.Sound.play(f.sound); }, f.delay || 0);
-      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration, spin: f.spin })
+      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration })
         .then(function () { if (f.hide) self.unhide(f.hide); });
     });
   };
@@ -355,18 +364,10 @@
 
   BurnsTable.prototype.renderTop = function (v) {
     this.el.set.textContent = v.phase === 'dealing' ? 'Dealing' : 'Set ' + v.setNo;
-    this.el.empty.hidden = !(v.deckCount === 0 && v.phase !== 'dealing');
-  };
-
-  BurnsTable.prototype.holder = function (v, e) {
-    return v.options.deckEmpty === 'takeAndPlay' ? (e.takenBy || e.owner) : e.owner;
   };
 
   BurnsTable.prototype.entryFor = function (v, pid) {
-    for (var i = 0; i < v.table.length; i++) {
-      var e = v.table[i];
-      if (this.holder(v, e) === pid) return e;
-    }
+    for (var i = 0; i < v.table.length; i++) if (v.table[i].owner === pid) return v.table[i];
     return null;
   };
 
@@ -384,14 +385,6 @@
       var chip = self.chipFor(v, p);
       s.chip.textContent = chip.text;
       s.chip.className = 'seat-chip' + (chip.tone ? ' ' + chip.tone : '');
-      var vk = p.voids.join('') + (v.phase === 'over');
-      if (s.voids.dataset.k !== vk) {
-        s.voids.dataset.k = vk;
-        s.voids.innerHTML = p.voids.length && v.phase !== 'over'
-          ? 'no&nbsp;' + p.voids.map(UI.suit).join('')
-          : '';
-        s.voids.title = p.voids.length ? p.name + ' is known to be out of ' + p.voids.map(UI.suitPlural).join(' and ') : '';
-      }
       if (self.renderSlot(s.slot, p.id, v, plan, revealOrder)) revealOrder++;
     });
     this.revealCount = revealOrder;
@@ -420,7 +413,7 @@
       case 'reveal':
       case 'over':
         if (won) return { text: 'wins the set', tone: 'hot' };
-        if (p.took) return { text: v.options.deckEmpty === 'pickUp' ? 'picked one up' : 'took one' };
+        if (p.took) return { text: 'picked one up' };
         return { text: p.drew ? 'drew ' + p.drew : '' };
     }
     return { text: '' };
@@ -429,22 +422,16 @@
   /* Returns true when this slot flips face up in this render (for staggering). */
   BurnsTable.prototype.renderSlot = function (slotEl, pid, v, plan, order) {
     var st = this.slotState[pid] || (this.slotState[pid] = { flip: null, key: null, up: false });
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var entry = this.entryFor(v, pid);
     var flipped = false;
     var tag = null;
-
-    // A card this player played was taken away by someone else ("Take and play").
-    var lostTo = null;
-    if (steal) v.table.forEach(function (e) { if (e.owner === pid && e.takenBy && e.takenBy !== pid) lostTo = e.takenBy; });
 
     if (!entry) {
       if (st.flip) { st.flip.parentNode && st.flip.parentNode.removeChild(st.flip); st.flip = null; st.key = null; st.up = false; }
       slotEl.classList.remove('winner', 'takeable', 'gone');
       slotEl.removeAttribute('data-take');
-      if (lostTo) tag = { text: 'taken', tone: '' };
     } else {
-      var key = v.setNo + '|' + (entry.owner || 'starter') + '|' + entry.via;
+      var key = v.setNo + '|' + entry.owner + '|' + entry.via;
       if (st.key !== key) {
         if (st.flip && st.flip.parentNode) st.flip.parentNode.removeChild(st.flip);
         var f = makeFlip();
@@ -455,8 +442,7 @@
       if (card) UI.setCard(st.front, card);
       var wantUp = !!card;
       if (wantUp !== st.up) {
-        var isReveal = wantUp && v.revealed && entry.owner !== this.me && entry.via !== 'starter' &&
-          !(entry.via === 'lead' && v.options.leadCard === 'faceUp') && !(steal && entry.takenBy === pid);
+        var isReveal = wantUp && v.revealed && entry.owner !== this.me && !(entry.via === 'lead' && v.options.leadCard === 'faceUp');
         if (isReveal && !this.quiet) {
           st.flip.classList.remove('no-anim');
           void st.flip.offsetWidth;
@@ -497,7 +483,7 @@
     var tagEl = slotEl.querySelector('.slot-tag');
     if (tag) {
       if (!tagEl) { tagEl = document.createElement('span'); slotEl.appendChild(tagEl); }
-      tagEl.className = 'slot-tag' + (tag.tone ? ' ' + tag.tone : '') + (tag.top ? ' top' : '');
+      tagEl.className = 'slot-tag' + (tag.tone ? ' ' + tag.tone : '');
       tagEl.innerHTML = tag.text;
     } else if (tagEl) tagEl.parentNode.removeChild(tagEl);
     return flipped;
@@ -506,28 +492,29 @@
   BurnsTable.prototype.renderRail = function (v) {
     var deck = this.el.deck;
     deck.classList.toggle('can-draw', !!v.mustDraw);
+    deck.classList.toggle('may-draw', !!v.mayDraw);
     deck.classList.toggle('empty', v.deckCount === 0);
     this.el.deckCount.textContent = v.deckCount === 0 ? 'empty' : v.deckCount + ' left';
-    deck.setAttribute('aria-label', v.mustDraw ? 'Deck, ' + v.deckCount + ' cards. Tap to draw.' : 'Deck, ' + v.deckCount + ' cards');
+    deck.setAttribute('aria-label', v.canDraw ? 'Deck, ' + v.deckCount + ' cards. Tap to draw.' : 'Deck, ' + v.deckCount + ' cards');
 
     this.el.aside.classList.toggle('empty', v.discard.length === 0);
     this.el.asideCount.textContent = v.discard.length + ' aside';
 
     // middle of the rail: starter card, suit to follow, or who leads
-    var steal = v.options.deckEmpty === 'takeAndPlay';
     var starterEntry = null;
     v.table.forEach(function (e) { if (e.via === 'starter') starterEntry = e; });
     var content = this.el.leadContent;
     var label = { text: '', tone: '' };
+    var acting = v.canFollow || v.canDraw;
     var key, html = null;
 
     if ((v.phase === 'dealing' || (v.phase === 'over' && v.winReason === 'flush')) && v.starter) {
       key = 'starter-deal:' + v.starter.id;
       label.text = 'Starter';
-    } else if (starterEntry && !(steal && starterEntry.takenBy)) {
+    } else if (starterEntry) {
       key = 'starter:' + starterEntry.card.id;
       label.text = 'Follow ' + UI.suitPlural(v.suit);
-      label.tone = v.canFollow || v.mustDraw ? 'hot' : '';
+      label.tone = acting ? 'hot' : '';
     } else if (v.phase === 'lead') {
       key = 'lead';
       html = '<div class="roundel empty"><span class="q">?</span></div>';
@@ -537,7 +524,7 @@
       key = 'suit:' + v.suit;
       html = '<div class="roundel ' + (UI.isRed(v.suit) ? 'red' : '') + '" aria-label="Suit in play: ' + UI.suitPlural(v.suit) + '">' + UI.suitSvg(v.suit) + '</div>';
       label.text = 'Follow ' + UI.suitPlural(v.suit);
-      label.tone = v.canFollow || v.mustDraw ? 'hot' : '';
+      label.tone = acting ? 'hot' : '';
     } else {
       key = 'blank';
       html = '<div class="roundel empty"></div>';
@@ -558,7 +545,6 @@
         UI.setCard(f.front, card);
         wrap.appendChild(f.flip);
         content.appendChild(wrap);
-        this.starterFlip = f;
         if (v.phase === 'dealing' && !this.quiet) {
           // turn the starter face up once the deal has landed
           var wait = Math.max(0, (this.dealDoneAt || performance.now()) - performance.now());
@@ -580,24 +566,30 @@
       if (takeable) starterWrap.dataset.take = starterEntry.card.id; else starterWrap.removeAttribute('data-take');
       if (starterEntry.gone && starterEntry.takenBy) { label.text = '→ ' + this.name(starterEntry.takenBy); label.tone = ''; }
     }
-    this.el.leadLabel.textContent = '';
     this.el.leadLabel.innerHTML = label.text;
     this.el.leadLabel.className = 'lead-label' + (label.tone ? ' ' + label.tone : '');
     this.el.leadLabel.hidden = !label.text;
-
-    var timing = v.phase === 'take';
-    this.el.ring.hidden = !timing;
-    this.el.timer.hidden = !timing;
-    if (!timing) this.el.lead.classList.remove('urgent');
     this.frame();
+  };
+
+  /* The clock that matters right now: the take window, or the set's time limit. */
+  BurnsTable.prototype.clock = function (v) {
+    if (v.phase === 'take' && v.takeEndsAt) return { endsAt: v.takeEndsAt, total: v.timing.takeWindowMs, take: true };
+    if ((v.phase === 'lead' || v.phase === 'follow') && v.turnEndsAt) return { endsAt: v.turnEndsAt, total: v.timing.turnMs, take: false };
+    return null;
+  };
+
+  BurnsTable.prototype.myTurn = function (v) {
+    return v.canLead || v.canFollow || v.canDraw || v.canTake;
   };
 
   BurnsTable.prototype.statusFor = function (v) {
     var me = this.me, self = this;
-    var mine = v.players.filter(function (p) { return p.id === me; })[0];
+    var mine = this.mine(v);
     var s = v.suit;
     var P = s ? UI.suit(s) + ' ' + UI.suitPlural(s) : '';
     var one = s ? UI.suitSingle(s) : '';
+    var secs = ' <span class="secs"></span>';
     var waitingOn = v.players.filter(function (p) { return p.id !== v.leader && !p.committed && !p.isTaker && p.id !== me; })
       .map(function (p) { return self.name(p.id); });
 
@@ -605,15 +597,24 @@
       case 'dealing':
         return { main: 'Dealing…', sub: 'Four cards each. A Flush (one of every suit) wins on the spot.' };
       case 'lead':
-        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.', sub: 'Its suit is the one everyone must follow.' };
+        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.' + secs, sub: 'Its suit is the one everyone must follow.' };
         return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
       case 'follow': {
         var intro = v.setNo === 1 ? 'The starter card sets the suit.' : this.name(v.leader) + ' led ' + UI.suit(s) + '.';
-        if (v.canFollow) return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>', sub: intro + ' Cards stay hidden until everyone has played.' };
+        if (v.mayDraw) {
+          return {
+            main: 'You found a ' + UI.suit(s) + ' ' + one + '. <span class="hl">Play it, or keep drawing.</span>' + secs,
+            sub: 'A higher ' + one + ' could win the set, but every card you draw stays in your hand.'
+          };
+        }
+        if (v.canFollow) {
+          if (mine.drew) return { main: '<span class="hl">Play a ' + one + '.</span> The deck is empty.' + secs, sub: 'Cards stay hidden until everyone has played.' };
+          return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>' + secs, sub: intro + ' Cards stay hidden until everyone has played.' };
+        }
         if (v.mustDraw) {
           return {
-            main: 'No ' + P + '. <span class="hl">Tap the deck to draw.</span>',
-            sub: mine.drew ? 'Drawn ' + mine.drew + ' so far. Keep going until a ' + one + ' turns up.' : 'Draw until a ' + one + ' turns up. It is played for you.'
+            main: 'No ' + P + '. <span class="hl">Tap the deck to draw.</span>' + secs,
+            sub: mine.drew ? 'Drawn ' + mine.drew + ' so far. Keep going until a ' + one + ' turns up.' : 'When a ' + one + ' turns up, play it or keep drawing for a better one.'
           };
         }
         if (mine && mine.isTaker) return { main: '<span class="em">No ' + P + ' and the deck is empty.</span>', sub: 'Once everyone else is in, you take a card from the set.' };
@@ -622,11 +623,10 @@
       case 'take': {
         var takers = v.players.filter(function (p) { return p.isTaker; });
         var pending = takers.filter(function (p) { return !p.took && p.id !== me; }).map(function (p) { return self.name(p.id); });
-        var verb = v.options.deckEmpty === 'pickUp' ? 'It goes into your hand.' : 'You play it as your own.';
-        if (v.canTake) return { main: '<span class="hl">Take a card from the set</span> <span class="secs"></span>', sub: verb + ' Each card can only be taken once.' };
+        if (v.canTake) return { main: '<span class="hl">Take a card from the set</span>' + secs, sub: 'It goes into your hand. Each card can only be taken once.' };
         if (mine && mine.isTaker) return { main: 'Got it.', sub: pending.length ? 'Waiting for ' + list(pending) + '.' : '' };
         var names = takers.map(function (p) { return self.name(p.id); });
-        return { main: list(names) + (names.length > 1 ? ' are' : ' is') + ' taking from the set <span class="secs"></span>', sub: 'The deck is empty, so they take from the cards just played.' };
+        return { main: list(names) + (names.length > 1 ? ' are' : ' is') + ' taking from the set' + secs, sub: 'The deck is empty, so they pick up from the cards just played.' };
       }
       case 'reveal': {
         var r = v.setResult;
@@ -651,11 +651,10 @@
   };
 
   BurnsTable.prototype.renderMe = function (v, plan) {
-    var me = this.me;
-    var mine = v.players.filter(function (p) { return p.id === me; })[0];
+    var mine = this.mine(v);
     this.el.me.classList.toggle('is-leader', !!(mine && mine.isLeader));
     this.el.myCount.textContent = v.hand.length === 1 ? '1 card' : v.hand.length + ' cards';
-    this.renderSlot(this.el.mySlot, me, v, plan, this.revealCount || 0);
+    this.renderSlot(this.el.mySlot, this.me, v, plan, this.revealCount || 0);
     var sel = this.selected && v.playable.indexOf(this.selected) >= 0 ? this.selected : null;
     var card = sel && v.hand.filter(function (c) { return c.id === sel; })[0];
     if (card) {
@@ -688,7 +687,7 @@
         self.handEls[c.id] = el;
       }
       el.classList.toggle('playable', needAct && !!playable[c.id]);
-      el.classList.toggle('dim', (needAct && !playable[c.id]) || !!v.mustDraw || (v.canTake && true));
+      el.classList.toggle('dim', (needAct && !playable[c.id]) || !!v.mustDraw || !!v.canTake);
       el.classList.toggle('selected', self.selected === c.id);
       el.style.visibility = self.hidden['h:' + c.id] ? 'hidden' : '';
       el.style.zIndex = String(i + 1);
@@ -698,13 +697,13 @@
     }
     this.layoutHand(cards);
 
-    // bring the first playable card into view when it's your turn on a long hand
-    var turnKey = needAct ? v.setNo + v.phase : null;
+    // bring the first playable card into view when it becomes playable on a long hand
+    var firstPlayable = cards.filter(function (c) { return playable[c.id]; })[0];
+    var turnKey = needAct && firstPlayable ? v.setNo + v.phase + firstPlayable.id : null;
     if (turnKey && turnKey !== this.turnKey) {
-      var first = cards.filter(function (c) { return playable[c.id]; })[0];
       var wrap = this.el.handWrap;
-      if (first && wrap.scrollWidth > wrap.clientWidth) {
-        var left = parseFloat(this.handEls[first.id].style.left) || 0;
+      if (wrap.scrollWidth > wrap.clientWidth) {
+        var left = parseFloat(this.handEls[firstPlayable.id].style.left) || 0;
         wrap.scrollTo({ left: Math.max(0, left - 24), behavior: 'smooth' });
       }
     }
@@ -730,22 +729,35 @@
     });
   };
 
-  /* Called ~20×/s by the app loop for live timers. */
+  /* Called ~20×/s by the app loop for the countdown ring and seconds. */
   BurnsTable.prototype.frame = function () {
     var v = this.v;
-    if (!v || v.phase !== 'take' || !v.takeEndsAt) return;
-    var left = Math.max(0, v.takeEndsAt - this.session.now());
-    var frac = left / (v.timing.takeWindowMs || 10000);
-    this.el.ringFg.setAttribute('stroke-dashoffset', String(295.3 * (1 - frac)));
+    if (!v) return;
+    var c = this.clock(v);
+    var lead = this.el.lead;
+    // the ring is an <svg>, which has no .hidden property: toggle the attribute
+    if (c) this.el.ring.removeAttribute('hidden'); else this.el.ring.setAttribute('hidden', '');
+    if (!c) {
+      this.el.timer.hidden = true;
+      lead.classList.remove('urgent', 'turn', 'late');
+      return;
+    }
+    var left = Math.max(0, c.endsAt - this.session.now());
+    var frac = c.total ? left / c.total : 0;
+    this.el.ringFg.setAttribute('stroke-dashoffset', String(RING * (1 - frac)));
     var secs = Math.ceil(left / 1000);
+    var showSecs = c.take || left <= SHOW_SECS_AT;
+    var urgent = left <= (c.take ? 3000 : 5000);
+    lead.classList.toggle('turn', !c.take);
+    lead.classList.toggle('late', !c.take && left <= SHOW_SECS_AT);
+    lead.classList.toggle('urgent', urgent);
+    this.el.timer.hidden = !showSecs;
     this.el.timer.textContent = secs + 's';
-    var urgent = left <= 3000;
-    this.el.lead.classList.toggle('urgent', urgent);
     var span = this.el.statusMain.querySelector('.secs');
-    if (span) span.textContent = '· ' + secs + 's';
+    if (span) span.textContent = showSecs ? '· ' + secs + 's' : '';
     if (secs !== this.lastSecs) {
       this.lastSecs = secs;
-      if (urgent && secs > 0 && v.canTake) UI.Sound.play('tick');
+      if (urgent && secs > 0 && this.myTurn(v)) UI.Sound.play('tick');
     }
   };
 
@@ -771,7 +783,7 @@
     }
     if (v.mustDraw) {
       this.shake(el);
-      UI.toast('No ' + UI.suit(v.suit) + ' ' + UI.suitPlural(v.suit) + '. Draw from the deck.');
+      UI.toast('No ' + UI.suit(v.suit) + ' ' + UI.suitPlural(v.suit) + ' yet. Draw from the deck.');
       return;
     }
     if (v.canTake) { UI.toast('Tap a glowing card on the table to take it.'); return; }
@@ -798,8 +810,8 @@
     if (!v) return;
     UI.Sound.unlock();
     var deck = this.el.deck;
-    if (!v.mustDraw) {
-      if (v.canFollow) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
+    if (!v.canDraw) {
+      if (v.canFollow && !this.mine(v).drew) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
       return;
     }
     var res = this.session.act(this.me, 'draw');
@@ -813,7 +825,7 @@
       this.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
       UI.Sound.play('draw');
       UI.buzz(8);
-      if (res.matched) UI.toast('Drew ' + UI.cardText(res.card) + ' — played for you.');
+      if (res.matched) UI.toast('Found ' + UI.cardText(res.card) + '. Play it, or keep drawing.', 2400);
     } else if (res.code === 'cooldown') {
       deck.classList.remove('wiggle');
       void deck.offsetWidth;
@@ -835,7 +847,7 @@
   /* ---------- sounds and notices for things other players did ---------- */
 
   BurnsTable.prototype.react = function (events, v) {
-    var me = this.me, self = this;
+    var me = this.me;
     events.forEach(function (e) {
       switch (e.type) {
         case 'lead':
@@ -843,7 +855,7 @@
           if (e.player !== me) UI.Sound.play('play');
           break;
         case 'draw':
-          if (e.player !== me) UI.Sound.play('draw');
+          if (e.player !== me || e.auto) UI.Sound.play('draw');
           break;
         case 'reveal':
           setTimeout(function () { UI.Sound.play('flip'); }, 420);
@@ -857,12 +869,18 @@
         case 'stuck':
           if (e.players.indexOf(me) >= 0) UI.toast('No ' + UI.suit(e.suit) + ' and the deck is empty. You’ll take from the set.', 2600);
           break;
+        case 'timeout':
+          if (e.players.indexOf(me) >= 0) {
+            UI.toast(e.phase === 'lead' ? 'Time’s up. A random card was led for you.' : 'Time’s up. A random card was played for you.', 2600);
+            UI.Sound.play('nope');
+          }
+          break;
         case 'takeStart':
           if (e.takers.indexOf(me) >= 0) UI.Sound.play('alert');
           break;
         case 'take':
           if (e.player !== me) UI.Sound.play('draw');
-          if (e.player === me && e.auto) UI.toast('Time’s up — you got ' + UI.cardText(e.card) + '.');
+          if (e.player === me && e.auto) UI.toast('Time’s up. You picked up ' + UI.cardText(e.card) + '.');
           break;
         case 'gameOver':
           var iWon = e.winners.indexOf(me) >= 0;
@@ -885,6 +903,7 @@
     var self = this;
     var me = this.me;
     var N = function (pid) { return self.name(pid); };
+    var timed = ' (time ran out, so it was picked at random)';
     switch (e.type) {
       case 'deal':
         this.pushLog('Dealt ' + e.handSize + ' cards to each of ' + e.order.length + ' players.', 'set');
@@ -900,12 +919,15 @@
         if (e.setNo === 1) this.pushLog('Set 1 · starter card ' + UI.cardText(e.starter) + ', so everyone follows ' + UI.suit(e.suit) + '.', 'set');
         else this.pushLog('Set ' + e.setNo + ' · ' + N(e.leader) + ' to lead.', 'set');
         break;
+      case 'timeout':
+        this.pushLog('Time ran out for ' + list(e.players.map(function (p) { return N(p) === 'You' ? 'you' : N(p); })) + '.');
+        break;
       case 'lead':
-        if (e.player === me && e.mine) this.pushLog('You led ' + UI.cardText(e.mine.card) + (e.card ? '.' : ' (others only see the suit).'));
-        else this.pushLog(N(e.player) + ' led ' + (e.card ? UI.cardText(e.card) : UI.suit(e.suit) + ' (card hidden)') + '.');
+        if (e.player === me && e.mine) this.pushLog('You led ' + UI.cardText(e.mine.card) + (e.auto ? timed : '') + (e.card ? '.' : ' Others only see the suit.'));
+        else this.pushLog(N(e.player) + ' led ' + (e.card ? UI.cardText(e.card) : UI.suit(e.suit) + ' (card hidden)') + (e.auto ? timed : '') + '.');
         break;
       case 'commit':
-        this.pushLog(e.player === me && e.mine ? 'You played ' + UI.cardText(e.mine.card) + '.' : N(e.player) + ' played a card.');
+        this.pushLog((e.player === me && e.mine ? 'You played ' + UI.cardText(e.mine.card) : N(e.player) + ' played a card') + (e.auto ? timed : '') + '.');
         break;
       case 'draw': {
         var k = this.lastSetNo + ':' + e.player;
@@ -913,15 +935,9 @@
         if (!d) d = this.drawLog[k] = { item: this.pushLog(''), n: 0, cards: [] };
         d.n = e.n;
         if (e.mine) d.cards.push(e.mine.card);
-        var text;
-        if (e.player === me) {
-          text = 'You drew ' + d.cards.map(UI.cardText).join(', ');
-          if (e.matched) text += ' — played the ' + UI.cardText(e.mine.card) + '.';
-        } else {
-          text = N(e.player) + ' drew ' + d.n + (d.n === 1 ? ' card' : ' cards');
-          if (e.matched) text += d.n === 1 ? ', which matched and was played.' : '; the last one matched and was played.';
-        }
-        d.item.html = text;
+        d.item.html = e.player === me
+          ? 'You drew ' + d.cards.map(UI.cardText).join(', ') + '.'
+          : N(e.player) + ' drew ' + d.n + (d.n === 1 ? ' card.' : ' cards.');
         break;
       }
       case 'deckEmpty':
@@ -939,8 +955,8 @@
         this.pushLog(list(e.takers.map(N)) + (e.takers.length > 1 ? ' have' : ' has') + ' 10 seconds to take a card from the set.');
         break;
       case 'take':
-        this.pushLog(N(e.player) + (v.options.deckEmpty === 'pickUp' ? ' picked up ' : ' took and played ') + UI.cardText(e.card) +
-          (e.from ? ' (' + N(e.from).replace(/^You$/, 'yours') + (e.from === me ? '' : '’s') + ')' : ' (the starter)') +
+        this.pushLog(N(e.player) + ' picked up ' + UI.cardText(e.card) +
+          (e.from ? ' (' + (e.from === me ? 'yours' : N(e.from) + '’s') + ')' : ' (the starter)') +
           (e.auto ? ', picked at random when time ran out.' : '.'));
         break;
       case 'setWon':

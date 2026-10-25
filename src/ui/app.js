@@ -41,8 +41,13 @@
       this.settings = UI.store.get(SETTINGS_KEY, {}) || {};
       this.stats = UI.store.get(STATS_KEY, {}) || {};
       UI.Sound.on = this.settings.sound !== false;
+      UI.Music.on = this.settings.music !== false;
 
-      document.addEventListener('pointerdown', function () { UI.Sound.unlock(); }, true);
+      // Browsers only allow audio after a tap; start the music on the first one.
+      document.addEventListener('pointerdown', function () {
+        UI.Sound.unlock();
+        if (UI.Music.on && !UI.Music.playing) UI.Music.start();
+      }, true);
       document.addEventListener('visibilitychange', function () { self.onVisibility(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && self.sheet && self.sheet !== 'result') self.closeSheet(); });
       $('overlay').addEventListener('click', function (e) { if (e.target === this && self.sheet !== 'confirm') self.closeSheet(); });
@@ -78,6 +83,8 @@
       var modes = CT.listModes();
       var html =
         '<header class="home-head"><p class="eyebrow">Card table</p>' +
+        '<span class="spacer"></span>' +
+        '<button class="icon-btn" id="h-music" type="button"></button>' +
         '<button class="icon-btn" id="h-sound" type="button"></button></header>' +
         '<h1 class="home-title">Pick a game</h1>';
       if (save) {
@@ -116,13 +123,18 @@
           fan.appendChild(UI.makeCard(c));
         });
       });
-      var snd = $('h-sound');
-      var paintSound = function () {
+      var snd = $('h-sound'), mus = $('h-music');
+      var paintAudio = function () {
+        mus.innerHTML = UI.Music.on ? UI.icon.musicOn : UI.icon.musicOff;
+        mus.setAttribute('aria-label', UI.Music.on ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+        mus.classList.toggle('off', !UI.Music.on);
         snd.innerHTML = UI.Sound.on ? UI.icon.soundOn : UI.icon.soundOff;
-        snd.setAttribute('aria-label', UI.Sound.on ? 'Sound on. Tap to mute.' : 'Sound off. Tap to turn on.');
+        snd.setAttribute('aria-label', UI.Sound.on ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+        snd.classList.toggle('off', !UI.Sound.on);
       };
-      paintSound();
-      snd.addEventListener('click', function () { self.toggleSound(); paintSound(); });
+      paintAudio();
+      mus.addEventListener('click', function () { self.toggleMusic(); paintAudio(); });
+      snd.addEventListener('click', function () { self.toggleSound(); paintAudio(); });
       if (save) $('h-resume').addEventListener('click', function () { self.resume(save); });
       home.querySelectorAll('[data-play]').forEach(function (b) {
         b.addEventListener('click', function () { self.openSetup(b.dataset.play); });
@@ -269,9 +281,20 @@
     },
 
     onVisibility: function () {
-      if (!this.session) return;
-      if (document.hidden) { this.session.pause(); this.save(); }
-      else if (!this.sheet && this.screen === 'table') this.session.resume();
+      if (document.hidden) {
+        UI.Music.stop();
+        if (this.session) { this.session.pause(); this.save(); }
+        return;
+      }
+      if (UI.Music.on) UI.Music.start();
+      if (this.session && !this.sheet && this.screen === 'table') this.session.resume();
+    },
+
+    toggleMusic: function () {
+      UI.Sound.unlock();
+      UI.Music.setOn(!UI.Music.on);
+      this.settings.music = UI.Music.on;
+      UI.store.set(SETTINGS_KEY, this.settings);
     },
 
     toggleSound: function () {

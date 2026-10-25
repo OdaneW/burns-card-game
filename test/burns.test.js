@@ -1,5 +1,5 @@
 /* Burns rules tests: hand-built scenarios plus thousands of all-bot games
-   checked for card conservation, follow-suit, privacy, cooldowns and timers.
+   checked for card conservation, follow-suit, privacy, draw pauses and timers.
    Run: node test/burns.test.js */
 'use strict';
 const path = require('path');
@@ -77,10 +77,11 @@ test('no Flush: set 1 follows the starter card’s suit', () => {
   conservation(s);
 });
 
-test('must follow suit; cannot draw while holding the suit', () => {
+test('must follow suit; players who start with the suit cannot draw', () => {
   const s = rigged({ hands: [H0, H1], starter: 'KD', deck: ['QC'] });
   Burns.tick(s, 0);
   eq(act(s, 'p0', 'draw').code, 'has-suit');
+  eq(Burns.view(s, 'p0').canDraw, false);
   eq(act(s, 'p0', 'follow', { cardId: '2S' }).code, 'wrong-suit');
   assert(act(s, 'p0', 'follow', { cardId: '5D' }).ok);
   eq(act(s, 'p0', 'follow', { cardId: '4C' }).code, 'done');
@@ -90,8 +91,7 @@ test('cards stay hidden until everyone has played, then reveal together', () => 
   const s = rigged({ hands: [H0, H1, H2], starter: 'KD', deck: ['QH'] });
   Burns.tick(s, 0);
   act(s, 'p0', 'follow', { cardId: '5D' });
-  const v1 = Burns.view(s, 'p1');
-  eq(v1.table.find(e => e.owner === 'p0').card, null, 'p0 card visible to p1 before reveal');
+  eq(Burns.view(s, 'p1').table.find(e => e.owner === 'p0').card, null, 'p0 card visible to p1 before reveal');
   eq(Burns.view(s, 'p0').table.find(e => e.owner === 'p0').card.id, '5D', 'own card visible');
   act(s, 'p1', 'follow', { cardId: '9D' });
   assert(Burns.view(s, 'p2').table.every(e => e.via === 'starter' || e.card === null), 'hidden for p2');
@@ -122,22 +122,40 @@ test('set winner leads any suit next; the set is put aside', () => {
   eq(s.discard.filter(c => ['5D', '9D', 'KD'].includes(c.id)).length, 3, 'previous set put aside');
 });
 
-test('no suit: draw until one turns up, then it is played; pause between draws', () => {
-  const s = rigged({ hands: [H0, H1], starter: 'KH', deck: ['QC', '4H', 'JS'] });
+test('no suit: draw until one turns up, then play it or keep drawing for a better one', () => {
+  const s = rigged({ hands: [H0, H1], starter: 'KH', deck: ['QC', '4H', 'JS', '9H', '2C'] });
   Burns.tick(s, 0);
   eq(act(s, 'p0', 'follow', { cardId: '2S' }).code, 'wrong-suit');
+  let v = Burns.view(s, 'p0');
+  assert(v.mustDraw && !v.canFollow, 'must draw first');
   const r1 = act(s, 'p0', 'draw', {}, 1000);
   assert(r1.ok && !r1.matched, 'first draw off-suit');
-  eq(ids(s.players[0].hand), ['2S', '3S', '4C', '5D', 'QC']);
   const spam = act(s, 'p0', 'draw', {}, 1200);
   eq(spam.code, 'cooldown'); assert(spam.retryInMs === 300, 'retry ' + spam.retryInMs);
   const r2 = act(s, 'p0', 'draw', {}, 1500);
   assert(r2.ok && r2.matched, 'second draw matches');
-  assert(s.committed.p0, 'committed');
-  eq(s.table.find(e => e.owner === 'p0').card.id, '4H');
-  eq(s.table.find(e => e.owner === 'p0').via, 'draw');
-  assert(s.voids.p0.includes('H'), 'known to be out of hearts');
+  eq(s.committed.p0, undefined, 'a found card is not played automatically');
+  v = Burns.view(s, 'p0');
+  assert(v.canFollow && v.mayDraw && !v.mustDraw, 'may play or keep drawing');
+  eq(v.playable, ['4H']);
+  assert(act(s, 'p0', 'draw', {}, 2000).ok, 'kept drawing (JS)');
+  assert(act(s, 'p0', 'draw', {}, 2500).matched, 'found 9H');
+  eq(Burns.view(s, 'p0').playable.sort(), ['4H', '9H']);
+  assert(act(s, 'p0', 'follow', { cardId: '9H' }, 2600).ok);
+  eq(s.table.find(e => e.owner === 'p0').card.id, '9H');
+  eq(ids(s.players[0].hand), ['2S', '3S', '4C', '5D', 'QC', '4H', 'JS'], 'every drawn card stays in the hand');
   conservation(s);
+});
+
+test('a found card stays private: others only see that a card was drawn', () => {
+  const s = rigged({ hands: [H0, H1], starter: 'KH', deck: ['4H', 'QC'] });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'draw', {}, 0);
+  const draws = Burns.view(s, 'p1', { sinceSeq: 0 }).events.filter(e => e.type === 'draw');
+  eq(draws.length, 1);
+  eq(draws[0].matched, undefined, 'match not public');
+  eq(draws[0].mine, undefined, 'card not shown to others');
+  eq(Burns.view(s, 'p0', { sinceSeq: 0 }).events.filter(e => e.type === 'draw')[0].mine.matched, true, 'drawer knows');
 });
 
 test('several players draw at the same time from one deck', () => {
@@ -146,12 +164,24 @@ test('several players draw at the same time from one deck', () => {
   assert(act(s, 'p0', 'draw', {}, 0).ok);                 // QD
   const r = act(s, 'p1', 'draw', {}, 10);                // 2H, no clash with p0's pause
   assert(r.ok && r.matched, 'p1 matched');
+  assert(act(s, 'p1', 'follow', { cardId: '2H' }, 20).ok);
   assert(act(s, 'p2', 'follow', { cardId: '10H' }, 20).ok);
   assert(act(s, 'p0', 'draw', {}, 600).ok);               // 9C
-  const r3 = act(s, 'p0', 'draw', {}, 1100);             // 3H
-  assert(r3.ok && r3.matched, 'p0 matched');
+  assert(act(s, 'p0', 'draw', {}, 1100).matched);         // 3H
+  assert(act(s, 'p0', 'follow', { cardId: '3H' }, 1200).ok);
   eq(s.phase, 'reveal'); eq(s.setResult.player, 'p2');
   conservation(s);
+});
+
+test('deck runs out after finding the suit: not stuck, must play it', () => {
+  const s = rigged({ hands: [H0, H1], starter: 'KH', deck: ['4H', 'QC'] });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'draw', {}, 0);       // 4H
+  act(s, 'p0', 'draw', {}, 500);     // QC, deck empty
+  eq(s.takers, [], 'holds a heart, so not stuck');
+  const v = Burns.view(s, 'p0');
+  assert(v.canFollow && !v.canDraw, 'can only play now');
+  assert(act(s, 'p0', 'follow', { cardId: '4H' }, 600).ok);
 });
 
 // p0 holds a heart; p1 and p2 hold none.
@@ -159,7 +189,7 @@ const DE0 = ['2H', '3S', '4C', '4S'];
 const DE1 = ['6S', '7S', '8C', '9D'];
 const DE2 = ['10S', 'JS', 'QC', 'AD'];
 
-test('deck runs out: stuck players pick up a card from the set (Pick up)', () => {
+test('deck runs out: stuck players pick up a card from the set', () => {
   const s = rigged({ hands: [DE0, DE1, DE2], starter: 'KH', deck: ['QD'] });
   Burns.tick(s, 0);
   assert(act(s, 'p0', 'follow', { cardId: '2H' }, 0).ok);
@@ -168,6 +198,7 @@ test('deck runs out: stuck players pick up a card from the set (Pick up)', () =>
   eq(s.takers.slice().sort(), ['p1', 'p2']);
   eq(s.phase, 'take', 'take phase begins once everyone else is in');
   eq(s.takeEndsAt, 10000);
+  eq(s.turnEndsAt, null, 'set timer stops for the take phase');
   assert(Burns.view(s, 'p1').canTake);
   eq(act(s, 'p0', 'take', { cardId: 'KH' }, 100).code, 'not-taker');
   assert(act(s, 'p2', 'take', { cardId: 'KH' }, 200).ok);     // takes the starter
@@ -213,8 +244,8 @@ test('more stuck players than cards: a random one of them takes it', () => {
     s.rng = seed * 104729;
     Burns.tick(s, 0);
     act(s, 'p0', 'follow', { cardId: '2H' }, 0);
-    act(s, 'p1', 'draw', {}, 0);   // 8H
-    act(s, 'p2', 'draw', {}, 0);   // 9H → p2 wins the set, deck empty
+    act(s, 'p1', 'draw', {}, 0); act(s, 'p1', 'follow', { cardId: '8H' }, 0);
+    act(s, 'p2', 'draw', {}, 0); act(s, 'p2', 'follow', { cardId: '9H' }, 0);   // p2 wins, deck empty
     eq(s.setResult.player, 'p2');
     Burns.tick(s, 100);
     act(s, 'p2', 'lead', { cardId: 'JS' }, 100);   // nobody else has spades
@@ -228,22 +259,6 @@ test('more stuck players than cards: a random one of them takes it', () => {
     conservation(s);
   }
   assert(seen.p0 > 15 && seen.p1 > 15, 'random choice is spread: ' + JSON.stringify(seen));
-});
-
-test('Take and play: the taken card counts for the taker', () => {
-  const s = rigged({ hands: [DE0, DE1, ['10H', 'JS', 'QC', 'QS']], starter: '3H', deck: ['QD'], options: { deckEmpty: 'takeAndPlay' } });
-  Burns.tick(s, 0);
-  act(s, 'p0', 'follow', { cardId: '2H' }, 0);
-  act(s, 'p2', 'follow', { cardId: '10H' }, 0);
-  act(s, 'p1', 'draw', {}, 0);   // QD → deck empty, p1 stuck
-  eq(s.phase, 'take');
-  assert(act(s, 'p1', 'take', { cardId: '10H' }, 500).ok);
-  eq(s.phase, 'reveal');
-  eq(s.setResult.player, 'p1', 'taker wins with the taken 10H');
-  eq(s.players[1].hand.length, 5, 'taker’s hand unchanged by the take');
-  Burns.tick(s, 600);
-  conservation(s);
-  assert(s.discard.some(c => c.id === '10H'), 'taken card is put aside with the set');
 });
 
 test('the leader’s card: suit only vs face up', () => {
@@ -263,12 +278,54 @@ test('the leader’s card: suit only vs face up', () => {
   eq(shown.table.find(e => e.via === 'lead').card.id, '7S');
 });
 
+test('set timer: an idle leader leads a random card', () => {
+  const s = rigged({ hands: [H0, H1], starter: 'KD', deck: ['QH', 'JH'], options: { turnTime: '15' } });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5D' }, 100); act(s, 'p1', 'follow', { cardId: '9D' }, 200);
+  Burns.tick(s, 300);                                    // set 2, p1 leads
+  eq(s.turnEndsAt, 300 + 15000);
+  eq(Burns.tick(s, 15299), false, 'not before time');
+  eq(Burns.tick(s, 15300), true);
+  eq(s.phase, 'follow');
+  const e = s.table.find(x => x.via === 'lead');
+  assert(e && e.owner === 'p1' && e.auto, 'random card led for p1');
+  eq(s.events.filter(x => x.type === 'timeout').map(x => x.players), [['p1']]);
+  eq(s.turnEndsAt, 15300 + 15000, 'followers get a fresh 15 seconds');
+  conservation(s);
+});
+
+test('set timer: idle followers get a random card of the suit, or draw until one turns up', () => {
+  const s = rigged({ hands: [['7S', '3H', '5H', '6S'], H0, ['8S', '9S', '10D', 'JD']], starter: 'KH', deck: ['QC', '7H', 'AH'] });
+  Burns.tick(s, 0);
+  eq(s.turnEndsAt, 30000, '30 seconds by default');
+  Burns.tick(s, 30000);
+  eq(s.committed.p0 && s.committed.p1, true);
+  assert(['3H', '5H'].includes(s.table.find(e => e.owner === 'p0').card.id), 'p0 played one of their hearts');
+  eq(s.table.find(e => e.owner === 'p1').card.id, '7H', 'p1 drew QC then 7H, and 7H was played');
+  eq(s.drawn.p1, 2);
+  // p2 had no hearts either: drew AH and played it
+  eq(s.table.find(e => e.owner === 'p2').card.id, 'AH');
+  eq(s.phase, 'reveal'); eq(s.setResult.player, 'p2');
+  conservation(s);
+});
+
+test('set timer: running out of deck on a forced draw leads to the take phase', () => {
+  const s = rigged({ hands: [DE0, DE1, DE2], starter: 'KH', deck: ['QD'] });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '2H' }, 0);
+  Burns.tick(s, 30000);
+  eq(s.phase, 'take');
+  eq(s.takers.slice().sort(), ['p1', 'p2']);
+  conservation(s);
+});
+
 test('first to empty their hand wins; a same-set tie goes to the higher card', () => {
   const s = rigged({ hands: [['5H'], ['9H'], ['2S', '3S']], starter: 'KH', deck: ['QC', 'QD', '4H'] });
   Burns.tick(s, 0);
   act(s, 'p0', 'follow', { cardId: '5H' }, 0);
   act(s, 'p1', 'follow', { cardId: '9H' }, 0);
   act(s, 'p2', 'draw', {}, 0); act(s, 'p2', 'draw', {}, 500); act(s, 'p2', 'draw', {}, 1000);
+  act(s, 'p2', 'follow', { cardId: '4H' }, 1100);
   eq(s.phase, 'over'); eq(s.winReason, 'empty'); eq(s.winners, ['p1']);
   eq(Burns.view(s, 'p0').players[2].hand.length, 4, 'hands are shown at game over');
 });
@@ -304,11 +361,11 @@ test('save and restore a session mid-game', () => {
   const back = CT.Session.restore(saved);
   assert(back, 'restored');
   eq(back.state.seq, sess.state.seq);
-  eq(CT.Session.restore(Object.assign({}, saved, { engineVersion: 999 })), null, 'incompatible save rejected');
+  eq(CT.Session.restore(Object.assign({}, saved, { engineVersion: 1 })), null, 'saves from older rules are rejected');
 });
 
 /* ---------------------------------------------------------------------------
-   All-bot simulations
+   Simulations: all-bot games, plus games where one player never acts
    --------------------------------------------------------------------------- */
 console.log('\nSimulations');
 
@@ -319,8 +376,8 @@ function walkCards(obj, fn) {
   for (const k in obj) walkCards(obj[k], fn);
 }
 
-function simulate({ seed, nPlayers, options, spam }) {
-  const players = Array.from({ length: nPlayers }, (_, i) => ({ id: 'p' + i, name: 'P' + i, isBot: true }));
+function simulate({ seed, nPlayers, options, spam, idle }) {
+  const players = Array.from({ length: nPlayers }, (_, i) => ({ id: 'p' + i, name: 'P' + i, isBot: !(idle && i === 0) }));
   const clock = new CT.ManualClock(0);
   const sess = new CT.Session({ modeId: 'burns', players, options, seed, clock, botSeed: seed * 31 + 7 });
   const st = () => sess.state;
@@ -328,14 +385,13 @@ function simulate({ seed, nPlayers, options, spam }) {
   players.forEach(p => { knows[p.id] = new Set(); });
   let lastSeq = -1;
   const lastDraw = {};
-  const stats = { sets: 0, takePhases: 0, autoTakes: 0, draws: 0, flush: false, maxHand: 0, spamBlocked: 0 };
+  const stats = { sets: 0, takePhases: 0, autoTakes: 0, timeouts: 0, extraDraws: 0, flush: false, maxHand: 0, spamBlocked: 0 };
 
   const check = () => {
     const s = st();
     conservation(s);
     if (s.seq === lastSeq) return;
     lastSeq = s.seq;
-    // follow-suit on the table
     if (s.table.length) s.table.forEach(e => assert(e.card.suit === s.suit, 'off-suit card on table'));
     // every player's knowledge grows only through legitimate channels
     s.players.forEach(p => {
@@ -349,6 +405,7 @@ function simulate({ seed, nPlayers, options, spam }) {
       if (s.phase === 'over') s.players.forEach(q => q.hand.forEach(c => K.add(c.id)));
       const v = sess.view(p.id, { sinceSeq: 0 });
       walkCards(v, c => assert(K.has(c.id), p.id + ' can see ' + c.id + ' without knowing it (phase ' + s.phase + ')'));
+      v.events.filter(ev => ev.type === 'draw').forEach(ev => assert(ev.matched === undefined, 'draw result made public'));
       if (s.phase === 'follow') {
         v.table.forEach(e => {
           if (e.owner && e.owner !== p.id && (e.via !== 'lead' || s.options.leadCard === 'suitOnly')) assert(e.card === null, 'hidden card exposed');
@@ -358,27 +415,28 @@ function simulate({ seed, nPlayers, options, spam }) {
     });
   };
 
+  const matchedAt = {};
   sess.on(() => {
     const s = st();
-    const e = s.events[s.events.length - 1];
-    // cooldown audit: scan new draw events
     s.events.forEach(ev => {
-      if (ev.type !== 'draw' || ev._audited) return;
+      if (ev._audited) return;
       ev._audited = true;
-      stats.draws++;
+      if (ev.type === 'setStart') { for (const k in matchedAt) delete matchedAt[k]; }
+      if (ev.type === 'timeout') stats.timeouts++;
+      if (ev.type === 'takeStart') stats.takePhases++;
+      if (ev.type === 'take' && ev.auto) stats.autoTakes++;
+      if (ev.type !== 'draw') return;
+      if (matchedAt[ev.player]) stats.extraDraws++;
+      if (ev.secret[ev.player].matched) matchedAt[ev.player] = true;
+      if (ev.auto) return;  // time-out draws happen all at once
       if (lastDraw[ev.player] != null) assert(ev.t - lastDraw[ev.player] >= s.timing.drawCooldownMs, 'draws too close');
       lastDraw[ev.player] = ev.t;
       if (spam) {
         const r = Burns.act(s, ev.player, 'draw', {}, clock.now());
-        if (r.ok) {
-          // allowed only if the player was no longer drawing
-          throw new Error('spam draw accepted');
-        }
+        if (r.ok) throw new Error('spam draw accepted');
         if (r.code === 'cooldown') stats.spamBlocked++;
       }
     });
-    if (e && e.type === 'takeStart') stats.takePhases++;
-    if (e && e.type === 'take' && e.auto) stats.autoTakes++;
   });
 
   check();
@@ -387,36 +445,37 @@ function simulate({ seed, nPlayers, options, spam }) {
     clock.advance(50);
     sess.tick();
     check();
-    if (++guard > 200000) throw new Error('game did not finish (seed ' + seed + ')');
+    if (++guard > 400000) throw new Error('game did not finish (seed ' + seed + ')');
   }
   stats.sets = st().setNo;
   stats.flush = st().winReason === 'flush';
   stats.time = clock.now();
-  stats.winners = st().winners;
   return stats;
 }
 
 const configs = [];
 [2, 3, 4, 5, 6].forEach(n => {
-  [{ deckEmpty: 'pickUp', leadCard: 'suitOnly' }, { deckEmpty: 'takeAndPlay', leadCard: 'faceUp' }, { deckEmpty: 'pickUp', leadCard: 'faceUp' }, { deckEmpty: 'takeAndPlay', leadCard: 'suitOnly' }]
-    .forEach(options => configs.push({ n, options }));
+  [{ leadCard: 'suitOnly', turnTime: '30' }, { leadCard: 'faceUp', turnTime: '15' }].forEach(options => {
+    configs.push({ n, options, games: 200 });
+  });
+  configs.push({ n, options: { leadCard: 'suitOnly', turnTime: '15' }, games: 40, idle: true });
 });
 
 const summary = {};
-let simFail = 0;
+let simFail = 0, total = 0;
 const t0 = Date.now();
-configs.forEach(({ n, options }, ci) => {
-  const games = 120;
-  const key = n + 'p ' + options.deckEmpty + '/' + options.leadCard;
-  const agg = { games: 0, flush: 0, sets: [], take: 0, auto: 0, maxHand: 0, minutes: [], spamBlocked: 0 };
+configs.forEach(({ n, options, games, idle }, ci) => {
+  const key = n + 'p ' + options.leadCard + ' ' + options.turnTime + 's' + (idle ? ' · idle player' : '');
+  const agg = { games: 0, flush: 0, sets: [], take: 0, timeouts: 0, extra: 0, maxHand: 0, minutes: [], spamBlocked: 0 };
   for (let g = 0; g < games; g++) {
-    const seed = 1000 + ci * 1000 + g;
+    const seed = 5000 + ci * 1000 + g;
+    total++;
     try {
-      const r = simulate({ seed, nPlayers: n, options, spam: g % 4 === 0 });
+      const r = simulate({ seed, nPlayers: n, options, spam: g % 4 === 0, idle });
       agg.games++;
-      if (r.flush) agg.flush++; else agg.sets.push(r.sets);
-      agg.take += r.takePhases; agg.auto += r.autoTakes; agg.maxHand = Math.max(agg.maxHand, r.maxHand);
-      if (!r.flush) agg.minutes.push(r.time / 60000);
+      if (r.flush) agg.flush++; else { agg.sets.push(r.sets); agg.minutes.push(r.time / 60000); }
+      agg.take += r.takePhases; agg.timeouts += r.timeouts; agg.extra += r.extraDraws;
+      agg.maxHand = Math.max(agg.maxHand, r.maxHand);
       agg.spamBlocked += r.spamBlocked;
     } catch (e) {
       simFail++;
@@ -430,13 +489,14 @@ configs.forEach(({ n, options }, ci) => {
     flushPct: Math.round(100 * agg.flush / agg.games),
     avgSets: avg(agg.sets).toFixed(1),
     p95Sets: sorted[Math.floor(sorted.length * 0.95)] || 0,
-    takePhasesPerGame: (agg.take / agg.games).toFixed(2),
+    takesPerGame: (agg.take / agg.games).toFixed(2),
+    timeoutsPerGame: (agg.timeouts / agg.games).toFixed(2),
+    extraDrawsPerGame: (agg.extra / agg.games).toFixed(2),
     avgMinutes: avg(agg.minutes).toFixed(1),
-    maxHand: agg.maxHand,
-    spamBlocked: agg.spamBlocked
+    maxHand: agg.maxHand
   };
 });
-if (simFail === 0) { passed++; console.log('  ✓ ' + configs.length * 120 + ' all-bot games finished with every invariant intact (' + ((Date.now() - t0) / 1000).toFixed(1) + 's)'); }
+if (simFail === 0) { passed++; console.log('  ✓ ' + total + ' simulated games finished with every invariant intact (' + ((Date.now() - t0) / 1000).toFixed(1) + 's)'); }
 else { failed++; console.log('  ✗ ' + simFail + ' simulated games failed'); }
 console.table(summary);
 
