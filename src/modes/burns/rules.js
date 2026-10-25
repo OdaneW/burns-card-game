@@ -4,7 +4,7 @@
    either changes the state or explains why it can't. No timers, no DOM.
 
    Flow of one game
-     dealing ──(flush?)──► over
+     dealing ──(Flush rule on and someone holds one)──► over
         └──► set 1: starter card sets the suit ─► follow ─► [take] ─► reveal
      reveal ──► lead (set winner plays any suit) ─► follow ─► [take] ─► reveal …
      A set ends with everyone's card revealed; whoever has emptied their hand
@@ -20,17 +20,30 @@
   var DEFAULT_TIMING = {
     drawCooldownMs: 500,   // minimum gap between two draws by the same player
     takeWindowMs: 10000,   // time to choose a card from the set when the deck is empty
-    dealHoldMs: 1900,      // pause after the deal before the Flush check
+    dealHoldMs: 1900,      // pause after the deal before play (and the Flush check)
     revealHoldMs: 2700     // how long a revealed set stays on the table
   };
 
   /* Rule choices the user can switch on the setup screen. Add new house
-     rules here; the setup screen and the rules text pick them up. */
+     rules here; the setup screen and the rules text pick them up.
+     formerDefaults lists values that used to be the default: a choice saved
+     by an older version that matches one was never really picked, so the
+     current default replaces it. */
   var OPTIONS = [
+    {
+      id: 'flush',
+      label: 'Flush',
+      default: 'off',
+      choices: [
+        { value: 'off', label: 'Off', help: 'A hand with one card of every suit is just a normal hand. Play always begins after the deal.' },
+        { value: 'on', label: 'On', help: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins.' }
+      ]
+    },
     {
       id: 'leadCard',
       label: 'The leader’s card',
-      default: 'suitOnly',
+      default: 'faceUp',
+      formerDefaults: ['suitOnly'],
       choices: [
         { value: 'suitOnly', label: 'Suit only', help: 'Everyone sees which suit was led. The card itself stays hidden until the reveal.' },
         { value: 'faceUp', label: 'Face up', help: 'The lead card is shown to everyone as soon as it is played.' }
@@ -72,6 +85,11 @@
     return (Number(state.options.turnTime) || 30) * 1000;
   }
   function deadline(state, now) { var ms = turnMs(state); return ms ? now + ms : null; }
+
+  /* The Flush rule. Games saved before it became a choice always had it on. */
+  function flushOn(state) {
+    return state.options.flush == null ? true : state.options.flush === 'on';
+  }
 
   function secretFor(pid, data) { var s = {}; s[pid] = data; return s; }
 
@@ -422,7 +440,7 @@
 
   function tick(state, now) {
     if (state.phase === 'dealing' && now >= state.phaseEndsAt) {
-      var flush = state.players.filter(function (p) {
+      var flush = !flushOn(state) ? [] : state.players.filter(function (p) {
         return CT.SUITS.every(function (s) { return CT.hasSuit(p.hand, s); });
       });
       if (flush.length) {
@@ -432,7 +450,7 @@
         emit(state, now, { type: 'flush', players: state.winners, hands: handsOf(state) });
         emit(state, now, { type: 'gameOver', reason: 'flush', winners: state.winners, hands: handsOf(state) });
       } else {
-        emit(state, now, { type: 'noFlush' });
+        if (flushOn(state)) emit(state, now, { type: 'noFlush' });
         startSet(state, now, null);
       }
       return true;
@@ -483,6 +501,7 @@
       leader: state.leader,
       suit: state.suit,
       options: state.options,
+      flushRule: flushOn(state),
       timing: { drawCooldownMs: state.timing.drawCooldownMs, takeWindowMs: state.timing.takeWindowMs, turnMs: turnMs(state) },
       phaseEndsAt: state.phaseEndsAt,
       turnEndsAt: state.turnEndsAt,
@@ -549,9 +568,12 @@
       ? 'Everyone sees the suit that was led; the card itself stays hidden until the reveal.'
       : 'The lead card is shown to everyone straight away.';
     var secs = Number(o.turnTime) || 30;
+    var flushText = o.flush === 'on'
+      ? 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.'
+      : 'A Flush is 4 starting cards that include all four suits. It only counts when the Flush rule is switched on in the game setup; then it wins before play begins. The rule is off, so play always begins after the deal.';
     return [
       { title: 'The deal', text: 'Everyone gets 4 cards from a standard 52-card deck. One more card is turned face up. Its suit must be followed in the first set.' },
-      { title: 'Flush', text: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.' },
+      { title: 'Flush', text: flushText },
       { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
       { title: 'Winning a set', text: 'The highest card wins the set. Cards rank 2 (low) up to 10, Jack, Queen, King and Ace (high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
       { title: 'Drawing', text: 'Before you play, you may draw from the deck to look for a better card of the suit, but every card you draw stays in your hand. If you don’t have the suit, you must draw until one turns up; then play it or keep drawing. Everyone draws at the same time, with a short pause between draws. The leader doesn’t draw.' },

@@ -56,17 +56,38 @@ const H0 = ['2S', '3S', '4C', '5D'];   // no hearts
 const H1 = ['6H', '7S', '8S', '9D'];   // no clubs
 const H2 = ['10H', 'JS', 'QS', 'AD'];  // no clubs
 
-test('a Flush on the deal wins immediately', () => {
-  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7S', '8H', '9H']], starter: 'KD', deck: ['QC'] });
+test('defaults: Flush off, leader’s card face up, 30 seconds to play', () => {
+  const s = Burns.createGame({ players: [{ id: 'p0', name: 'A' }, { id: 'p1', name: 'B' }], seed: 1, now: 0 });
+  eq(s.options, { flush: 'off', leadCard: 'faceUp', turnTime: '30' });
+});
+
+test('Flush rule on: a Flush on the deal wins immediately', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7S', '8H', '9H']], starter: 'KD', deck: ['QC'], options: { flush: 'on' } });
   Burns.tick(s, 0);
   eq(s.phase, 'over'); eq(s.winners, ['p0']); eq(s.winReason, 'flush');
   conservation(s);
 });
 
-test('two Flushes share the win', () => {
-  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7H', '8C', '9D'], ['10S', 'JS', 'QS', 'KS']], starter: 'AD', deck: [] });
+test('Flush rule on: two Flushes share the win', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7H', '8C', '9D'], ['10S', 'JS', 'QS', 'KS']], starter: 'AD', deck: [], options: { flush: 'on' } });
   Burns.tick(s, 0);
   eq(s.winners, ['p0', 'p1']);
+});
+
+test('Flush rule off: a hand with all four suits just plays', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7S', '8H', '9H']], starter: 'KD', deck: ['QC'], options: { flush: 'off' } });
+  Burns.tick(s, 0);
+  eq(s.phase, 'follow'); assert(!s.winReason, 'nobody has won'); eq(s.suit, 'D');
+  eq(s.events.filter(e => /lush/.test(e.type)).length, 0, 'no Flush events');
+  assert(Burns.view(s, 'p0').flushRule === false);
+  conservation(s);
+});
+
+test('a game saved before Flush became a choice keeps the Flush rule', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7S', '8H', '9H']], starter: 'KD', deck: ['QC'] });
+  delete s.options.flush;
+  Burns.tick(s, 0);
+  eq(s.winReason, 'flush');
 });
 
 test('no Flush: set 1 follows the starter card’s suit', () => {
@@ -460,17 +481,17 @@ function simulate({ seed, nPlayers, options, spam, idle }) {
 
 const configs = [];
 [2, 3, 4, 5, 6].forEach(n => {
-  [{ leadCard: 'suitOnly', turnTime: '30' }, { leadCard: 'faceUp', turnTime: '15' }].forEach(options => {
+  [{ flush: 'off', leadCard: 'faceUp', turnTime: '30' }, { flush: 'on', leadCard: 'suitOnly', turnTime: '15' }].forEach(options => {
     configs.push({ n, options, games: 200 });
   });
-  configs.push({ n, options: { leadCard: 'suitOnly', turnTime: '15' }, games: 40, idle: true });
+  configs.push({ n, options: { flush: 'off', leadCard: 'suitOnly', turnTime: '15' }, games: 40, idle: true });
 });
 
 const summary = {};
 let simFail = 0, total = 0;
 const t0 = Date.now();
 configs.forEach(({ n, options, games, idle }, ci) => {
-  const key = n + 'p ' + options.leadCard + ' ' + options.turnTime + 's' + (idle ? ' · idle player' : '');
+  const key = n + 'p ' + options.leadCard + ' ' + options.turnTime + 's flush ' + options.flush + (idle ? ' · idle player' : '');
   const agg = { games: 0, flush: 0, sets: [], take: 0, timeouts: 0, extra: 0, maxHand: 0, minutes: [], spamBlocked: 0 };
   for (let g = 0; g < games; g++) {
     const seed = 5000 + ci * 1000 + g;
@@ -487,6 +508,7 @@ configs.forEach(({ n, options, games, idle }, ci) => {
       if (simFail < 6) console.log('  ✗ ' + key + ' seed ' + seed + ': ' + e.message);
     }
   }
+  if (options.flush === 'off' && agg.flush) { simFail++; console.log('  ✗ ' + key + ': a Flush won with the rule off'); }
   const avg = a => a.length ? (a.reduce((x, y) => x + y, 0) / a.length) : 0;
   const sorted = agg.sets.slice().sort((a, b) => a - b);
   summary[key] = {

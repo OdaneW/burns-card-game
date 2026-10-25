@@ -39,6 +39,7 @@
     boot: function (data) {
       var self = this;
       this.settings = UI.store.get(SETTINGS_KEY, {}) || {};
+      this.migrateSettings();
       this.stats = UI.store.get(STATS_KEY, {}) || {};
       UI.Sound.on = this.settings.sound !== false;
       UI.Music.on = this.settings.music !== false;
@@ -66,6 +67,29 @@
 
     snapshot: function () {
       return { save: this.currentSave(), screen: this.screen };
+    },
+
+    /* Setup saves only the choices you actually tap, so when a default changes
+       in an update it reaches everyone who never picked otherwise. Versions
+       before 0.4 saved every rule; keep only values that differ from anything
+       that has been the default. */
+    migrateSettings: function () {
+      var s = this.settings;
+      if (s.format >= 2) return;
+      CT.listModes().forEach(function (m) {
+        var cfg = s[m.id];
+        if (!cfg || typeof cfg !== 'object') return;
+        if (cfg.opponents === m.players.default - 1) delete cfg.opponents;
+        var kept = {};
+        (m.options || []).forEach(function (o) {
+          var v = cfg.options ? cfg.options[o.id] : undefined;
+          if (v == null || v === o.default || (o.formerDefaults || []).indexOf(v) >= 0) return;
+          kept[o.id] = v;
+        });
+        cfg.options = kept;
+      });
+      s.format = 2;
+      UI.store.set(SETTINGS_KEY, s);
     },
 
     /* ---------- screens ---------- */
@@ -194,8 +218,9 @@
         });
       };
       var store = function (patch) {
-        var cur = self.modeSettings(mode);
-        var next = { opponents: cur.opponents, options: Object.assign({}, cur.options) };
+        // only what was tapped; untouched rules follow the defaults
+        var saved = self.settings[mode.id] || {};
+        var next = { opponents: saved.opponents, options: Object.assign({}, saved.options) };
         if (patch.opponents != null) next.opponents = patch.opponents;
         if (patch.opt) next.options[patch.opt] = patch.val;
         self.settings[mode.id] = next;

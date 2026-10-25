@@ -44,13 +44,15 @@ at the bottom of the menu screen.
 3. Add the new files to `SOURCES` in `build.js`.
 
 The menu lists every registered mode, and each mode's rule choices appear on its setup screen automatically.
+The setup screen saves only the choices a player actually taps, so changing an option's `default` in an
+update reaches everyone who left that option alone.
 
 ## Developing
 
 Needs Node 18 or newer. There are no dependencies.
 
 ```sh
-npm test         # rule scenarios plus 2,400 simulated all-bot games
+npm test         # rule scenarios plus 2,200 simulated all-bot games
 npm run build    # rebuild docs/ and dist/
 ```
 

@@ -50,7 +50,7 @@
         { next: true, title: 'Welcome to Burns', text: 'You’re playing against Mia and Dex. The goal is simple: be the first to get rid of all your cards.' },
         { next: true, target: 'hand', text: 'These are your cards. Only you can see them.' },
         { next: true, target: 'lead', text: 'Everyone gets 4 cards, then one more is turned face up: the starter. Its suit, ' + S('D') + ' diamonds, is the suit everyone must play in the first set.' },
-        { next: true, title: 'Lucky deal?', text: 'If your 4 starting cards are all different suits, that’s a Flush and you win on the spot. No Flush this time, so let’s play.' },
+        { next: true, title: 'Lucky deal?', text: 'There’s an optional Flush rule you can switch on before a game: if your 4 starting cards are all different suits, you win on the spot. It’s off here, so let’s play.' },
         { target: 'card:KD', text: 'Play a diamond. Tap your ' + K('KD') + ' once to pick it, then tap it again, or press Play.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
         { target: 'seats', text: 'Your card lies face down, so Mia and Dex can’t see it. When everyone has played, all the cards are turned over together.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
         { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
@@ -66,7 +66,7 @@
       steps: [
         { next: true, target: 'hand', title: 'Leading', text: 'The winner of a set leads the next one. This time that’s you: play any card you like, and its suit becomes the suit everyone must follow.' },
         { target: 'hand', text: 'Lead one of your hearts.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
-        { target: 'seats', text: 'The others only see the suit you led, not the card. Mia and Dex have no hearts, so they must draw from the deck until a heart turns up.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
+        { target: 'seats', text: 'The leader’s card is played face up, so Mia and Dex can see what they have to beat. Neither has a heart, so they must draw from the deck until one turns up.', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
         { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
           return 'Every card they drew stays in their hand. That’s the price of not having the suit. ' + winText(ctx);
         } }
@@ -79,11 +79,13 @@
       deck: ['10H', '4S', 'AS', '5D'],
       bots: { p2: { lead: 'KS' } },
       steps: [
-        { target: 'lead', title: 'Drawing', text: 'Dex won the last set, so Dex leads. Watch which suit he picks.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
-        { target: 'deck', text: 'Dex led ' + S('S') + ' spades, and you don’t have any. Tap the deck to draw, and keep going until a spade turns up.', done: function (ctx) { return ctx.v.canFollow || ctx.me.committed; } },
+        { target: 'lead', title: 'Drawing', text: 'Dex won the last set, so Dex leads. Watch what he plays.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'deck', text: 'Dex led the ' + K('KS') + ', and you don’t have any spades. Tap the deck to draw, and keep going until a spade turns up.', done: function (ctx) { return ctx.v.canFollow || ctx.me.committed; } },
         { text: function (ctx) {
           var best = bestOfSuit(ctx);
-          return 'You found ' + (best ? 'the ' + UI.cardText(best) : 'a spade') + '. Play it now, or tap the deck again to look for a higher spade. Every card you draw stays in your hand, so it’s a gamble.';
+          if (!best) return 'Play a spade, or tap the deck again to look for a higher one.';
+          if (val(best) > val(C('KS'))) return 'You found the ' + UI.cardText(best) + ', and it beats Dex’s ' + K('KS') + '. Play it!';
+          return 'You found the ' + UI.cardText(best) + ', but Dex’s ' + K('KS') + ' beats it. Play it anyway, or tap the deck again to look for a higher spade. Every card you draw stays in your hand, so it’s a gamble.';
         }, done: function (ctx) { return ctx.me.committed; }, after: 400 },
         { target: 'seats', text: 'Now everyone’s card is in…', done: function (ctx) { return ctx.v.revealed; }, after: 1500 },
         { next: true, target: function (ctx) { return 'slot:' + winner(ctx); }, text: function (ctx) {
@@ -103,7 +105,7 @@
       bots: { p1: { lead: 'JH' } },
       steps: [
         { target: 'deck', title: 'When the deck runs out', text: 'Mia leads this set. Look at the deck: only one card is left.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
-        { target: 'deck', text: 'Mia led ' + S('H') + ' hearts and you have none. Draw the last card.', done: function (ctx) { return ctx.v.deckCount === 0 || ctx.me.committed; } },
+        { target: 'deck', text: 'Mia led the ' + K('JH') + ' and you have no hearts. Draw the last card.', done: function (ctx) { return ctx.v.deckCount === 0 || ctx.me.committed; } },
         { target: 'seats', text: 'The deck is empty and you still have no hearts, so you can’t play this set. Instead, pick up one card from the set into your hand. In a real game you have 10 seconds. Tap a glowing card.', done: function (ctx) { return !!ctx.me.took || ctx.v.phase === 'reveal'; }, after: 900 },
         { next: true, target: 'slot:p1', text: function (ctx) {
           var took = ctx.me.took ? K(ctx.me.took) : 'a card';
@@ -201,7 +203,7 @@
   function makeSession(lesson) {
     var mode = Object.assign({}, Burns, { bot: scriptedBot(lesson) });
     var timing = Object.assign({ dealHoldMs: 0, revealHoldMs: 2600, takeWindowMs: 60000, turnMs: 0 }, lesson.timing || {});
-    var session = new CT.Session({ mode: mode, players: PLAYERS, options: { leadCard: 'suitOnly', turnTime: '30' }, seed: 7, timing: timing });
+    var session = new CT.Session({ mode: mode, players: PLAYERS, options: { flush: 'off', leadCard: 'faceUp', turnTime: '30' }, seed: 7, timing: timing });
     rig(session.state, lesson, session.now());
     mode.tick(session.state, session.now());   // start the set right away
     return session;

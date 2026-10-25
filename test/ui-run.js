@@ -149,9 +149,9 @@ async function playGame(p, tag, want) {
     }
 
     if (SCENARIO === 'small') {
-      // 360×640, five opponents, Take and play + face-up leads, double speed
+      // 360×640, five opponents, Flush rule on, double speed
       const p = await open(browser, { ctx: { viewport: { width: 360, height: 640 } }, seed: 4242, speed: 2,
-        settings: { burns: { opponents: 5, options: { deckEmpty: 'takeAndPlay', leadCard: 'faceUp' } } } });
+        settings: { format: 2, burns: { opponents: 5, options: { flush: 'on' } } } });
       await p.tap('[data-play="burns"]');
       await sleep(200);
       await p.tap('#s-deal');
@@ -163,6 +163,31 @@ async function playGame(p, tag, want) {
         if (v.reason !== 'flush') real++;
         await p.tap('#r-again'); await sleep(300);
       }
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (SCENARIO === 'settings') {
+      // Settings saved by 0.3 stored every rule. After the update, rules left at the old
+      // defaults follow the new ones; a real choice (15 seconds) survives.
+      const p = await open(browser, { ctx: { viewport: { width: 390, height: 780 } }, seed: 5,
+        settings: { music: true, burns: { opponents: 3, options: { leadCard: 'suitOnly', turnTime: '15' } } } });
+      const stored = () => p.evaluate(() => JSON.parse(localStorage.getItem('cardtable.settings.v1')));
+      console.log('  migrated:', JSON.stringify(await stored()));
+      await p.tap('[data-play="burns"]');
+      await sleep(300);
+      await shot(p, '40-setup-migrated');
+      await p.tap('[data-opt="flush"][data-val="on"]');
+      await sleep(200);
+      await shot(p, '41-setup-flush-on');
+      console.log('  after picking Flush on:', JSON.stringify((await stored()).burns));
+      await p.tap('#s-deal');
+      await sleep(400);
+      console.log('  game options:', JSON.stringify(await p.evaluate(() => CT.App.session.state.options)));
+      await p.tap('#t-menu');
+      await sleep(200);
+      await p.tap('#m-rules');
+      await sleep(300);
+      await shot(p, '42-rules-flush-on');
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
@@ -212,7 +237,7 @@ async function playGame(p, tag, want) {
     if (SCENARIO === 'timer') {
       // Sit idle with a 15-second limit: the countdown appears, then a card is played for you.
       const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 31,
-        settings: { burns: { opponents: 3, options: { leadCard: 'suitOnly', turnTime: '15' } } } });
+        settings: { format: 2, burns: { opponents: 3, options: { leadCard: 'suitOnly', turnTime: '15' } } } });
       await p.tap('[data-play="burns"]');
       await sleep(200);
       await p.tap('#s-deal');
@@ -232,7 +257,7 @@ async function playGame(p, tag, want) {
     if (SCENARIO === 'take') {
       // Force a deck-empty take where you are the one who can't follow.
       const p = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 77,
-        settings: { burns: { opponents: 3, options: { deckEmpty: 'pickUp', leadCard: 'suitOnly' } } } });
+        settings: { format: 2, burns: { opponents: 3, options: { leadCard: 'suitOnly' } } } });
       await p.tap('[data-play="burns"]');
       await sleep(200);
       await p.tap('#s-deal');

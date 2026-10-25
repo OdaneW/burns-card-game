@@ -471,7 +471,8 @@
 
     // hidden-from-others marker on your own card before the reveal
     var eye = slotEl.querySelector('.eye');
-    var showEye = pid === this.me && entry && entry.card && !v.revealed && v.phase !== 'over';
+    var showEye = pid === this.me && entry && entry.card && !v.revealed && v.phase !== 'over' &&
+      !(entry.via === 'lead' && v.options.leadCard === 'faceUp');   // a face-up lead is public
     if (showEye && !eye) {
       eye = document.createElement('span');
       eye.className = 'eye';
@@ -595,12 +596,14 @@
 
     switch (v.phase) {
       case 'dealing':
-        return { main: 'Dealing…', sub: 'Four cards each. A Flush (one of every suit) wins on the spot.' };
+        return { main: 'Dealing…', sub: v.flushRule ? 'Four cards each. A Flush (one of every suit) wins on the spot.' : 'Four cards each. The face-up starter card sets the first suit.' };
       case 'lead':
         if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.' + secs, sub: 'Its suit is the one everyone must follow.' };
         return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
       case 'follow': {
-        var intro = v.setNo === 1 ? 'The starter card sets the suit.' : this.name(v.leader) + ' led ' + UI.suit(s) + '.';
+        var led = v.table.filter(function (e) { return e.via === 'lead'; })[0];
+        var intro = v.setNo === 1 ? 'The starter card sets the suit.'
+          : this.name(v.leader) + ' led ' + (led && led.card ? UI.cardText(led.card) : UI.suit(s)) + '.';
         if (v.mayDraw && !mine.drew) {
           return {
             main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>, or draw for a better one.' + secs,
@@ -624,7 +627,7 @@
           };
         }
         if (mine && mine.isTaker) return { main: '<span class="em">No ' + P + ' and the deck is empty.</span>', sub: 'Once everyone else is in, you take a card from the set.' };
-        return { main: v.leader === me ? 'You led ' + P + '.' : 'Your card is in.', sub: waitingOn.length ? 'Waiting for ' + list(waitingOn) + '.' : '' };
+        return { main: v.leader === me ? 'You led ' + (led && led.card ? UI.cardText(led.card) : P) + '.' : 'Your card is in.', sub: waitingOn.length ? 'Waiting for ' + list(waitingOn) + '.' : '' };
       }
       case 'take': {
         var takers = v.players.filter(function (p) { return p.isTaker; });

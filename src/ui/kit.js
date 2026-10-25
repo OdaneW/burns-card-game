@@ -154,8 +154,19 @@
       var t = c.currentTime + (when || 0);
       g.gain.setValueAtTime(gain, t);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(f); f.connect(g); g.connect(c.destination);
+      src.connect(f); f.connect(g); g.connect(this.out());
       src.start(t, Math.random() * 0.3, dur + 0.02);
+    },
+    /* Effects share a gentle top-end roll-off, so nothing is piercing. */
+    out: function () {
+      var c = this.ctx;
+      if (!this.bus || this.bus.context !== c) {
+        var lp = c.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 5500; lp.Q.value = 0.5;
+        lp.connect(c.destination);
+        this.bus = lp;
+      }
+      return this.bus;
     },
     tone: function (freq, dur, gain, type, when) {
       var c = this.ctx;
@@ -167,23 +178,23 @@
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g); g.connect(c.destination);
+      o.connect(g); g.connect(this.out());
       o.start(t); o.stop(t + dur + 0.03);
     },
     play: function (name) {
       if (!this.ready()) return;
       try {
         switch (name) {
-          case 'deal': this.noise(0.05, 2600, 0.22); break;
-          case 'draw': this.noise(0.06, 2100, 0.28); break;
-          case 'play': this.noise(0.07, 1300, 0.3); this.tone(180, 0.08, 0.08, 'sine'); break;
-          case 'flip': this.noise(0.04, 3200, 0.18); this.noise(0.04, 2800, 0.14, 0.05); break;
+          case 'deal': this.noise(0.05, 2000, 0.2); break;
+          case 'draw': this.noise(0.06, 1700, 0.26); break;
+          case 'play': this.noise(0.07, 1100, 0.3); this.tone(180, 0.08, 0.08, 'sine'); break;
+          case 'flip': this.noise(0.04, 2300, 0.17); this.noise(0.04, 2000, 0.13, 0.05); break;
           case 'win': this.tone(523, 0.14, 0.12, 'triangle'); this.tone(784, 0.22, 0.12, 'triangle', 0.1); break;
           case 'lose': this.tone(392, 0.16, 0.1, 'triangle'); this.tone(330, 0.24, 0.1, 'triangle', 0.12); break;
-          case 'alert': this.tone(880, 0.09, 0.09, 'square'); this.tone(660, 0.12, 0.08, 'square', 0.1); break;
-          case 'tick': this.tone(1320, 0.04, 0.05, 'square'); break;
-          case 'nope': this.tone(150, 0.12, 0.1, 'sawtooth'); break;
-          case 'victory': [523, 659, 784, 1046].forEach(function (f, i) { Sound.tone(f, 0.22, 0.11, 'triangle', i * 0.11); }); break;
+          case 'alert': this.tone(659, 0.13, 0.11, 'triangle'); this.tone(523, 0.18, 0.1, 'triangle', 0.11); break;
+          case 'tick': this.tone(880, 0.06, 0.07, 'sine'); this.noise(0.02, 1200, 0.06); break;
+          case 'nope': this.tone(330, 0.1, 0.09, 'triangle'); this.tone(262, 0.15, 0.09, 'triangle', 0.08); break;
+          case 'victory': [523, 659, 784, 1046].forEach(function (f, i) { Sound.tone(f, 0.22, i === 3 ? 0.09 : 0.11, i === 3 ? 'sine' : 'triangle', i * 0.11); }); break;
         }
       } catch (e) { /* audio is optional */ }
     }
