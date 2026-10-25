@@ -238,6 +238,7 @@
     this.holding = false;
     this.index = 0;
     this.step = -1;
+    this.snaps = [];   // per lesson, per step: the table as that step began
   }
 
   Tutorial.prototype.lessons = LESSONS;
@@ -249,14 +250,18 @@
     this.begin();
   };
 
-  Tutorial.prototype.begin = function () {
-    var lesson = LESSONS[this.index];
+  /* Put a session on the table and follow it. */
+  Tutorial.prototype.use = function (session) {
     if (this.unsub) this.unsub();
-    this.session = makeSession(lesson);
-    this.session.pause();
-    this.app.attachTutorial(this.session);
+    this.session = session;
+    session.pause();
+    this.app.attachTutorial(session);
     var self = this;
-    this.unsub = this.session.on(function () { self.check(); });
+    this.unsub = session.on(function () { self.check(); });
+  };
+
+  Tutorial.prototype.begin = function () {
+    this.use(makeSession(LESSONS[this.index]));
     this.step = -1;
     this.nextStep();
   };
@@ -279,6 +284,30 @@
       this.begin();
       return;
     }
+    var byLesson = this.snaps[this.index] || (this.snaps[this.index] = []);
+    byLesson[this.step] = { state: JSON.stringify(this.session.state), t: this.session.now() };
+    this.enter();
+  };
+
+  /* Previous: back to the step before, with the table exactly as it was when
+     that step began, so it can be read again and played again. */
+  Tutorial.prototype.canGoBack = function () { return this.index > 0 || this.step > 0; };
+
+  Tutorial.prototype.prevStep = function () {
+    var index = this.index, step = this.step - 1;
+    if (step < 0) { index--; step = index >= 0 ? LESSONS[index].steps.length - 1 : -1; }
+    var snap = index >= 0 ? (this.snaps[index] || [])[step] : null;
+    if (!snap) return;
+    clearTimeout(this.timer);
+    this.index = index;
+    this.step = step;
+    var mode = Object.assign({}, Burns, { bot: scriptedBot(LESSONS[index]) });
+    this.use(new CT.Session({ mode: mode, state: JSON.parse(snap.state), clock: new CT.Clock(snap.t) }));
+    this.enter();
+  };
+
+  /* Show the current step and set the table going (or keep it waiting). */
+  Tutorial.prototype.enter = function () {
     var s = this.current();
     this.stepSeq = this.session.state.seq;
     this.advancing = false;
@@ -289,17 +318,28 @@
     if (!read) this.check();
   };
 
+  Tutorial.prototype.prevButton = function () {
+    var self = this;
+    return { id: 'prev', label: 'Previous', cls: 'coach-prev', onClick: function () { self.prevStep(); } };
+  };
+
+  /* Previous (when there's somewhere to go back to), then the way forward. */
+  Tutorial.prototype.buttons = function (rest) {
+    return (this.canGoBack() ? [this.prevButton()] : []).concat(rest || []);
+  };
+
   Tutorial.prototype.render = function () {
     var self = this, s = this.current(), ctx = this.ctx();
     var lesson = LESSONS[this.index];
-    var actions = [];
+    var next = { id: 'next', label: 'Next', primary: true, onClick: function () { self.nextStep(); } };
+    var actions = this.buttons(s.next ? [next] : []);
     if (s.final) {
+      // the two ways out share a row; Previous sits underneath
       actions = [
-        { label: 'Back to games', onClick: function () { self.exit(); } },
-        { label: 'Play Burns', primary: true, onClick: function () { self.exit('setup'); } }
+        { id: 'home', label: 'Back to games', onClick: function () { self.exit(); } },
+        { id: 'play', label: 'Play Burns', primary: true, onClick: function () { self.exit('setup'); } },
+        { br: true }, this.prevButton()
       ];
-    } else if (s.next) {
-      actions = [{ label: 'Next', primary: true, onClick: function () { self.nextStep(); } }];
     }
     var target = typeof s.target === 'function' ? s.target(ctx) : s.target;
     var read = !!(s.next || s.final);
@@ -343,7 +383,7 @@
     this.holding = true;
     this.session.pause();
     if (this.readingTime() <= SHORT_NOTE_MS) this.timer = setTimeout(function () { self.nextStep(); }, owed);
-    else this.coach.setActions([{ label: 'Next', primary: true, onClick: function () { self.nextStep(); } }]);
+    else this.coach.setActions(this.buttons([{ id: 'next', label: 'Next', primary: true, onClick: function () { self.nextStep(); } }]));
   };
 
   Tutorial.prototype.exit = function (to) {

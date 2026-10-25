@@ -69,6 +69,8 @@
     window.removeEventListener('resize', this.onResize);
     clearTimeout(this.overTimer);
     this.root.innerHTML = '';
+    var fx = document.getElementById('fx');
+    if (fx) fx.innerHTML = '';   // cards still in flight belonged to this table
   };
 
   BurnsTable.prototype.name = function (pid, cap) {

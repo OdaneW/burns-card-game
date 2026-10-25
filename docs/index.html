@@ -75,6 +75,7 @@ button { font: inherit; color: inherit; }
 button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 p { margin: 0; }
 h1, h2, h3 { margin: 0; text-wrap: balance; }
+[hidden] { display: none !important; }   /* hidden means hidden, whatever page wraps the app */
 
 #app { height: 100%; display: flex; justify-content: center; }
 .screen {
@@ -634,6 +635,8 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .coach-text .suit-black, .coach-text .ct.suit-black { color: var(--suit-black); }
 .coach-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 2px; }
 .coach-actions .btn { padding: 11px 18px; font-size: 15px; }
+.coach-actions .coach-prev { margin-right: auto; }   /* Previous on the left, the way forward on the right */
+.coach-break { flex-basis: 100%; height: 0; }
 .btn-plain { background: transparent; color: var(--ink-on-paint); box-shadow: inset 0 0 0 1.5px rgba(14, 43, 41, .3); }
 .btn-plain:active { background: rgba(14, 43, 41, .06); }
 @keyframes spot { 0%, 100% { outline-color: var(--marigold); } 50% { outline-color: rgba(244, 185, 66, .35); } }
@@ -710,7 +713,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
+CT.BUILD = {"version":"0.4.2","id":"91205c3","target":"app"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -2490,7 +2493,7 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
 
   /* o: { step, title, text (HTML), target: fn → element|null,
           place: 'auto' | 'top' | 'center', dim: true|false,
-          actions: [{ label, primary, onClick }] } */
+          actions: [{ id, label, primary, cls, onClick }] } */
   Coach.prototype.show = function (o) {
     this.el.hidden = false;
     this.stepEl.textContent = o.step || '';
@@ -2514,9 +2517,11 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
     actions = actions || [];
     this.actionsEl.innerHTML = '';
     actions.forEach(function (a) {
+      if (a.br) { var br = document.createElement('span'); br.className = 'coach-break'; this.actionsEl.appendChild(br); return; }
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn ' + (a.primary ? 'btn-primary' : 'btn-plain');
+      b.className = 'btn ' + (a.primary ? 'btn-primary' : 'btn-plain') + (a.cls ? ' ' + a.cls : '');
+      if (a.id) b.dataset.act = a.id;
       b.textContent = a.label;
       b.addEventListener('click', a.onClick);
       this.actionsEl.appendChild(b);
@@ -2661,6 +2666,8 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
     window.removeEventListener('resize', this.onResize);
     clearTimeout(this.overTimer);
     this.root.innerHTML = '';
+    var fx = document.getElementById('fx');
+    if (fx) fx.innerHTML = '';   // cards still in flight belonged to this table
   };
 
   BurnsTable.prototype.name = function (pid, cap) {
@@ -3816,6 +3823,7 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
     this.holding = false;
     this.index = 0;
     this.step = -1;
+    this.snaps = [];   // per lesson, per step: the table as that step began
   }
 
   Tutorial.prototype.lessons = LESSONS;
@@ -3827,14 +3835,18 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
     this.begin();
   };
 
-  Tutorial.prototype.begin = function () {
-    var lesson = LESSONS[this.index];
+  /* Put a session on the table and follow it. */
+  Tutorial.prototype.use = function (session) {
     if (this.unsub) this.unsub();
-    this.session = makeSession(lesson);
-    this.session.pause();
-    this.app.attachTutorial(this.session);
+    this.session = session;
+    session.pause();
+    this.app.attachTutorial(session);
     var self = this;
-    this.unsub = this.session.on(function () { self.check(); });
+    this.unsub = session.on(function () { self.check(); });
+  };
+
+  Tutorial.prototype.begin = function () {
+    this.use(makeSession(LESSONS[this.index]));
     this.step = -1;
     this.nextStep();
   };
@@ -3857,6 +3869,30 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
       this.begin();
       return;
     }
+    var byLesson = this.snaps[this.index] || (this.snaps[this.index] = []);
+    byLesson[this.step] = { state: JSON.stringify(this.session.state), t: this.session.now() };
+    this.enter();
+  };
+
+  /* Previous: back to the step before, with the table exactly as it was when
+     that step began, so it can be read again and played again. */
+  Tutorial.prototype.canGoBack = function () { return this.index > 0 || this.step > 0; };
+
+  Tutorial.prototype.prevStep = function () {
+    var index = this.index, step = this.step - 1;
+    if (step < 0) { index--; step = index >= 0 ? LESSONS[index].steps.length - 1 : -1; }
+    var snap = index >= 0 ? (this.snaps[index] || [])[step] : null;
+    if (!snap) return;
+    clearTimeout(this.timer);
+    this.index = index;
+    this.step = step;
+    var mode = Object.assign({}, Burns, { bot: scriptedBot(LESSONS[index]) });
+    this.use(new CT.Session({ mode: mode, state: JSON.parse(snap.state), clock: new CT.Clock(snap.t) }));
+    this.enter();
+  };
+
+  /* Show the current step and set the table going (or keep it waiting). */
+  Tutorial.prototype.enter = function () {
     var s = this.current();
     this.stepSeq = this.session.state.seq;
     this.advancing = false;
@@ -3867,17 +3903,28 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
     if (!read) this.check();
   };
 
+  Tutorial.prototype.prevButton = function () {
+    var self = this;
+    return { id: 'prev', label: 'Previous', cls: 'coach-prev', onClick: function () { self.prevStep(); } };
+  };
+
+  /* Previous (when there's somewhere to go back to), then the way forward. */
+  Tutorial.prototype.buttons = function (rest) {
+    return (this.canGoBack() ? [this.prevButton()] : []).concat(rest || []);
+  };
+
   Tutorial.prototype.render = function () {
     var self = this, s = this.current(), ctx = this.ctx();
     var lesson = LESSONS[this.index];
-    var actions = [];
+    var next = { id: 'next', label: 'Next', primary: true, onClick: function () { self.nextStep(); } };
+    var actions = this.buttons(s.next ? [next] : []);
     if (s.final) {
+      // the two ways out share a row; Previous sits underneath
       actions = [
-        { label: 'Back to games', onClick: function () { self.exit(); } },
-        { label: 'Play Burns', primary: true, onClick: function () { self.exit('setup'); } }
+        { id: 'home', label: 'Back to games', onClick: function () { self.exit(); } },
+        { id: 'play', label: 'Play Burns', primary: true, onClick: function () { self.exit('setup'); } },
+        { br: true }, this.prevButton()
       ];
-    } else if (s.next) {
-      actions = [{ label: 'Next', primary: true, onClick: function () { self.nextStep(); } }];
     }
     var target = typeof s.target === 'function' ? s.target(ctx) : s.target;
     var read = !!(s.next || s.final);
@@ -3921,7 +3968,7 @@ CT.BUILD = {"version":"0.4.1","id":"fd8ab63","target":"app"};
     this.holding = true;
     this.session.pause();
     if (this.readingTime() <= SHORT_NOTE_MS) this.timer = setTimeout(function () { self.nextStep(); }, owed);
-    else this.coach.setActions([{ label: 'Next', primary: true, onClick: function () { self.nextStep(); } }]);
+    else this.coach.setActions(this.buttons([{ id: 'next', label: 'Next', primary: true, onClick: function () { self.nextStep(); } }]));
   };
 
   Tutorial.prototype.exit = function (to) {

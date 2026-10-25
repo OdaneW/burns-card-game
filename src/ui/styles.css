@@ -52,6 +52,7 @@ button { font: inherit; color: inherit; }
 button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 p { margin: 0; }
 h1, h2, h3 { margin: 0; text-wrap: balance; }
+[hidden] { display: none !important; }   /* hidden means hidden, whatever page wraps the app */
 
 #app { height: 100%; display: flex; justify-content: center; }
 .screen {
@@ -611,6 +612,8 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .coach-text .suit-black, .coach-text .ct.suit-black { color: var(--suit-black); }
 .coach-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 2px; }
 .coach-actions .btn { padding: 11px 18px; font-size: 15px; }
+.coach-actions .coach-prev { margin-right: auto; }   /* Previous on the left, the way forward on the right */
+.coach-break { flex-basis: 100%; height: 0; }
 .btn-plain { background: transparent; color: var(--ink-on-paint); box-shadow: inset 0 0 0 1.5px rgba(14, 43, 41, .3); }
 .btn-plain:active { background: rgba(14, 43, 41, .06); }
 @keyframes spot { 0%, 100% { outline-color: var(--marigold); } 50% { outline-color: rgba(244, 185, 66, .35); } }

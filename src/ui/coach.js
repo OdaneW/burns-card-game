@@ -40,7 +40,7 @@
 
   /* o: { step, title, text (HTML), target: fn → element|null,
           place: 'auto' | 'top' | 'center', dim: true|false,
-          actions: [{ label, primary, onClick }] } */
+          actions: [{ id, label, primary, cls, onClick }] } */
   Coach.prototype.show = function (o) {
     this.el.hidden = false;
     this.stepEl.textContent = o.step || '';
@@ -64,9 +64,11 @@
     actions = actions || [];
     this.actionsEl.innerHTML = '';
     actions.forEach(function (a) {
+      if (a.br) { var br = document.createElement('span'); br.className = 'coach-break'; this.actionsEl.appendChild(br); return; }
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn ' + (a.primary ? 'btn-primary' : 'btn-plain');
+      b.className = 'btn ' + (a.primary ? 'btn-primary' : 'btn-plain') + (a.cls ? ' ' + a.cls : '');
+      if (a.id) b.dataset.act = a.id;
       b.textContent = a.label;
       b.addEventListener('click', a.onClick);
       this.actionsEl.appendChild(b);

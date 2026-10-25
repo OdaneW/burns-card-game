@@ -221,6 +221,13 @@ async function playGame(p, tag, want) {
       await sleep(500);
       const seen = [];
       let guard = 0, drewExtra = false;
+      const back = {}, checks = [];
+      const where = () => p.evaluate(() => {
+        const t = CT.App.tutorial, s = CT.App.session, v = s.view('p0', { events: false });
+        const me = v.players.find(x => x.id === 'p0');
+        return { at: 'L' + (t.index + 1) + '-S' + (t.step + 1), phase: v.phase, hand: v.hand.map(c => c.id).join(' '), committed: me.committed,
+          canLead: v.canLead, secondsLeft: v.turnEndsAt ? Math.round((v.turnEndsAt - s.now()) / 1000) : null };
+      });
       while (guard++ < 800) {
         const st = await p.evaluate(() => {
           const t = CT.App.tutorial; if (!t) return { done: true };
@@ -233,6 +240,16 @@ async function playGame(p, tag, want) {
         const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
         if (!seen.includes(key)) { seen.push(key); await sleep(500); await shot(p, '31-tut-' + key); }
         if (st.final) break;
+        // Previous: from a held note, across a lesson boundary, and back into the time limit
+        const tryBack = { 'L1-S6': 'l1', 'L2-S1': 'l2', 'L5-S3': 'l5' }[key];
+        if (tryBack && !back[tryBack]) {
+          back[tryBack] = true;
+          await p.tap('[data-act="prev"]');
+          await sleep(600);
+          checks.push('Previous from ' + key + ' → ' + JSON.stringify(await where()));
+          if (key === 'L1-S6') await shot(p, '32-tut-previous-L1-S5');
+          continue;
+        }
         if (st.next || st.held) { await p.tap('.coach-actions .btn-primary'); await sleep(300); continue; }
         if (st.canTake) { const t = await p.$('[data-take]'); if (t) await t.tap(); await sleep(300); continue; }
         if (st.mustDraw) { await p.tap('#t-deck'); await sleep(620); continue; }
@@ -247,10 +264,11 @@ async function playGame(p, tag, want) {
         await sleep(250);
       }
       const finalText = await p.evaluate(() => document.querySelector('.coach-title').textContent);
-      await p.tap('.coach-actions .btn-plain');
+      await p.tap('[data-act="home"]');
       await sleep(400);
       const after = await p.evaluate(() => ({ screen: CT.App.screen, tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1') }));
       console.log('  steps:', seen.join(' '));
+      checks.forEach(c => console.log('  ' + c));
       // Notes that left on their own must have stayed up for their reading time.
       const notes = await p.evaluate(() => window.__tut.map((e, i, a) => Object.assign({}, e, { shown: a[i + 1] ? Math.round(a[i + 1].t - e.t) : null })));
       notes.filter(n => n.kind === 'watch').forEach(n => console.log('  watch note ' + n.key + ': ' + n.how + ', up ' + n.shown + ' ms, reading time ' + n.reading + ' ms'));
