@@ -661,7 +661,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
+CT.BUILD = {"version":"0.2.1","id":"7a47e1f","target":"app"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -1316,15 +1316,13 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
     return CT.ok();
   }
 
-  /* Only players who started the set without the suit may draw. Once a card
-     of the suit turns up they can play it or keep drawing for a better one. */
+  /* Any follower may draw while the deck lasts, hoping for a better card of
+     the suit; players without the suit must draw until one turns up. Every
+     drawn card stays in the hand. */
   function actDraw(state, pid, payload, now) {
     var bad = followGuard(state, pid);
     if (bad) return bad;
     var p = player(state, pid);
-    if (CT.hasSuit(p.hand, state.suit) && !state.drawn[pid]) {
-      return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it. Only players who start the set without the suit may draw.');
-    }
     if (!state.deck.length) return CT.fail('deck-empty', 'The deck is empty.');
     var last = state.lastDrawAt[pid];
     var gap = state.timing.drawCooldownMs;
@@ -1490,9 +1488,9 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
     var hasIt = !!mine && CT.hasSuit(hand, state.suit);
     v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
     v.canFollow = hasIt;
-    v.canDraw = !!mine && state.deck.length > 0 && (!hasIt || (state.drawn[pid] || 0) > 0);
+    v.canDraw = !!mine && state.deck.length > 0;
     v.mustDraw = v.canDraw && !hasIt;
-    v.mayDraw = v.canDraw && hasIt;   // found the suit while drawing: play it or keep going
+    v.mayDraw = v.canDraw && hasIt;   // holds the suit: play it, or draw for a better one
     v.canTake = !!me && state.phase === 'take' && isTaker(state, pid) && !state.taken[pid];
     v.playable = v.canLead ? hand.map(function (c) { return c.id; })
       : v.canFollow ? hand.filter(function (c) { return c.suit === state.suit; }).map(function (c) { return c.id; })
@@ -1523,7 +1521,7 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
       { title: 'Flush', text: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.' },
       { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
       { title: 'Winning a set', text: 'The highest card wins the set. Cards rank 2 (low) up to 10, Jack, Queen, King and Ace (high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
-      { title: 'Can’t follow?', text: 'If you start a set without the suit, draw from the deck until a card of the suit turns up. Then you can play it, or keep drawing for a better one, but every card you draw stays in your hand. Everyone who needs to draws at the same time, with a short pause between draws. Players who start the set with the suit can’t draw.' },
+      { title: 'Drawing', text: 'Before you play, you may draw from the deck to look for a better card of the suit, but every card you draw stays in your hand. If you don’t have the suit, you must draw until one turns up; then play it or keep drawing. Everyone draws at the same time, with a short pause between draws. The leader doesn’t draw.' },
       { title: 'Deck empty', text: 'If the deck runs out before you have a card of the suit, take one card from the set into your hand instead and sit out that set. The card still counts for whoever played it. You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
       { title: 'Time limit', text: 'The leader has ' + secs + ' seconds to lead, then everyone has ' + secs + ' seconds to play. When time runs out, a random card of the suit is played for anyone still deciding. If they have none, they draw until one turns up and it is played.' },
       { title: 'Winning the game', text: 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.' }
@@ -1643,20 +1641,24 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
     return mine[0];
   }
 
-  /* Found the suit while drawing: play the best one, or draw again hoping for
-     a winner. Every extra draw stays in the hand, so don't push it far. */
+  /* Holding the suit with cards left in the deck: play, or draw hoping for a
+     winner. Every extra draw stays in the hand, so stay cautious, especially
+     with the suit already in hand or close to going out. */
   function playOrKeepDrawing(v, memory, rnd) {
     if (memory.set !== v.setNo) { memory.set = v.setNo; memory.matchAt = null; }
     var drew = me(v).drew;
-    if (memory.matchAt == null) memory.matchAt = drew;
+    if (memory.matchAt == null) { memory.matchAt = drew; memory.hadSuit = drew === 0; }
     var extra = drew - memory.matchAt;
     var mine = suited(v);
     var best = mine[mine.length - 1];
     var seen = seenIds(v);
-    var play = { type: 'follow', payload: { cardId: best.id } };
-    if (val(best) > toBeat(v) && unseenHigher(best, seen) === 0) return play;  // already a sure winner
-    if (v.deckCount < 3 || extra >= 2 || val(best) >= 10 || v.hand.length >= 9) return play;
-    var keepGoing = val(best) <= 6 ? 0.5 : 0.25;
+    var sure = val(best) > toBeat(v) && unseenHigher(best, seen) === 0;
+    // Started with the suit: the usual follow choice. Found it by drawing: the best one found.
+    var pick = memory.hadSuit || sure ? chooseFollow(v, rnd) : best;
+    var play = { type: 'follow', payload: { cardId: pick.id } };
+    if (sure || v.deckCount < 3 || extra >= 2 || val(best) >= 10) return play;
+    if (v.hand.length >= 9 || v.hand.length <= 3) return play;
+    var keepGoing = memory.hadSuit ? (val(best) <= 6 ? 0.15 : 0.05) : (val(best) <= 6 ? 0.5 : 0.25);
     return rnd() < keepGoing ? { type: 'draw', payload: {} } : play;
   }
 
@@ -1674,7 +1676,7 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
       var drew = v.canDraw || v.canFollow ? me(v).drew : 0;
       if (v.canLead) return { kind: 'lead', key: 'L' + v.setNo };
       if (v.mustDraw) return { kind: 'draw', key: 'D' + v.setNo + ':' + drew, first: drew === 0 };
-      if (v.mayDraw) return { kind: 'drawOrPlay', key: 'P' + v.setNo + ':' + drew };
+      if (v.mayDraw) return { kind: 'drawOrPlay', key: 'P' + v.setNo + ':' + drew, first: drew === 0 };
       if (v.canFollow) return { kind: 'follow', key: 'F' + v.setNo + ':' + drew };
       if (v.canTake) return { kind: 'take', key: 'T' + v.setNo };
       return null;
@@ -1686,7 +1688,7 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
         case 'lead': return 900 + rnd() * 1300;
         case 'follow': return 650 + rnd() * 1500;
         case 'draw': return intent.first ? 450 + rnd() * 500 : v.timing.drawCooldownMs + 60 + rnd() * 380;
-        case 'drawOrPlay': return v.timing.drawCooldownMs + 250 + rnd() * 600;
+        case 'drawOrPlay': return intent.first ? 650 + rnd() * 1500 : v.timing.drawCooldownMs + 250 + rnd() * 600;
         case 'take': return 1400 + rnd() * 4800;
       }
       return 800;
@@ -2750,15 +2752,21 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
         return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
       case 'follow': {
         var intro = v.setNo === 1 ? 'The starter card sets the suit.' : this.name(v.leader) + ' led ' + UI.suit(s) + '.';
+        if (v.mayDraw && !mine.drew) {
+          return {
+            main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>, or draw for a better one.' + secs,
+            sub: intro + ' Every card you draw stays in your hand.'
+          };
+        }
         if (v.mayDraw) {
           return {
-            main: 'You found a ' + UI.suit(s) + ' ' + one + '. <span class="hl">Play it, or keep drawing.</span>' + secs,
-            sub: 'A higher ' + one + ' could win the set, but every card you draw stays in your hand.'
+            main: '<span class="hl">Play a ' + UI.suit(s) + ' ' + one + ', or keep drawing.</span>' + secs,
+            sub: 'Drawn ' + mine.drew + ' so far. A higher ' + one + ' could win the set, but every card you draw stays in your hand.'
           };
         }
         if (v.canFollow) {
           if (mine.drew) return { main: '<span class="hl">Play a ' + one + '.</span> The deck is empty.' + secs, sub: 'Cards stay hidden until everyone has played.' };
-          return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>' + secs, sub: intro + ' Cards stay hidden until everyone has played.' };
+          return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>' + secs, sub: intro + ' The deck is empty, so no more drawing.' };
         }
         if (v.mustDraw) {
           return {
@@ -2960,7 +2968,8 @@ CT.BUILD = {"version":"0.2.0","id":"937372f","target":"app"};
     UI.Sound.unlock();
     var deck = this.el.deck;
     if (!v.canDraw) {
-      if (v.canFollow && !this.mine(v).drew) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
+      if (v.canFollow && v.deckCount === 0) UI.toast('The deck is empty. Play a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '.');
+      else if (v.canLead) UI.toast('The leader doesn’t draw. Lead any card.');
       return;
     }
     var res = this.session.act(this.me, 'draw');

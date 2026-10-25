@@ -601,15 +601,21 @@
         return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
       case 'follow': {
         var intro = v.setNo === 1 ? 'The starter card sets the suit.' : this.name(v.leader) + ' led ' + UI.suit(s) + '.';
+        if (v.mayDraw && !mine.drew) {
+          return {
+            main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>, or draw for a better one.' + secs,
+            sub: intro + ' Every card you draw stays in your hand.'
+          };
+        }
         if (v.mayDraw) {
           return {
-            main: 'You found a ' + UI.suit(s) + ' ' + one + '. <span class="hl">Play it, or keep drawing.</span>' + secs,
-            sub: 'A higher ' + one + ' could win the set, but every card you draw stays in your hand.'
+            main: '<span class="hl">Play a ' + UI.suit(s) + ' ' + one + ', or keep drawing.</span>' + secs,
+            sub: 'Drawn ' + mine.drew + ' so far. A higher ' + one + ' could win the set, but every card you draw stays in your hand.'
           };
         }
         if (v.canFollow) {
           if (mine.drew) return { main: '<span class="hl">Play a ' + one + '.</span> The deck is empty.' + secs, sub: 'Cards stay hidden until everyone has played.' };
-          return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>' + secs, sub: intro + ' Cards stay hidden until everyone has played.' };
+          return { main: 'Follow ' + P + ' — <span class="hl">pick a ' + one + '</span>' + secs, sub: intro + ' The deck is empty, so no more drawing.' };
         }
         if (v.mustDraw) {
           return {
@@ -811,7 +817,8 @@
     UI.Sound.unlock();
     var deck = this.el.deck;
     if (!v.canDraw) {
-      if (v.canFollow && !this.mine(v).drew) UI.toast('You have a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '. Play it.');
+      if (v.canFollow && v.deckCount === 0) UI.toast('The deck is empty. Play a ' + UI.suit(v.suit) + ' ' + UI.suitSingle(v.suit) + '.');
+      else if (v.canLead) UI.toast('The leader doesn’t draw. Lead any card.');
       return;
     }
     var res = this.session.act(this.me, 'draw');

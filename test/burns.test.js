@@ -77,14 +77,17 @@ test('no Flush: set 1 follows the starter card’s suit', () => {
   conservation(s);
 });
 
-test('must follow suit; players who start with the suit cannot draw', () => {
-  const s = rigged({ hands: [H0, H1], starter: 'KD', deck: ['QC'] });
+test('must follow suit; holding the suit you may still draw for a better one', () => {
+  const s = rigged({ hands: [H0, H1], starter: 'KD', deck: ['QC', 'AD'] });
   Burns.tick(s, 0);
-  eq(act(s, 'p0', 'draw').code, 'has-suit');
-  eq(Burns.view(s, 'p0').canDraw, false);
+  const v = Burns.view(s, 'p0');
+  assert(v.canFollow && v.mayDraw && !v.mustDraw, 'can play or draw');
   eq(act(s, 'p0', 'follow', { cardId: '2S' }).code, 'wrong-suit');
-  assert(act(s, 'p0', 'follow', { cardId: '5D' }).ok);
-  eq(act(s, 'p0', 'follow', { cardId: '4C' }).code, 'done');
+  assert(act(s, 'p0', 'draw', {}, 0).ok, 'drew QC');
+  assert(act(s, 'p0', 'draw', {}, 500).matched, 'drew AD');
+  assert(act(s, 'p0', 'follow', { cardId: 'AD' }, 600).ok);
+  eq(act(s, 'p0', 'follow', { cardId: '5D' }, 700).code, 'done');
+  eq(ids(s.players[0].hand), ['2S', '3S', '4C', '5D', 'QC'], 'drawn cards stay in the hand');
 });
 
 test('cards stay hidden until everyone has played, then reveal together', () => {
@@ -117,8 +120,10 @@ test('set winner leads any suit next; the set is put aside', () => {
   Burns.tick(s, 100);
   eq(s.phase, 'lead'); eq(s.leader, 'p1'); eq(s.setNo, 2);
   eq(act(s, 'p0', 'lead', { cardId: '2S' }).code, 'not-leader');
+  eq(act(s, 'p1', 'draw', {}, 100).code, 'not-now', 'the leader does not draw');
   assert(act(s, 'p1', 'lead', { cardId: '6H' }, 100).ok);
   eq(s.suit, 'H'); eq(s.phase, 'follow');
+  eq(act(s, 'p1', 'draw', {}, 150).code, 'leader');
   eq(s.discard.filter(c => ['5D', '9D', 'KD'].includes(c.id)).length, 3, 'previous set put aside');
 });
 

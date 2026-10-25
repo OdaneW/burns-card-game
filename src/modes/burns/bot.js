@@ -92,20 +92,24 @@
     return mine[0];
   }
 
-  /* Found the suit while drawing: play the best one, or draw again hoping for
-     a winner. Every extra draw stays in the hand, so don't push it far. */
+  /* Holding the suit with cards left in the deck: play, or draw hoping for a
+     winner. Every extra draw stays in the hand, so stay cautious, especially
+     with the suit already in hand or close to going out. */
   function playOrKeepDrawing(v, memory, rnd) {
     if (memory.set !== v.setNo) { memory.set = v.setNo; memory.matchAt = null; }
     var drew = me(v).drew;
-    if (memory.matchAt == null) memory.matchAt = drew;
+    if (memory.matchAt == null) { memory.matchAt = drew; memory.hadSuit = drew === 0; }
     var extra = drew - memory.matchAt;
     var mine = suited(v);
     var best = mine[mine.length - 1];
     var seen = seenIds(v);
-    var play = { type: 'follow', payload: { cardId: best.id } };
-    if (val(best) > toBeat(v) && unseenHigher(best, seen) === 0) return play;  // already a sure winner
-    if (v.deckCount < 3 || extra >= 2 || val(best) >= 10 || v.hand.length >= 9) return play;
-    var keepGoing = val(best) <= 6 ? 0.5 : 0.25;
+    var sure = val(best) > toBeat(v) && unseenHigher(best, seen) === 0;
+    // Started with the suit: the usual follow choice. Found it by drawing: the best one found.
+    var pick = memory.hadSuit || sure ? chooseFollow(v, rnd) : best;
+    var play = { type: 'follow', payload: { cardId: pick.id } };
+    if (sure || v.deckCount < 3 || extra >= 2 || val(best) >= 10) return play;
+    if (v.hand.length >= 9 || v.hand.length <= 3) return play;
+    var keepGoing = memory.hadSuit ? (val(best) <= 6 ? 0.15 : 0.05) : (val(best) <= 6 ? 0.5 : 0.25);
     return rnd() < keepGoing ? { type: 'draw', payload: {} } : play;
   }
 
@@ -123,7 +127,7 @@
       var drew = v.canDraw || v.canFollow ? me(v).drew : 0;
       if (v.canLead) return { kind: 'lead', key: 'L' + v.setNo };
       if (v.mustDraw) return { kind: 'draw', key: 'D' + v.setNo + ':' + drew, first: drew === 0 };
-      if (v.mayDraw) return { kind: 'drawOrPlay', key: 'P' + v.setNo + ':' + drew };
+      if (v.mayDraw) return { kind: 'drawOrPlay', key: 'P' + v.setNo + ':' + drew, first: drew === 0 };
       if (v.canFollow) return { kind: 'follow', key: 'F' + v.setNo + ':' + drew };
       if (v.canTake) return { kind: 'take', key: 'T' + v.setNo };
       return null;
@@ -135,7 +139,7 @@
         case 'lead': return 900 + rnd() * 1300;
         case 'follow': return 650 + rnd() * 1500;
         case 'draw': return intent.first ? 450 + rnd() * 500 : v.timing.drawCooldownMs + 60 + rnd() * 380;
-        case 'drawOrPlay': return v.timing.drawCooldownMs + 250 + rnd() * 600;
+        case 'drawOrPlay': return intent.first ? 650 + rnd() * 1500 : v.timing.drawCooldownMs + 250 + rnd() * 600;
         case 'take': return 1400 + rnd() * 4800;
       }
       return 800;

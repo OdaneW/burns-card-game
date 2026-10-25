@@ -343,15 +343,13 @@
     return CT.ok();
   }
 
-  /* Only players who started the set without the suit may draw. Once a card
-     of the suit turns up they can play it or keep drawing for a better one. */
+  /* Any follower may draw while the deck lasts, hoping for a better card of
+     the suit; players without the suit must draw until one turns up. Every
+     drawn card stays in the hand. */
   function actDraw(state, pid, payload, now) {
     var bad = followGuard(state, pid);
     if (bad) return bad;
     var p = player(state, pid);
-    if (CT.hasSuit(p.hand, state.suit) && !state.drawn[pid]) {
-      return CT.fail('has-suit', 'You have a ' + suitName(state.suit) + '. Play it. Only players who start the set without the suit may draw.');
-    }
     if (!state.deck.length) return CT.fail('deck-empty', 'The deck is empty.');
     var last = state.lastDrawAt[pid];
     var gap = state.timing.drawCooldownMs;
@@ -517,9 +515,9 @@
     var hasIt = !!mine && CT.hasSuit(hand, state.suit);
     v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
     v.canFollow = hasIt;
-    v.canDraw = !!mine && state.deck.length > 0 && (!hasIt || (state.drawn[pid] || 0) > 0);
+    v.canDraw = !!mine && state.deck.length > 0;
     v.mustDraw = v.canDraw && !hasIt;
-    v.mayDraw = v.canDraw && hasIt;   // found the suit while drawing: play it or keep going
+    v.mayDraw = v.canDraw && hasIt;   // holds the suit: play it, or draw for a better one
     v.canTake = !!me && state.phase === 'take' && isTaker(state, pid) && !state.taken[pid];
     v.playable = v.canLead ? hand.map(function (c) { return c.id; })
       : v.canFollow ? hand.filter(function (c) { return c.suit === state.suit; }).map(function (c) { return c.id; })
@@ -550,7 +548,7 @@
       { title: 'Flush', text: 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.' },
       { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
       { title: 'Winning a set', text: 'The highest card wins the set. Cards rank 2 (low) up to 10, Jack, Queen, King and Ace (high). The cards are put aside and the winner leads the next set with any card they like. ' + leadText },
-      { title: 'Can’t follow?', text: 'If you start a set without the suit, draw from the deck until a card of the suit turns up. Then you can play it, or keep drawing for a better one, but every card you draw stays in your hand. Everyone who needs to draws at the same time, with a short pause between draws. Players who start the set with the suit can’t draw.' },
+      { title: 'Drawing', text: 'Before you play, you may draw from the deck to look for a better card of the suit, but every card you draw stays in your hand. If you don’t have the suit, you must draw until one turns up; then play it or keep drawing. Everyone draws at the same time, with a short pause between draws. The leader doesn’t draw.' },
       { title: 'Deck empty', text: 'If the deck runs out before you have a card of the suit, take one card from the set into your hand instead and sit out that set. The card still counts for whoever played it. You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
       { title: 'Time limit', text: 'The leader has ' + secs + ' seconds to lead, then everyone has ' + secs + ' seconds to play. When time runs out, a random card of the suit is played for anyone still deciding. If they have none, they draw until one turns up and it is played.' },
       { title: 'Winning the game', text: 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.' }

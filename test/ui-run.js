@@ -58,7 +58,7 @@ async function view(p) {
     const s = CT.App.session; if (!s) return null;
     const v = s.view('p0', { events: false });
     return { phase: v.phase, setNo: v.setNo, canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake,
-      turnLeft: v.turnEndsAt ? v.turnEndsAt - s.now() : null,
+      turnLeft: v.turnEndsAt ? v.turnEndsAt - s.now() : null, drew: (v.players.find(x => x.id === 'p0') || {}).drew || 0,
       playable: v.playable, hand: v.hand.length, deck: v.deckCount, winners: v.winners, reason: v.winReason,
       takers: v.players.filter(x => x.isTaker).length, sheet: CT.App.sheet };
   });
@@ -78,16 +78,16 @@ async function playGame(p, tag, want) {
   while (v && v.phase !== 'over' && guard++ < 3000) {
     if (v.phase === 'dealing') await once('deal', 'dealing', 650);
     if (v.mayDraw) await once('found', 'found-suit', 350);
-    if (v.mayDraw && Math.random() < 0.5) {
+    if (v.mayDraw && v.drew < 2 && Math.random() < 0.25) {
       await p.tap('#t-deck');          // keep drawing for a better card
       await sleep(560);
     } else if (v.canLead || v.canFollow) {
       const id = v.playable[Math.floor(Math.random() * v.playable.length)];
       await once(v.canLead ? 'lead' : 'follow', v.canLead ? 'your-lead' : 'follow', 300);
-      await p.tap(`.hcard[data-id="${id}"]`);
+      await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } });   // the visible left edge of an overlapped card
       await sleep(160);
       await once('selected', 'selected', 0);
-      await p.tap(`.hcard[data-id="${id}"]`);
+      await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } });   // the visible left edge of an overlapped card
       await sleep(250);
     } else if (v.mustDraw) {
       await p.tap('#t-deck');
