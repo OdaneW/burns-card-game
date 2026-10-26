@@ -5,6 +5,9 @@ A phone-first card game with several game modes, played against computer players
 - **Burns**: follow the suit, draw when you can't, and be the first to empty your hand.
 - **Pass-Roun Donkey**: pass one card round the circle, collect four of a kind, and never be last
   to put your cards down, or you collect a letter of DONKEY.
+- **Bull**: the whole deck is dealt round a circular table. Play one to four cards face down as the next
+  rank (Aces, then 2s, up to Kings and round again), bluff when you have to, and call "Bull!" on anyone
+  you think is lying. Whoever is wrong picks up the pile.
 
 **Play:** https://odanew.github.io/burns-card-game/
 
@@ -39,6 +42,9 @@ at the bottom of the menu screen.
 | `src/modes/donkey/bot.js` | The Donkey computer player, with three reflex speeds for the race |
 | `src/modes/donkey/ui.js` | The Donkey table screen: four seats round a table |
 | `src/modes/donkey/tutorial.js` | The interactive Donkey tutorial: five rigged lessons on the real table |
+| `src/modes/bull/rules.js` | The Bull rules: dealing the whole deck, the rank sequence, face-down plays, calling Bull and the last-card call |
+| `src/modes/bull/bot.js` | The Bull computer player: when to bluff, and when to call Bull from the cards it has seen |
+| `src/modes/bull/ui.js` | The Bull table screen: three to six seats round an oval table |
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |
@@ -61,7 +67,8 @@ at the bottom of the menu screen.
 2. Add a computer player (`bot.js`) and a table screen (`ui.js`), reusing pieces from Burns where they fit.
 3. Optionally, add an interactive tutorial (`tutorial.js`): lessons for `UI.makeTutorial`, registered in
    `UI.tutorials`. How to play then offers it automatically, and so does Play, once, for someone new to the mode.
-4. Add the new files to `SOURCES` in `build.js`.
+4. Add the new files to `SOURCES` in `build.js`, and the rules and computer player to `server/src/engine.js`
+   so online rooms can play it. Phones on an app without the mode are asked to update when they join its room.
 
 The menu lists every registered mode, and each mode's rule choices appear on its setup screen automatically.
 The setup screen saves only the choices a player actually taps, so changing an option's `default` in an
@@ -89,7 +96,7 @@ game against the live server (`server/check.mjs`). The app connects to the addre
 To run it locally: `cd server && npm install && npm run dev`, then point the app at it by setting
 `localStorage['cardtable.server'] = '"ws://localhost:8787"'` in the browser console.
 `node test/online.test.mjs` tests the room logic with pretend phones, and `node test/ui-run.js <dir> online`
-plays through the screens with two phones against the local server.
+plays through the screens with two phones against the local server (`online-burns` and `online-bull` use three).
 
 A room's rules version must match the app's: when a mode's rules change in a way that affects saved or online
 games, bump its `ENGINE_VERSION`, and phones on an older app are asked to update.

@@ -326,6 +326,35 @@ test('a host who has gone quiet hands the room to someone who’s here', () => {
   eq(core.active().map(m => m.name), ['B'], 'someone gone two minutes comes off the lobby list');
 });
 
+test('a whole game of Bull with three people and a computer player', () => {
+  const { io, core } = setup(13);
+  const all = { burns: 2, donkey: 1, bull: 1 };
+  join(core, 'a', T(1), 'Odane', { mode: 'bull', size: 4, engines: all });
+  join(core, 'b', T(2), 'Tess', { engines: all });
+  join(core, 'c', T(3), 'Ravi', { engines: all });
+  core.message('a', { t: 'start' });
+  eq(core.session.state.players.map(p => p.isBot), [false, false, false, true]);
+  playFor(core, io, ['a', 'b', 'c'], 1800000);
+  eq(core.room.phase, 'over');
+  const st = last(io, 'b', 'state').view;
+  eq([st.mode, st.phase, st.me], ['bull', 'over', 'p1']);
+});
+
+test('apps without a room’s game are asked to update', () => {
+  const { io, core } = setup();
+  const all = { burns: 2, donkey: 1, bull: 1 };
+  join(core, 'a', T(1), 'Host', { mode: 'donkey', engines: all });
+  join(core, 'old', T(2), 'Old app');                         // an app from before Bull: no list of games
+  eq(core.active().length, 2, 'an older app can still join a Donkey room');
+  core.message('a', { t: 'setup', mode: 'bull' });
+  eq(last(io, 'old', 'error').code, 'no-mode', 'switching to Bull asks the older app to update');
+  assert(!core.member(2).connected);
+  join(core, 'old2', T(3), 'Another old app');
+  eq(last(io, 'old2', 'error').code, 'no-mode', 'and an older app can’t join a Bull room');
+  join(core, 'new', T(4), 'Updated', { engines: all });
+  eq(last(io, 'new', 'welcome').you, 3, 'an updated app joins as normal');
+});
+
 test('Donkey online: the race uses the time each phone measured', () => {
   const { io, core } = setup(21);
   join(core, 'a', T(1), 'A', { mode: 'donkey' });

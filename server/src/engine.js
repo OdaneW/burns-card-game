@@ -7,5 +7,7 @@ import '../../src/modes/burns/rules.js';
 import '../../src/modes/burns/bot.js';
 import '../../src/modes/donkey/rules.js';
 import '../../src/modes/donkey/bot.js';
+import '../../src/modes/bull/rules.js';
+import '../../src/modes/bull/bot.js';
 
 export default globalThis.CT;

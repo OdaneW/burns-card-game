@@ -362,17 +362,95 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
-    if (SCENARIO === 'online' || SCENARIO === 'online-burns') {
+    if (/^bull/.test(SCENARIO)) {
+      // A game of Bull through the screen: playing true cards and bluffs, calling Bull, big hands.
+      const size = {
+        'bull': { viewport: { width: 390, height: 844 } },
+        'bull-small': { viewport: { width: 360, height: 640 } },
+        'bull-landscape': { viewport: { width: 844, height: 390 } },
+        'bull-six': { viewport: { width: 390, height: 844 } }
+      }[SCENARIO];
+      const players = SCENARIO === 'bull-six' ? 6 : SCENARIO === 'bull-small' ? 3 : 4;
+      const tag = SCENARIO;
+      const p = await open(browser, { ctx: size, seed: 41, speed: 2,
+        settings: { format: 2, bull: { opponents: players - 1, options: {} } } });
+      await shot(p, tag + '-01-home');
+      await p.tap('[data-play="bull"]');
+      await sleep(300);
+      await shot(p, tag + '-02-setup');
+      await p.tap('#s-deal');
+      await sleep(250);
+      const look = () => p.evaluate(() => {
+        const s = CT.App.session; if (!s) return null;
+        const me = CT.App.table.me;
+        const v = s.view(me, { events: false });
+        return { phase: v.phase, turn: v.turn, me: me, rank: v.rank, canPlay: v.canPlay, canBull: v.canBull, openAt: v.openAt, now: s.now(),
+          hand: v.hand.map(c => c.id), handRanks: v.hand.map(c => c.rank), last: v.last, reveal: v.reveal, sheet: CT.App.sheet, pile: v.pileCount,
+          two: document.getElementById('b-handwrap').classList.contains('two') };
+      });
+      const shots = {};
+      const once = async (key, name, wait) => { if (shots[key]) return; shots[key] = 1; if (wait) await sleep(wait); await shot(p, tag + '-' + name); };
+      let guard = 0, v = await look(), myPlays = 0, myBluffs = 0, myCalls = 0, sawTwoRows = false;
+      const checks = [];
+      while (v && v.phase !== 'over' && guard++ < 8000) {
+        if (v.two) sawTwoRows = true;
+        if (v.phase === 'dealing') await once('deal', '03-dealing', 500);
+        if (v.phase === 'reveal') await once(v.reveal.lie ? 'lie' : 'true', v.reveal.lie ? '08-reveal-bluff' : '09-reveal-true', 900);
+        if (v.phase === 'lastcall') await once('last', '10-last-call', 200);
+        if (v.canBull && v.last && v.last.n >= 2 && myCalls < 3 && Math.random() < 0.5) {
+          await once('bullbtn', '06-bull-button', 0);
+          try { await p.tap('#b-bull', { timeout: 1500 }); myCalls++; } catch (e) { /* the moment passed */ }
+          await sleep(300);
+        } else if (v.canPlay && v.now >= (v.openAt || 0)) {
+          await once('turn', '04-your-turn', 200);
+          const want = v.hand.filter((id, i) => v.handRanks[i] === v.rank);
+          let pick = want.slice(0, 4);
+          if (!pick.length) { pick = [v.hand[0]]; myBluffs++; }
+          else if (Math.random() < 0.3 && v.hand.length > pick.length + 1 && pick.length < 4) { pick.push(v.hand.find(id => !pick.includes(id))); myBluffs++; }
+          if (want.length && Math.random() < 0.5) await p.tap('#b-pick');
+          else for (const id of pick) { await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 8, y: 20 } }); await sleep(90); }
+          await sleep(120);
+          await once('sel', '05-selected', 0);
+          try { await p.tap('#b-play', { timeout: 2500 }); myPlays++; } catch (e) { /* waiting */ }
+          await sleep(250);
+        } else {
+          if (v.phase === 'play' && v.turn !== v.me && v.last) await once('others', '07-others-turn', 300);
+          await sleep(100);
+        }
+        v = await look();
+      }
+      if (!v || v.phase !== 'over') throw new Error('Bull game did not finish');
+      const end = await p.evaluate(() => {
+        const st = CT.App.session.state;
+        return { plays: st.plays, winner: st.winners[0], calls: st.events.filter(e => e.type === 'bull').length, counts: st.players.map(x => x.hand.length) };
+      });
+      console.log('  game over:', JSON.stringify(end), '· you played', myPlays, 'times (' + myBluffs + ' with a bluff), called Bull', myCalls, 'times · two-row hand seen:', sawTwoRows);
+      await sleep(2800);
+      await shot(p, tag + '-11-result');
+      await p.tap('#r-table'); await sleep(300);
+      await p.tap('#b-menu'); await sleep(300);
+      await p.tap('#m-log'); await sleep(300);
+      await shot(p, tag + '-12-log');
+      await p.tap('[data-close]'); await sleep(200);
+      await p.tap('#b-menu'); await sleep(200);
+      await p.tap('#m-rules'); await sleep(300);
+      await shot(p, tag + '-13-rules');
+      checks.forEach(c => console.log('  ' + c));
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (SCENARIO === 'online' || SCENARIO === 'online-burns' || SCENARIO === 'online-bull') {
       // Phones playing together through the game server (run it locally: cd server && npm run dev).
       const burns = SCENARIO === 'online-burns';
+      const bull = SCENARIO === 'online-bull';
       const server = process.env.SERVER || 'ws://127.0.0.1:8787';
       const phone = { viewport: { width: 390, height: 844 } };
       const storage = { 'cardtable.server': server };
-      const names = burns ? ['Odane', 'Tess', 'Ravi'] : ['Odane', 'Tess'];
+      const names = burns || bull ? ['Odane', 'Tess', 'Ravi'] : ['Odane', 'Tess'];
       const pages = [];
       for (let i = 0; i < names.length; i++) pages.push(await open(browser, { ctx: phone, seed: 31 + i, storage }));
       const [host, guest] = pages;
-      const tag = burns ? 'ob' : 'od';
+      const tag = burns ? 'ob' : bull ? 'oB' : 'od';
       const checks = [];
       const info = p => p.evaluate(() => {
         const o = CT.App.online;
@@ -383,8 +461,7 @@ async function playGame(p, tag, want) {
       await shot(host, tag + '-01-home');
       // the host creates a room
       await host.tap('[data-online="create"]'); await sleep(300);
-      if (burns) await host.tap('#overlay [data-mode="burns"]');
-      else await host.tap('#overlay [data-mode="donkey"]');
+      await host.tap('#overlay [data-mode="' + (burns ? 'burns' : bull ? 'bull' : 'donkey') + '"]');
       await host.fill('#o-name', names[0]);
       await shot(host, tag + '-02-create');
       await host.tap('#o-go');
@@ -412,7 +489,7 @@ async function playGame(p, tag, want) {
       await shot(guest, tag + '-05-lobby-guest');
       await shot(host, tag + '-06-lobby-host-full');
       checks.push('lobby (host): ' + JSON.stringify((await info(host)).members) + ' · guest sees host = ' + (await info(guest)).host);
-      if (burns) {
+      if (burns || bull) {
         await host.tap('[data-l-size="4"]'); await sleep(400);
         checks.push('host set 4 seats; guest sees ' + await guest.evaluate(() => CT.App.online.room.size) + ' seats');
       }
@@ -437,6 +514,9 @@ async function playGame(p, tag, want) {
           const d = v.tiebreak && v.tiebreak.duel;
           Object.assign(out, { canPass: v.canPass, canDeclare: v.canDeclare, canReact: v.canReact, canChallenge: v.canChallenge, canCall: v.canCall,
             call: d && d.myCard ? (CT.rankValue(d.myCard.rank, true) >= 7 ? 'higher' : 'lower') : null });
+        } else if (v.mode === 'bull') {
+          Object.assign(out, { canPlay: v.canPlay, canBull: v.canBull, open: v.openAt == null || s.now() >= v.openAt, last: v.last,
+            want: v.hand.filter(c => c.rank === v.rank).map(c => c.id).slice(0, 4), any: v.hand.length ? v.hand[0].id : null });
         } else {
           Object.assign(out, { canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake, playable: v.playable });
         }
@@ -455,6 +535,13 @@ async function playGame(p, tag, want) {
               await p.tap(`.hcard[data-id="${v.pick}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); busy.set(p, Date.now() + 600);
             } else if (v.canChallenge) { await p.tap('#d-choices button', { timeout: 1500 }); busy.set(p, Date.now() + 600); }
             else if (v.canCall) { await p.tap(`#d-choices [data-call="${v.call}"]`, { timeout: 1500 }); busy.set(p, Date.now() + 600); }
+          } else if (v.mode === 'bull') {
+            if (v.canBull && v.last && v.last.n >= 3 && Math.random() < 0.5) { await p.tap('#b-bull', { timeout: 1500 }); busy.set(p, Date.now() + 800); }
+            else if (v.canPlay && v.open) {
+              const pick = v.want.length ? v.want : [v.any];
+              for (const id of pick) { await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 8, y: 20 }, timeout: 1500 }); await sleep(80); }
+              await p.tap('#b-play', { timeout: 2500 }); busy.set(p, Date.now() + 700);
+            }
           } else {
             if ((v.canLead || v.canFollow) && v.playable.length && !(v.mayDraw && Math.random() < 0.2)) {
               const id = v.playable[Math.floor(Math.random() * v.playable.length)];
@@ -521,7 +608,7 @@ async function playGame(p, tag, want) {
       await shot(host, tag + '-13-host-after-reload');
       // a guest leaves from the menu; the computer takes their seat
       const leaver = pages[pages.length - 1];
-      await leaver.tap(burns ? '#t-menu' : '#d-menu'); await sleep(300);
+      await leaver.tap(burns ? '#t-menu' : bull ? '#b-menu' : '#d-menu'); await sleep(300);
       await shot(leaver, tag + '-14-menu');
       await leaver.tap('#m-leave'); await sleep(300);
       await shot(leaver, tag + '-15-leave-confirm');

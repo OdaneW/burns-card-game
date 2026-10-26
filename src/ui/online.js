@@ -228,7 +228,7 @@
     this.room = null;
     this.you = null;
     this.remote = null;
-    var hello = { token: this.data.token, name: this.data.name || 'Player' };
+    var hello = { token: this.data.token, name: this.data.name || 'Player', engines: this.app.engines() };
     for (var k in extra) hello[k] = extra[k];
     this.conn = new CT.Net.Connection({
       server: serverUrl(), code: code, hello: hello,
@@ -268,6 +268,11 @@
   };
 
   Online.prototype.onRoom = function (room) {
+    if (!CT.getMode(room.mode)) {
+      // a game this version of the app doesn't have yet
+      this.onError({ code: 'update', message: 'This room is playing a game your app doesn’t have yet. Update the app, then join again with the code.' });
+      return;
+    }
     var first = !this.room;
     this.room = room;
     this.data.room = { code: room.code, mode: room.mode, at: Date.now() };

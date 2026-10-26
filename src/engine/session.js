@@ -100,7 +100,7 @@
       if (!intent) { delete this.botPlans[p.id]; continue; }
       var plan = this.botPlans[p.id];
       if (!plan || plan.key !== intent.key) {
-        plan = this.botPlans[p.id] = { key: intent.key, at: now + bot.delay(intent, view, this.botRng) };
+        plan = this.botPlans[p.id] = { key: intent.key, at: now + bot.delay(intent, view, this.botRng, now) };
       }
       if (now < plan.at) continue;
       var memory = this.botMemory[p.id] || (this.botMemory[p.id] = {});

@@ -16,7 +16,7 @@
   var PING_MS = 4000;          // clock checks during a game
   var KEEPALIVE_MS = 25000;    // a tiny ping otherwise, so idle connections aren't dropped
   // Refusals that won't change by trying again.
-  var FINAL = { 'no-room': 1, update: 1, full: 1, 'bad-hello': 1, replaced: 1, closed: 1 };
+  var FINAL = { 'no-room': 1, update: 1, 'no-mode': 1, full: 1, 'bad-hello': 1, replaced: 1, closed: 1 };
 
   function perfNow() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 

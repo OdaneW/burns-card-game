@@ -501,6 +501,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 .hand-wrap {
   position: relative; flex: none;
+  isolation: isolate;   /* the cards' own stacking stays inside the hand, under sheets, toasts and the coach */
   height: calc(var(--hcw) * 1.4 + 22px);
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
@@ -807,11 +808,97 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 @keyframes slapIn { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes slapPulse { from { box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45); } to { box-shadow: 0 0 0 10px rgba(240, 100, 60, .18), 0 14px 30px rgba(0, 0, 0, .45); } }
 
+/* ---------- Bull: a round table for three to six ---------- */
+.bl-table { position: relative; flex: 1 1 auto; min-height: 280px; }
+.bl-felt {
+  position: absolute; inset: 9% 13%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 42%, rgba(23, 82, 78, .95), rgba(6, 30, 29, .6) 72%);
+  box-shadow: inset 0 2px 14px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.bl-seat {
+  position: absolute; z-index: 2; transform: translate(-50%, -50%);
+  width: 86px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 5px 2px; border-radius: 14px;
+  transition: background-color .25s, opacity .25s;
+}
+.bl-seat.is-turn { background: rgba(244, 185, 66, .12); }
+.bl-seat.is-out { opacity: .6; }
+.bl-count { display: inline-flex; align-items: center; gap: 4px; font: 700 12px/1 var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.bl-count .card { --cw: 12px; border-radius: 2px; box-shadow: none; }
+.bl-bubble {
+  max-width: 100%; box-sizing: border-box;
+  padding: 3px 7px; border-radius: 99px;
+  background: var(--card); color: var(--ink-on-paint);
+  font: 800 11px/1.15 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .3);
+}
+.bl-bubble.hot { background: var(--ember); color: #2A0E05; }
+.bl-bubble.ember { background: #FFB59B; }
+.bl-bubble.ok { background: #9FE3D6; }
+
+.bl-center {
+  position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -50%);
+  width: 44%; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.bl-now { display: grid; justify-items: center; }
+.bl-now .lbl { font: 800 10px/1.2 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.bl-now b { font: 400 26px/1.05 var(--font-display); color: var(--marigold); letter-spacing: .02em; text-shadow: .05em .05em 0 var(--ember), .1em .1em 0 rgba(0, 0, 0, .35); }
+.bl-now.mine .lbl { color: var(--marigold); }
+.bl-now.mine b { animation: nudge 1.4s ease-in-out infinite; }
+.bl-pile { position: relative; width: calc(var(--rail-cw) + 12px); height: calc(var(--rail-cw) * 1.4 + 6px); }
+.bl-pile .card { --cw: var(--rail-cw); position: absolute; top: 2px; left: 4px; }
+.bl-pile .card:nth-child(1) { transform: rotate(-9deg) translateX(-3px); }
+.bl-pile .card:nth-child(2) { transform: rotate(5deg) translateX(3px); }
+.bl-pile .card:nth-child(3) { transform: rotate(-1deg); }
+.bl-pile.empty { border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .2); }
+.bl-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+.bl-center.revealing .bl-pile, .bl-center.revealing .bl-pilecount, .bl-center.revealing .bl-now { display: none; }
+.bl-reveal { display: grid; justify-items: center; gap: 6px; }
+.bl-reveal-head { font: 800 10px/1.25 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.bl-reveal-cards { display: flex; gap: 4px; perspective: 600px; }
+.bl-reveal-cards .card { --cw: calc(var(--rail-cw) * .9); animation: flipIn .45s ease-out both; animation-delay: calc(var(--i) * 90ms + .15s); }
+.bl-reveal-cards .card.wrong { box-shadow: 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .6); }
+.bl-stamp { font: 400 24px/1 var(--font-display); transform: rotate(-6deg); animation: stampIn .35s cubic-bezier(.2, .8, .3, 1.4) .6s both; }
+.bl-stamp.lie { color: var(--ember); }
+.bl-stamp.true { color: #9FE3D6; }
+
+.bl-me {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  flex: none; min-height: 48px; padding: 2px 4px 2px 2px;
+  border-radius: 14px;
+  transition: background-color .25s;
+}
+.bl-me.is-turn { background: rgba(244, 185, 66, .1); }
+.bl-me-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bl-me-text { display: grid; gap: 2px; }
+.bl-me .dk-initial { background: var(--ink); }
+.bl-actions { display: flex; align-items: center; gap: 6px; }
+.bl-bull {
+  padding: 11px 16px;
+  font: 400 18px/1 var(--font-display);
+  background: var(--ember); color: #2A0E05;
+  box-shadow: 0 3px 0 #A63F20, 0 10px 22px rgba(0, 0, 0, .28);
+  animation: bullPulse .7s ease-in-out infinite alternate;
+}
+.bl-bull:active { transform: translateY(2px); }
+.status-sub .bl-pick { display: inline; padding: 0 2px; font-size: 13px; color: var(--marigold); vertical-align: baseline; }
+@media (max-width: 380px) { .bl-me .btn-play .as { display: none; } }
+.btn-play.waiting { opacity: .5; }
+.bl-handwrap .hcard { transition: transform .22s cubic-bezier(.3, .7, .3, 1), left .28s cubic-bezier(.3, .7, .3, 1), bottom .28s cubic-bezier(.3, .7, .3, 1), box-shadow .2s; }
+.bl-handwrap.two { height: calc(var(--hcw) * 1.4 * 1.56 + 22px); }
+
+@keyframes flipIn { from { transform: rotateY(90deg); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes stampIn { from { transform: rotate(-6deg) scale(2.2); opacity: 0; } to { transform: rotate(-6deg) scale(1); opacity: 1; } }
+@keyframes bullPulse { from { box-shadow: 0 3px 0 #A63F20, 0 0 0 0 rgba(240, 100, 60, 0); } to { box-shadow: 0 3px 0 #A63F20, 0 0 0 7px rgba(240, 100, 60, .3); } }
+
 /* short screens (landscape phones): smaller cards, and the hand moves beside the table */
 @media (max-height: 560px) {
   :root { --hcw: 50px; --seat-cw: 32px; --me-cw: 40px; --rail-cw: 40px; }
   .status-sub, .seat-voids { display: none; }
   .status { min-height: 0; }
+  #screen-table:has(.bl-table) .status-sub { display: block; }   /* Bull's hints (and Pick) are worth the line */
 }
 @media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
   #screen-table {
@@ -833,6 +920,11 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .dk-choices { grid-column: 2; grid-row: 3; }
   .dk-me { grid-column: 2; grid-row: 4; }
   .dk-handwrap { grid-row: 5; align-self: end; }
+  .bl-table { grid-column: 1; grid-row: 2 / -1; min-height: 0; }
+  #screen-table:has(.bl-table) { grid-template-rows: auto auto auto minmax(0, 1fr); }
+  #screen-table:has(.bl-table) .status { grid-column: 2; grid-row: 2; }
+  .bl-me { grid-column: 2; grid-row: 3; }
+  .bl-handwrap { grid-row: 4; align-self: end; }
 }
 
 /* ---------- online: playing with friends ---------- */
@@ -955,7 +1047,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.8.0","id":"d73d919","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -1216,7 +1308,7 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
       if (!intent) { delete this.botPlans[p.id]; continue; }
       var plan = this.botPlans[p.id];
       if (!plan || plan.key !== intent.key) {
-        plan = this.botPlans[p.id] = { key: intent.key, at: now + bot.delay(intent, view, this.botRng) };
+        plan = this.botPlans[p.id] = { key: intent.key, at: now + bot.delay(intent, view, this.botRng, now) };
       }
       if (now < plan.at) continue;
       var memory = this.botMemory[p.id] || (this.botMemory[p.id] = {});
@@ -2748,6 +2840,566 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
   Donkey.bot = bot;
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
 
+/* ---- src/modes/bull/rules.js ---- */
+/* ==========================================================================
+   GAME MODE · BULL — rules
+   Three to six players share out the whole deck. Taking turns clockwise,
+   each puts one to four cards face down and claims they're the next rank in
+   an endless sequence: Aces, then 2s, 3s … Kings, then Aces again. They may
+   be lying. After every play anyone may call "Bull!", until the next player
+   has played: the cards are turned over, and whoever was wrong (the liar, or
+   whoever doubted an honest play) picks up the whole pile. The first to get
+   rid of all their cards wins, but that last play can be called too.
+
+   Flow
+     dealing ─► play (turn by turn; every play can be called) ─► reveal
+       (someone called Bull) ─► play …
+     Someone plays their last cards ─► lastcall ─► over, or reveal if called
+   Everyone gets a few seconds after each play to call Bull before the next
+   player may play; after that, calls are still open until they do.
+   Pure rules: every function takes the state and the game time; no timers,
+   no DOM. Seats run clockwise in the order of state.players.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  var ENGINE_VERSION = 1;
+  var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  var MAX_PLAY = 4;   // there are only four of each rank
+  var NAMES = { A: ['Ace', 'Aces'], J: ['Jack', 'Jacks'], Q: ['Queen', 'Queens'], K: ['King', 'Kings'] };
+
+  /* "Ace", "Aces", "7", "7s": a rank as it's claimed. */
+  function rankName(rank, n) {
+    var nm = NAMES[rank];
+    if (nm) return n === 1 ? nm[0] : nm[1];
+    return n === 1 ? rank : rank + 's';
+  }
+
+  var DEFAULT_TIMING = {
+    dealHoldMs: 1900,        // the deal plays out
+    revealMs: 3000,          // the called cards stay face up
+    lastCallExtraMs: 1500    // someone's last cards: a little longer to decide
+  };
+
+  /* Choices on the setup screen; the rules text and computer players read them too. */
+  var OPTIONS = [
+    {
+      id: 'turnTime',
+      label: 'Time to play',
+      default: '30',
+      choices: [
+        { value: '15', label: '15 sec', help: 'You have 15 seconds to play your cards. When time runs out, one card is played for you.' },
+        { value: '30', label: '30 sec', help: 'You have 30 seconds to play your cards. When time runs out, one card is played for you.' },
+        { value: '60', label: '60 sec', help: 'You have a minute to play your cards. When time runs out, one card is played for you.' }
+      ]
+    },
+    {
+      id: 'bullTime',
+      label: 'Time to call Bull',
+      default: '3',
+      choices: [
+        { value: '2', label: '2 sec', help: 'After each play, everyone has 2 seconds to call Bull before the next player can play. Quick games.' },
+        { value: '3', label: '3 sec', help: 'After each play, everyone has 3 seconds to call Bull before the next player can play.' },
+        { value: '5', label: '5 sec', help: 'After each play, everyone has 5 seconds to call Bull before the next player can play. Time to think.' }
+      ]
+    },
+    {
+      id: 'bots',
+      label: 'Computer players',
+      default: 'normal',
+      choices: [
+        { value: 'easy', label: 'Trusting', help: 'The computer players rarely call Bull and bluff in obvious ways.' },
+        { value: 'normal', label: 'Normal', help: 'The computer players call Bull when a claim looks unlikely, and bluff now and then.' },
+        { value: 'sharp', label: 'Suspicious', help: 'The computer players call Bull more often and sneak in extra cards when they can.' }
+      ]
+    }
+  ];
+
+  /* ---------- helpers ---------------------------------------------------- */
+
+  function player(state, pid) {
+    for (var i = 0; i < state.players.length; i++) if (state.players[i].id === pid) return state.players[i];
+    return null;
+  }
+
+  /* The next seat clockwise. */
+  function nextAfter(state, pid) {
+    var ps = state.players;
+    for (var i = 0; i < ps.length; i++) if (ps[i].id === pid) return ps[(i + 1) % ps.length].id;
+    return null;
+  }
+
+  function turnMs(state) {
+    if (state.timing.turnMs != null) return state.timing.turnMs;    // tests and lessons
+    return (Number(state.options.turnTime) || 30) * 1000;
+  }
+  function bullMs(state) {
+    if (state.timing.bullMs != null) return state.timing.bullMs;
+    return (Number(state.options.bullTime) || 3) * 1000;
+  }
+  function turnDeadline(state, from) { var ms = turnMs(state); return ms ? from + ms : null; }
+
+  function pileCount(state) {
+    var n = 0;
+    state.pile.forEach(function (pl) { n += pl.cards.length; });
+    return n;
+  }
+
+  function counts(state) {
+    var out = {};
+    state.players.forEach(function (p) { out[p.id] = p.hand.length; });
+    return out;
+  }
+
+  function emit(state, now, ev, secret) {
+    state.seq += 1;
+    ev.seq = state.seq;
+    ev.t = Math.round(now);
+    if (secret) ev.secret = secret;
+    state.events.push(ev);
+    if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
+  }
+
+  /* ---------- setup ------------------------------------------------------ */
+
+  function createGame(config) {
+    var players = config.players || [];
+    if (players.length < 3 || players.length > 6) throw new Error('Bull needs 3 to 6 players');
+    var now = config.now || 0;
+    var timing = {};
+    for (var k in DEFAULT_TIMING) timing[k] = DEFAULT_TIMING[k];
+    if (config.timing) for (var t in config.timing) timing[t] = config.timing[t];
+
+    var state = {
+      mode: 'bull',
+      engineVersion: ENGINE_VERSION,
+      rng: ((config.seed != null ? config.seed : Date.now()) >>> 0) || 1,
+      options: CT.resolveOptions(OPTIONS, config.options),
+      timing: timing,
+      players: players.map(function (p, i) {
+        return { id: p.id, name: p.name, isBot: !!p.isBot, seat: i, hand: [] };
+      }),
+      phase: 'dealing',
+      phaseEndsAt: now + timing.dealHoldMs,
+      starter: null,
+      turn: null,         // whose turn it is to play
+      turnEndsAt: null,   // when time runs out for them
+      openAt: null,       // they may play from here (everyone's had a moment to call Bull)
+      rank: 0,            // the rank they must claim: an index into RANKS
+      pile: [],           // face-down plays since the pile was last picked up: { by, rank, cards }
+      last: null,         // the play that can be called: { by, rank, n, at, no }
+      plays: 0,
+      reveal: null,       // a call being shown: { challenger, accused, rank, n, cards, lie, taker, count, wasLast, no }
+      winners: null,
+      seq: 0,
+      events: []
+    };
+
+    // the whole deck, one card at a time clockwise from the player who starts
+    var deck = CT.shuffle(CT.standardDeck(), state);
+    var start = state.players.indexOf(CT.pickRandom(state.players, state));
+    state.starter = state.players[start].id;
+    deck.forEach(function (c, i) { state.players[(start + i) % state.players.length].hand.push(c); });
+    var secret = {};
+    state.players.forEach(function (p) { secret[p.id] = { hand: p.hand.slice() }; });
+    var order = [];
+    for (var i = 0; i < state.players.length; i++) order.push(state.players[(start + i) % state.players.length].id);
+    emit(state, now, { type: 'deal', starter: state.starter, order: order, counts: counts(state) }, secret);
+    return state;
+  }
+
+  function startPlay(state, now) {
+    state.phase = 'play';
+    state.turn = state.starter;
+    state.rank = 0;
+    state.openAt = now;
+    state.turnEndsAt = turnDeadline(state, now);
+    emit(state, now, { type: 'start', player: state.starter, rank: RANKS[0] });
+  }
+
+  /* ---------- playing ---------------------------------------------------- */
+
+  /* Cards go face down on the pile, claimed as the rank in sequence. Only
+     the player knows what they really are. */
+  function lay(state, p, cards, now, auto) {
+    var rank = state.rank;
+    state.plays += 1;
+    state.pile.push({ by: p.id, rank: rank, cards: cards });
+    state.last = { by: p.id, rank: rank, n: cards.length, at: now, no: state.plays };
+    var secret = {};
+    secret[p.id] = { cards: cards.slice() };
+    emit(state, now, { type: 'play', player: p.id, rank: RANKS[rank], n: cards.length, no: state.plays,
+      auto: !!auto, pile: pileCount(state), left: p.hand.length }, secret);
+    state.rank = (rank + 1) % RANKS.length;
+    state.turn = nextAfter(state, p.id);
+    if (!p.hand.length) {
+      // their last cards: one last chance to call Bull before they win
+      state.phase = 'lastcall';
+      state.phaseEndsAt = now + bullMs(state) + state.timing.lastCallExtraMs;
+      state.openAt = null;
+      state.turnEndsAt = null;
+      emit(state, now, { type: 'lastCall', player: p.id });
+      return;
+    }
+    state.openAt = now + bullMs(state);
+    state.turnEndsAt = turnDeadline(state, state.openAt);
+  }
+
+  function actPlay(state, p, cardIds, now) {
+    if (state.phase !== 'play') return CT.fail('phase', 'It isn’t time to play.');
+    if (state.turn !== p.id) return CT.fail('turn', 'Wait for your turn.');
+    if (now < state.openAt) return CT.fail('wait', 'Give everyone a moment to call Bull.', { retryInMs: Math.max(0, state.openAt - now) });
+    var ids = [];
+    (Array.isArray(cardIds) ? cardIds : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
+    if (!ids.length) return CT.fail('none', 'Pick at least one card to play.');
+    if (ids.length > MAX_PLAY) return CT.fail('many', 'You can play up to four cards at a time.');
+    var cards = [];
+    for (var i = 0; i < ids.length; i++) {
+      var c = p.hand.filter(function (x) { return x.id === ids[i]; })[0];
+      if (!c) return CT.fail('card', 'That card isn’t in your hand.');
+      cards.push(c);
+    }
+    p.hand = p.hand.filter(function (x) { return ids.indexOf(x.id) < 0; });
+    var claimed = RANKS[state.rank];
+    lay(state, p, cards, now, false);
+    return CT.ok({ n: cards.length, rank: claimed });
+  }
+
+  /* Time ran out: one card goes down for them, a true one if they have it. */
+  function playTimeout(state, now) {
+    var p = player(state, state.turn);
+    emit(state, now, { type: 'timeout', player: p.id });
+    var want = RANKS[state.rank];
+    var card = p.hand.filter(function (c) { return c.rank === want; })[0] || CT.pickRandom(p.hand, state);
+    p.hand = p.hand.filter(function (c) { return c.id !== card.id; });
+    lay(state, p, [card], now, true);
+  }
+
+  /* ---------- calling Bull ------------------------------------------------ */
+
+  function actBull(state, p, now) {
+    if (state.phase !== 'play' && state.phase !== 'lastcall') return CT.fail('phase', 'There’s nothing to call Bull on right now.');
+    var last = state.last;
+    if (!last) return CT.fail('nothing', 'There’s nothing to call Bull on right now.');
+    if (last.by === p.id) return CT.fail('self', 'You can’t call Bull on your own cards.');
+    var play = state.pile[state.pile.length - 1];
+    var want = RANKS[last.rank];
+    var lie = play.cards.some(function (c) { return c.rank !== want; });
+    state.reveal = {
+      challenger: p.id, accused: last.by, rank: want, n: last.n, cards: play.cards.slice(),
+      lie: lie, taker: lie ? last.by : p.id, count: pileCount(state), wasLast: state.phase === 'lastcall', no: last.no
+    };
+    state.last = null;
+    state.phase = 'reveal';
+    state.phaseEndsAt = now + state.timing.revealMs;
+    state.openAt = null;
+    state.turnEndsAt = null;
+    var r = state.reveal;
+    emit(state, now, { type: 'bull', challenger: r.challenger, accused: r.accused, rank: r.rank, n: r.n,
+      cards: r.cards.slice(), lie: lie, taker: r.taker, count: r.count, wasLast: r.wasLast, no: r.no });
+    return CT.ok({ lie: lie });
+  }
+
+  /* Whoever was wrong takes the whole pile. If someone went out honestly,
+     they've won; otherwise the player whose turn it was carries on. */
+  function settle(state, now) {
+    var r = state.reveal;
+    var taker = player(state, r.taker);
+    var cards = [];
+    state.pile.forEach(function (pl) { pl.cards.forEach(function (c) { cards.push(c); }); });
+    taker.hand = taker.hand.concat(cards);
+    state.pile = [];
+    var secret = {};
+    secret[r.taker] = { cards: cards.slice() };
+    emit(state, now, { type: 'pickup', player: r.taker, count: cards.length, counts: counts(state) }, secret);
+    if (r.wasLast && !r.lie) { finish(state, now, r.accused); return; }
+    state.reveal = null;
+    state.phase = 'play';
+    state.openAt = now;
+    state.turnEndsAt = turnDeadline(state, now);
+    emit(state, now, { type: 'resume', player: state.turn, rank: RANKS[state.rank] });
+  }
+
+  function finish(state, now, winner) {
+    state.phase = 'over';
+    state.winners = [winner];
+    state.turn = null;
+    state.turnEndsAt = null;
+    state.openAt = null;
+    emit(state, now, { type: 'gameOver', winners: [winner], counts: counts(state) });
+  }
+
+  /* ---------- actions and time ------------------------------------------- */
+
+  function act(state, pid, type, payload, now) {
+    var p = player(state, pid);
+    if (!p) return CT.fail('no-player', 'You’re not in this game.');
+    payload = payload || {};
+    switch (type) {
+      case 'play': return actPlay(state, p, payload.cardIds, now);
+      case 'bull': return actBull(state, p, now);
+    }
+    return CT.fail('unknown', 'That move doesn’t exist in this game.');
+  }
+
+  function tick(state, now) {
+    switch (state.phase) {
+      case 'dealing':
+        if (now < state.phaseEndsAt) return false;
+        startPlay(state, now);
+        return true;
+      case 'play':
+        if (state.turnEndsAt == null || now < state.turnEndsAt) return false;
+        playTimeout(state, now);
+        return true;
+      case 'lastcall':
+        if (now < state.phaseEndsAt) return false;
+        finish(state, now, state.last.by);       // nobody called: they're out
+        return true;
+      case 'reveal':
+        if (now < state.phaseEndsAt) return false;
+        settle(state, now);
+        return true;
+    }
+    return false;
+  }
+
+  /* ---------- what one player may see ------------------------------------ */
+
+  function view(state, pid, opts) {
+    opts = opts || {};
+    var me = player(state, pid);
+    var last = state.last, r = state.reveal;
+    var v = {
+      mode: 'bull',
+      engineVersion: state.engineVersion,
+      me: pid,
+      phase: state.phase,
+      options: state.options,
+      timing: { turnMs: turnMs(state), bullMs: bullMs(state), revealMs: state.timing.revealMs, lastCallMs: bullMs(state) + state.timing.lastCallExtraMs },
+      phaseEndsAt: state.phaseEndsAt,
+      starter: state.starter,
+      turn: state.turn,
+      turnEndsAt: state.turnEndsAt,
+      openAt: state.openAt,
+      rank: RANKS[state.rank],
+      rankIdx: state.rank,
+      hand: me ? me.hand.slice() : [],
+      players: state.players.map(function (p) {
+        return { id: p.id, name: p.name, isBot: p.isBot, seat: p.seat, handCount: p.hand.length, isTurn: state.phase === 'play' && state.turn === p.id };
+      }),
+      pileCount: pileCount(state),
+      // what has been claimed on the pile (everyone heard), never what the cards are
+      pilePlays: state.pile.map(function (pl) { return { by: pl.by, rank: RANKS[pl.rank], n: pl.cards.length }; }),
+      last: last ? { by: last.by, rank: RANKS[last.rank], n: last.n, at: last.at, no: last.no } : null,
+      reveal: r ? { challenger: r.challenger, accused: r.accused, rank: r.rank, n: r.n, cards: r.cards.slice(), lie: r.lie,
+        taker: r.taker, count: r.count, wasLast: r.wasLast, no: r.no } : null,
+      plays: state.plays,
+      winners: state.winners,
+      seq: state.seq
+    };
+    // the cards you put on the pile yourself: you know what they are
+    v.myPileCards = [];
+    state.pile.forEach(function (pl) { if (pl.by === pid) pl.cards.forEach(function (c) { v.myPileCards.push(c); }); });
+    v.canPlay = !!me && state.phase === 'play' && state.turn === pid && me.hand.length > 0;
+    v.canBull = !!me && (state.phase === 'play' || state.phase === 'lastcall') && !!last && last.by !== pid;
+
+    if (opts.events !== false) {
+      var since = opts.sinceSeq || 0;
+      v.events = state.events.filter(function (e) { return e.seq > since; }).map(function (e) {
+        var copy = {};
+        for (var k in e) if (k !== 'secret') copy[k] = e[k];
+        if (e.secret && e.secret[pid]) copy.mine = e.secret[pid];
+        return copy;
+      });
+    }
+    return v;
+  }
+
+  /* ---------- How to play ------------------------------------------------- */
+
+  function rules(options) {
+    var o = CT.resolveOptions(OPTIONS, options);
+    var turn = Number(o.turnTime) || 30, call = Number(o.bullTime) || 3;
+    return [
+      { title: 'The cards', text: 'Three to six players. The whole deck is dealt out, so some players may get a card more than others. Keep your cards hidden.' },
+      { title: 'Your turn', text: 'Players take turns clockwise. On your turn, put one to four cards face down on the pile and claim they’re the rank in sequence: the first player plays Aces, the next 2s, then 3s, and so on up to Kings, then back to Aces. The app announces your claim, such as “two 7s”.' },
+      { title: 'Bluffing', text: 'Your cards don’t have to be what you claim. If you have no 7s when it’s your turn for 7s, you’ll have to bluff, and you can bluff even when you do have them.' },
+      { title: 'Bull!', text: 'If you think the last player lied, call Bull! Anyone can call, but only on the last play, and only until the next player has played. After each play everyone has ' + call + ' seconds to call before the next player can go.' },
+      { title: 'Who picks up', text: 'The cards that were called are turned over. If any of them isn’t what was claimed, the liar picks up the whole pile. If they told the truth, whoever called Bull picks up the whole pile instead. Then play carries on with the next rank.' },
+      { title: 'Winning', text: 'The first player to get rid of all their cards wins. When someone plays their last cards, everyone gets one last chance to call Bull. If they were bluffing, they pick up the pile and play on.' },
+      { title: 'Time limit', text: 'You have ' + turn + ' seconds to play. When time runs out, one card is played for you: a true one if you have it.' }
+    ];
+  }
+
+  /* One line for the "game in progress" card on the home screen. */
+  function describe(state, pid) {
+    var me = player(state, pid);
+    var n = me ? me.hand.length : 0;
+    return (n === 1 ? '1 card' : n + ' cards') + ' in your hand · ' + rankName(RANKS[state.rank], 2) + ' next';
+  }
+
+  CT.registerMode({
+    id: 'bull',
+    name: 'Bull',
+    shortName: 'Bull',
+    fan: ['7S', '7D', 'QC'],
+    tagline: 'Play your cards face down and claim they’re the next rank. Bluff your way out, or call Bull on a liar.',
+    handText: 'the whole deck dealt out',
+    engineVersion: ENGINE_VERSION,
+    players: { min: 3, max: 6, default: 4 },
+    options: OPTIONS,
+    defaultTiming: DEFAULT_TIMING,
+    ranks: RANKS,
+    rankName: rankName,
+    maxPlay: MAX_PLAY,
+    rules: rules,
+    describe: describe,
+    createGame: createGame,
+    act: act,
+    tick: tick,
+    view: view,
+    presenter: 'bull'
+  });
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/modes/bull/bot.js ---- */
+/* ==========================================================================
+   GAME MODE · BULL — computer player
+   Sees only what a person in that seat would see (its view). Plays its true
+   cards when it has them, now and then slipping in an extra; with nothing
+   true to play, it bluffs with the cards it will need least soon. It calls
+   Bull when a claim can't be true (it holds too many of that rank itself),
+   and otherwise when a claim looks unlikely, more readily when the player is
+   close to winning and less when the pile it might pick up is big.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var Bull = CT.getMode('bull');
+  var RANKS = Bull.ranks;
+
+  var SKILL = {
+    easy: { spot: 0.7, bar: 0.78, memory: false, extra: 0.05, react: [1000, 1900] },
+    normal: { spot: 1, bar: 0.68, memory: true, extra: 0.12, react: [750, 1600] },
+    sharp: { spot: 1, bar: 0.58, memory: true, extra: 0.2, react: [600, 1300] }
+  };
+  function skill(v) { return SKILL[v.options && v.options.bots] || SKILL.normal; }
+
+  /* A steady random number for this seat and this play, so a decision made
+     on one look at the table is the same on the next. */
+  function coin(v, salt) {
+    var s = v.me + ':' + salt, h = 2166136261;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 10007) / 10007;
+  }
+
+  function choose(n, k) {
+    if (k < 0 || k > n) return 0;
+    var r = 1;
+    for (var i = 1; i <= k; i++) r = r * (n - k + i) / i;
+    return r;
+  }
+
+  /* How likely the last claim is a lie, from what this seat knows. Most
+     people play every true card they have, sometimes slipping in one extra,
+     and bluff with a single card when they have none. So: how likely were
+     they to hold that many of the rank, given how many cards they had and
+     how many of the rank this seat knows are elsewhere (its own hand, and
+     what it put on the pile)? */
+  var BLUFF2 = 0.15, EXTRA = 0.12;
+  function lieChance(v, k) {
+    var last = v.last, n = last.n;
+    var known = v.hand.filter(function (c) { return c.rank === last.rank; }).length;
+    var mine = v.hand.length;
+    if (k.memory) {
+      var pile = v.myPileCards || [];
+      known += pile.filter(function (c) { return c.rank === last.rank; }).length;
+      mine += pile.length;
+    }
+    var left = 4 - known;
+    if (left < n) return 1;                                       // can't be true: the rest are mine
+    var accused = v.players.filter(function (p) { return p.id === last.by; })[0];
+    var unseen = 52 - mine;
+    var had = Math.min(unseen, (accused ? accused.handCount : 0) + n);
+    var total = choose(unseen, had);
+    var held = function (j) { return total ? choose(left, j) * choose(unseen - left, had - j) / total : 0; };
+    var truth = held(n), lie;
+    if (n === 1) lie = held(0) * (1 - BLUFF2);
+    else if (n === 2) lie = held(0) * BLUFF2 + held(1) * EXTRA;
+    else lie = held(n - 1) * EXTRA;
+    return lie + truth ? lie / (lie + truth) : 0.5;
+  }
+
+  function wantsBull(v) {
+    if (!v.canBull || !v.last) return false;
+    var k = skill(v), last = v.last;
+    var lie = lieChance(v, k);
+    if (lie >= 1) return coin(v, last.no + 'x') < k.spot;
+    // their last cards: if it's true they've won anyway, so calling costs nothing
+    if (v.phase === 'lastcall') return coin(v, last.no + 'L') < (k.memory ? 1 : 0.8);
+    var accused = v.players.filter(function (p) { return p.id === last.by; })[0];
+    var bar = k.bar + Math.min(0.15, v.pileCount * 0.006)           // a big pile makes a wrong call costly
+      + 0.05 * Math.max(0, v.players.length - 4);                   // more of us watching: leave it to the surest
+    if (accused && accused.handCount <= 2) bar -= 0.15;             // nearly out: worth the risk
+    return lie + (coin(v, last.no) - 0.5) * 0.16 > bar;
+  }
+
+  /* How many of my own turns until each rank is mine to play (0: now). */
+  function turnsUntil(v) {
+    var n = v.players.length, out = {};
+    RANKS.forEach(function (r, ri) {
+      for (var t = 0; t < 13; t++) if ((v.rankIdx + t * n) % 13 === ri) { out[r] = t; return; }
+      out[r] = 13;
+    });
+    return out;
+  }
+
+  function choosePlay(v, memory, rnd) {
+    var k = skill(v), want = v.rank, hand = v.hand;
+    var until = turnsUntil(v);
+    var spare = hand.filter(function (c) { return c.rank !== want; })
+      .sort(function (a, b) { return (until[b.rank] - until[a.rank]) || (rnd() - 0.5); });
+    var have = hand.filter(function (c) { return c.rank === want; }).slice(0, 4);
+    if (have.length) {
+      var cards = have.slice();
+      // now and then slip in a card that won't be needed for a long while
+      if (cards.length < 4 && spare.length > 2 && rnd() < k.extra) cards.push(spare[0]);
+      return cards.map(function (c) { return c.id; });
+    }
+    // nothing true to play: bluff, usually with one card
+    var count = hand.length >= 6 && rnd() < 0.15 ? 2 : 1;
+    return spare.slice(0, count).map(function (c) { return c.id; });
+  }
+
+  var bot = {
+    intent: function (v) {
+      if (wantsBull(v)) return { key: 'bull:' + v.last.no, kind: 'bull' };
+      if (v.canPlay) return { key: 'play:' + v.plays + ':' + v.turn + ':' + v.pileCount, kind: 'play' };
+      return null;
+    },
+
+    delay: function (intent, v, rnd, now) {
+      var k = skill(v);
+      if (intent.kind === 'bull') return k.react[0] + rnd() * (k.react[1] - k.react[0]);
+      // wait out everyone's moment to call Bull, then think
+      var wait = (v.openAt != null && now != null) ? Math.max(0, v.openAt - now) : 0;
+      return wait + 700 + rnd() * 1500;
+    },
+
+    decide: function (v, memory, rnd) {
+      if (wantsBull(v)) return { type: 'bull' };
+      if (v.canPlay) return { type: 'play', payload: { cardIds: choosePlay(v, memory, rnd) } };
+      return null;
+    },
+
+    wantsBull: wantsBull,
+    lieChance: function (v) { return lieChance(v, skill(v)); },
+    choosePlay: choosePlay
+  };
+
+  Bull.bot = bot;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
 /* ---- src/net/online.js ---- */
 /* ==========================================================================
    ONLINE · the link to the game server
@@ -2767,7 +3419,7 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
   var PING_MS = 4000;          // clock checks during a game
   var KEEPALIVE_MS = 25000;    // a tiny ping otherwise, so idle connections aren't dropped
   // Refusals that won't change by trying again.
-  var FINAL = { 'no-room': 1, update: 1, full: 1, 'bad-hello': 1, replaced: 1, closed: 1 };
+  var FINAL = { 'no-room': 1, update: 1, 'no-mode': 1, full: 1, 'bad-hello': 1, replaced: 1, closed: 1 };
 
   function perfNow() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
@@ -3281,6 +3933,8 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
           case 'nope': this.tone(330, 0.1, 0.09, 'triangle'); this.tone(262, 0.15, 0.09, 'triangle', 0.08); break;
           case 'slap': this.tone(140, 0.12, 0.16, 'sine'); this.noise(0.09, 700, 0.32); break;
           case 'thud': this.tone(120, 0.09, 0.08, 'sine'); this.noise(0.06, 600, 0.14); break;
+          case 'bull':   // a short, low call: two notes and a thump
+            this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;
           case 'bray':   // a soft hee-haw
             this.slide(560, 660, 0.22, 0.07, 'triangle', 0); this.slide(330, 280, 0.32, 0.08, 'triangle', 0.24);
             this.slide(540, 640, 0.2, 0.05, 'triangle', 0.62); this.slide(320, 270, 0.3, 0.06, 'triangle', 0.84);
@@ -6518,6 +7172,712 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
   });
 })(window.CT);
 
+/* ---- src/modes/bull/ui.js ---- */
+/* ==========================================================================
+   GAME MODE · BULL — table screen
+   A round table: you at the bottom, everyone else round the circle
+   clockwise from your left. The face-down pile sits in the middle under the
+   rank that's due next. Pick one to four cards and play them as that rank;
+   when someone else plays, the Bull! button is yours until the next player
+   has gone. Everything drawn comes from session.view(me), so nothing hidden
+   can leak onto the screen.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var Bull = CT.getMode('bull');
+  var RANKS = Bull.ranks;
+  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#9CC9EE', '#EBDDBB', '#C9A8F0'];
+  var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  var NUM = ['no', 'one', 'two', 'three', 'four'];
+  var RING = 113.1;   // circumference of the avatar timer ring (r = 18)
+
+  function sortHand(hand) {
+    return hand.slice().sort(function (a, b) {
+      return (RANKS.indexOf(a.rank) - RANKS.indexOf(b.rank)) || (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]);
+    });
+  }
+  function plural(rank) { return Bull.rankName(rank, 2); }
+  function article(rank) { return rank === 'A' || rank === '8' ? 'an' : 'a'; }
+  /* "a 7", "an Ace", "two 7s", "four Kings": a claim as it's announced. */
+  function claim(rank, n) { return n === 1 ? article(rank) + ' ' + Bull.rankName(rank, 1) : NUM[n] + ' ' + plural(rank); }
+  /* After "Mia’s" or "your": "Mia’s 7", "your two 7s". */
+  function owned(rank, n) { return n === 1 ? Bull.rankName(rank, 1) : NUM[n] + ' ' + plural(rank); }
+  function cardsWord(n) { return n === 1 ? '1 card' : n + ' cards'; }
+
+  function avatarHtml(initial) {
+    return '<span class="dk-avatar"><svg class="dk-ring" viewBox="0 0 40 40" aria-hidden="true" hidden>' +
+      '<circle class="bg" cx="20" cy="20" r="18"/><circle class="fg" cx="20" cy="20" r="18" stroke-dasharray="' + RING + '" stroke-dashoffset="0"/></svg>' +
+      '<span class="dk-initial">' + UI.esc(initial) + '</span></span>';
+  }
+
+  function BullTable(app, session, me, opts) {
+    opts = opts || {};
+    this.app = app;
+    this.session = session;
+    this.me = me;
+    this.lastSeq = 0;
+    this.selected = [];
+    this.hidden = {};
+    this.handEls = {};
+    this.seatEls = {};
+    this.logItems = [];
+    this.v = null;
+    this.first = true;
+    this.quiet = !!opts.restored;
+    this.root = document.getElementById('screen-table');
+    this.build();
+    var self = this;
+    this.unsub = session.on(function () { self.update(); });
+    this.onResize = function () { if (self.v) self.layoutHand(sortHand(self.v.hand)); };
+    window.addEventListener('resize', this.onResize);
+    this.update();
+  }
+
+  BullTable.prototype.destroy = function () {
+    if (this.unsub) this.unsub();
+    window.removeEventListener('resize', this.onResize);
+    clearTimeout(this.overTimer);
+    this.root.innerHTML = '';
+    var fx = document.getElementById('fx');
+    if (fx) fx.innerHTML = '';
+  };
+
+  BullTable.prototype.name = function (pid) {
+    if (pid === this.me) return 'You';
+    var p = this.session.state.players.filter(function (x) { return x.id === pid; })[0];
+    return p ? UI.esc(p.name) : 'Someone';
+  };
+  BullTable.prototype.lname = function (pid) { return pid === this.me ? 'you' : this.name(pid); };
+  /* "Mia’s" or "your" */
+  BullTable.prototype.poss = function (pid) { return pid === this.me ? 'your' : this.name(pid) + '’s'; };
+  BullTable.prototype.player = function (v, pid) { return v.players.filter(function (p) { return p.id === pid; })[0]; };
+
+  /* Seats round the table, clockwise from your left. */
+  BullTable.prototype.spot = function (v, pid) {
+    var ids = v.players.map(function (p) { return p.id; });
+    var n = ids.length;
+    var k = (ids.indexOf(pid) - ids.indexOf(this.me) + n) % n;
+    var a = 2 * Math.PI * k / n;
+    return { x: 0.5 - 0.37 * Math.sin(a), y: 0.5 + 0.4 * Math.cos(a) };
+  };
+
+  /* ---------- static layout ---------- */
+
+  BullTable.prototype.build = function () {
+    var v = this.session.view(this.me, { events: false });
+    var self = this;
+    this.root.innerHTML =
+      '<header class="topbar">' +
+        '<button class="icon-btn" id="b-menu" type="button" aria-label="Game menu">' + UI.icon.menu + '</button>' +
+        '<span class="wordmark">BULL</span>' +
+        '<span class="spacer"></span>' +
+        '<button class="icon-btn" id="b-music" type="button"></button>' +
+        '<button class="icon-btn" id="b-sound" type="button"></button>' +
+      '</header>' +
+      '<div class="bl-table" id="b-table">' +
+        '<div class="bl-felt" aria-hidden="true"></div>' +
+        '<div class="bl-center" id="b-center">' +
+          '<div class="bl-now" id="b-now"><span class="lbl">Next up</span><b id="b-rank"></b></div>' +
+          '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></div>' +
+          '<p class="bl-pilecount" id="b-pilecount"></p>' +
+          '<div class="bl-reveal" id="b-reveal" hidden></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="status" id="b-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
+      '<div class="bl-me" id="b-me">' +
+        '<div class="bl-me-info">' + avatarHtml('Y') + '<div class="bl-me-text"><span class="me-name">You</span><span class="me-count" id="b-mecount"></span></div></div>' +
+        '<div class="bl-actions">' +
+          '<button class="btn bl-bull" id="b-bull" type="button" hidden>Bull!</button>' +
+          '<button class="btn btn-primary btn-play" id="b-play" type="button" hidden></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hand-wrap bl-handwrap" id="b-handwrap"><div class="hand" id="b-hand"></div></div>';
+
+    var table = this.root.querySelector('#b-table');
+    v.players.forEach(function (p, i) {
+      if (p.id === self.me) return;
+      var at = self.spot(v, p.id);
+      var seat = document.createElement('div');
+      seat.className = 'bl-seat';
+      seat.dataset.pid = p.id;
+      seat.style.left = (at.x * 100) + '%';
+      seat.style.top = (at.y * 100) + '%';
+      seat.style.setProperty('--paint', PAINTS[i % PAINTS.length]);
+      seat.innerHTML = avatarHtml(p.name.charAt(0)) +
+        '<span class="seat-name">' + UI.esc(p.name) + '</span>' +
+        '<span class="bl-count"><span class="card back" aria-hidden="true"></span><b></b></span>' +
+        '<span class="bl-bubble" style="visibility:hidden">·</span>';
+      table.appendChild(seat);
+      self.seatEls[p.id] = {
+        seat: seat,
+        ring: seat.querySelector('.dk-ring'),
+        ringFg: seat.querySelector('.dk-ring .fg'),
+        count: seat.querySelector('.bl-count b'),
+        stack: seat.querySelector('.bl-count .card'),
+        bubble: seat.querySelector('.bl-bubble')
+      };
+    });
+    var meEl = this.root.querySelector('#b-me');
+    this.seatEls[this.me] = { seat: meEl, ring: meEl.querySelector('.dk-ring'), ringFg: meEl.querySelector('.dk-ring .fg') };
+
+    this.el = {
+      music: this.root.querySelector('#b-music'),
+      sound: this.root.querySelector('#b-sound'),
+      center: this.root.querySelector('#b-center'),
+      rank: this.root.querySelector('#b-rank'),
+      now: this.root.querySelector('#b-now'),
+      pile: this.root.querySelector('#b-pile'),
+      pileCount: this.root.querySelector('#b-pilecount'),
+      reveal: this.root.querySelector('#b-reveal'),
+      statusMain: this.root.querySelector('#b-status .status-main'),
+      statusSub: this.root.querySelector('#b-status .status-sub'),
+      meCount: this.root.querySelector('#b-mecount'),
+      meAvatar: this.root.querySelector('#b-me .dk-avatar'),
+      bull: this.root.querySelector('#b-bull'),
+      play: this.root.querySelector('#b-play'),
+      handWrap: this.root.querySelector('#b-handwrap'),
+      hand: this.root.querySelector('#b-hand')
+    };
+    this.renderAudio();
+
+    this.root.querySelector('#b-menu').addEventListener('click', function () { self.app.openMenu(); });
+    this.el.music.addEventListener('click', function () { self.app.toggleMusic(); self.renderAudio(); });
+    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderAudio(); });
+    this.el.hand.addEventListener('click', function (e) {
+      var btn = e.target.closest('.hcard');
+      if (btn) self.tapCard(btn.dataset.id, btn);
+    });
+    this.el.play.addEventListener('click', function () { self.play(); });
+    // called on the press: a moment can decide whether the window is still open
+    this.el.bull.addEventListener('pointerdown', function (e) { e.preventDefault(); self.callBull(); });
+    this.el.bull.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self.callBull(); }
+    });
+  };
+
+  BullTable.prototype.renderAudio = function () {
+    var m = UI.Music.on, s = UI.Sound.on;
+    this.el.music.innerHTML = m ? UI.icon.musicOn : UI.icon.musicOff;
+    this.el.music.setAttribute('aria-label', m ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+    this.el.music.classList.toggle('off', !m);
+    this.el.sound.innerHTML = s ? UI.icon.soundOn : UI.icon.soundOff;
+    this.el.sound.setAttribute('aria-label', s ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+    this.el.sound.classList.toggle('off', !s);
+  };
+
+  /* ---------- update cycle ---------- */
+
+  BullTable.prototype.update = function () {
+    var v = this.session.view(this.me, { sinceSeq: this.lastSeq });
+    var events = v.events || [];
+    var prev = this.v;
+    this.v = v;
+    var pre = (events.length && prev && !this.quiet) ? this.capture() : null;
+    var plan = (!this.quiet && events.length) ? this.plan(events, pre, v) : { flights: [] };
+    this.render(v);
+    if (plan.flights.length) this.run(plan);
+    if (!this.quiet) this.react(events, v);
+    var self = this;
+    events.forEach(function (e) { self.logEvent(e, v); });
+    if (events.length) this.lastSeq = events[events.length - 1].seq;
+    this.first = false;
+    this.quiet = false;
+    if (this.app.logOpen) this.app.renderLog();
+
+    if (v.phase === 'over' && !this.overShown) {
+      this.overShown = true;
+      this.overTimer = setTimeout(function () { self.app.showResult(self.v); }, events.length ? 2200 : 200);
+    }
+  };
+
+  BullTable.prototype.capture = function () {
+    var pre = { hand: {} };
+    for (var id in this.handEls) pre.hand[id] = this.handEls[id].getBoundingClientRect();
+    return pre;
+  };
+
+  /* Card flights for a batch of events. */
+  BullTable.prototype.plan = function (events, pre, v) {
+    var me = this.me, self = this;
+    var flights = [];
+    function add(f) { if (f.hide) self.hide(f.hide); flights.push(f); }
+    events.forEach(function (e) {
+      if (e.type === 'deal') {
+        var mine = e.mine ? sortHand(e.mine.hand) : [];
+        var gap = Math.min(45, 1100 / Math.max(1, mine.length));
+        mine.forEach(function (c, i) {
+          add({ from: 'pile', to: 'h:' + c.id, card: c, delay: 120 + i * gap, duration: 300, hide: 'h:' + c.id, sound: i % 2 ? null : 'deal' });
+        });
+        e.order.forEach(function (pid, k) {
+          if (pid === me) return;
+          for (var r = 0; r < 3; r++) add({ from: 'pile', to: 'seat:' + pid, card: null, delay: 160 + (r * e.order.length + k) * 70, duration: 300 });
+        });
+      } else if (e.type === 'play') {
+        var cards = e.player === me && e.mine ? e.mine.cards : null;
+        for (var i = 0; i < e.n; i++) {
+          var c = cards ? cards[i] : null;
+          add({ fromRect: c && pre ? pre.hand[c.id] : null, from: 'seat:' + e.player, to: 'pile', card: null, delay: i * 70, duration: 380 });
+        }
+      } else if (e.type === 'pickup') {
+        if (e.player === me && e.mine) {
+          sortHand(e.mine.cards).forEach(function (c, i) {
+            if (i < 10) add({ from: 'pile', to: 'h:' + c.id, card: null, delay: i * 55, duration: 380, hide: 'h:' + c.id });
+          });
+        } else {
+          for (var j = 0; j < Math.min(6, e.count); j++) add({ from: 'pile', to: 'seat:' + e.player, card: null, delay: j * 55, duration: 380 });
+        }
+      }
+    });
+    return { flights: flights };
+  };
+
+  BullTable.prototype.target = function (key) {
+    if (key === 'pile') return this.el.pile.lastElementChild;
+    if (key.indexOf('h:') === 0) return this.handEls[key.slice(2)] || null;
+    if (key.indexOf('seat:') === 0) {
+      var pid = key.slice(5);
+      if (pid === this.me) {
+        var cards = this.el.hand.children;
+        return cards.length ? cards[Math.floor(cards.length / 2)] : this.el.meAvatar;
+      }
+      var s = this.seatEls[pid];
+      return s ? s.stack : null;
+    }
+    return null;
+  };
+
+  BullTable.prototype.run = function (plan) {
+    var self = this;
+    plan.flights.forEach(function (f) {
+      var from = f.fromRect ? null : self.target(f.from);
+      var to = self.target(f.to);
+      if (f.sound) setTimeout(function () { UI.Sound.play(f.sound); }, f.delay || 0);
+      UI.fly({ from: from, fromRect: f.fromRect, to: to, card: f.card, delay: f.delay, duration: f.duration })
+        .then(function () { if (f.hide) self.unhide(f.hide); });
+    });
+  };
+
+  BullTable.prototype.hide = function (key) { this.hidden[key] = (this.hidden[key] || 0) + 1; };
+  BullTable.prototype.unhide = function (key) {
+    this.hidden[key] = Math.max(0, (this.hidden[key] || 0) - 1);
+    if (this.hidden[key]) return;
+    delete this.hidden[key];
+    var el = this.target(key);
+    if (el) el.style.visibility = '';
+  };
+
+  /* ---------- rendering ---------- */
+
+  BullTable.prototype.render = function (v) {
+    this.renderSeats(v);
+    this.renderCenter(v);
+    this.renderStatus(v);
+    this.renderMe(v);
+    this.renderHand(v);
+  };
+
+  BullTable.prototype.renderSeats = function (v) {
+    var self = this, r = v.phase === 'reveal' ? v.reveal : null, last = v.last;
+    v.players.forEach(function (p) {
+      var s = self.seatEls[p.id];
+      if (!s) return;
+      var turn = (v.phase === 'play' && v.turn === p.id);
+      s.seat.classList.toggle('is-turn', turn);
+      if (p.id === self.me) return;
+      s.count.textContent = p.handCount;
+      s.seat.classList.toggle('is-out', p.handCount === 0);
+      s.seat.setAttribute('aria-label', p.name + ', ' + cardsWord(p.handCount) + (turn ? ', playing' : ''));
+      // what they're saying: their claim, or Bull!
+      var say = '', tone = '';
+      if (r && r.challenger === p.id) { say = 'Bull!'; tone = 'hot'; }
+      else if (r && r.accused === p.id) { say = r.lie ? 'Caught!' : 'True!'; tone = r.lie ? 'ember' : 'ok'; }
+      else if (last && last.by === p.id) { say = claim(last.rank, last.n); }
+      else if (v.phase === 'over' && v.winners && v.winners[0] === p.id) { say = 'Out!'; tone = 'ok'; }
+      s.bubble.style.visibility = say ? '' : 'hidden';   // keeps its space, so the seat doesn't jump
+      s.bubble.textContent = say || '·';
+      s.bubble.className = 'bl-bubble' + (tone ? ' ' + tone : '');
+    });
+  };
+
+  BullTable.prototype.renderCenter = function (v) {
+    var r = v.reveal;
+    var showReveal = v.phase === 'reveal' && r;
+    this.el.center.classList.toggle('revealing', !!showReveal);
+    this.el.reveal.hidden = !showReveal;
+    this.el.rank.textContent = plural(v.rank);
+    this.el.now.classList.toggle('mine', v.phase === 'play' && v.turn === this.me);
+    this.el.now.hidden = v.phase === 'dealing' || v.phase === 'over';
+    // the pile: up to three backs, to suggest its size
+    var backs = this.el.pile.children;
+    var shown = v.phase === 'dealing' ? 1 : v.pileCount ? Math.min(3, Math.ceil(v.pileCount / 4)) : 0;
+    for (var i = 0; i < backs.length; i++) backs[i].style.visibility = i < shown ? '' : 'hidden';
+    this.el.pile.classList.toggle('empty', !shown);
+    this.el.pileCount.textContent = v.pileCount ? cardsWord(v.pileCount) : (v.phase === 'dealing' ? '' : 'No cards yet');
+    if (!showReveal) return;
+    var key = r.no + ':' + r.challenger;
+    if (this.el.reveal.dataset.key === key) return;
+    this.el.reveal.dataset.key = key;
+    this.el.reveal.innerHTML = '<p class="bl-reveal-head">' + this.poss(r.accused).replace(/^your/, 'Your') + ' ' + owned(r.rank, r.n) + '</p>' +
+      '<div class="bl-reveal-cards"></div><p class="bl-stamp ' + (r.lie ? 'lie' : 'true') + '">' + (r.lie ? 'Bluff!' : 'True!') + '</p>';
+    var row = this.el.reveal.querySelector('.bl-reveal-cards');
+    r.cards.forEach(function (c, i) {
+      var el = UI.makeCard(c);
+      el.classList.toggle('wrong', c.rank !== r.rank);
+      el.style.setProperty('--i', i);
+      row.appendChild(el);
+    });
+  };
+
+  BullTable.prototype.statusFor = function (v) {
+    var me = this.me, self = this;
+    var timer = ' <span class="secs"></span>';
+    var last = v.last, r = v.reveal;
+    switch (v.phase) {
+      case 'dealing':
+        return { main: 'Dealing the whole deck…', sub: (v.starter === me ? 'You start' : this.name(v.starter) + ' starts') + ' with Aces.' };
+      case 'play': {
+        var want = plural(v.rank);
+        if (v.turn === me) {
+          var have = v.hand.filter(function (c) { return c.rank === v.rank; }).length;
+          var waiting = v.openAt != null && this.session.now() < v.openAt && last;
+          var picked = this.selected.length && this.selected.every(function (id) { return v.hand.some(function (c) { return c.id === id && c.rank === v.rank; }); }) && this.selected.length === Math.min(4, have);
+          var pick = have && !picked ? ' <button class="link-btn bl-pick" id="b-pick" type="button">Pick ' + (have === 1 ? 'it' : 'them') + '</button>' : '';
+          var sub = waiting
+            ? 'Everyone has a moment to call Bull on ' + this.poss(last.by) + ' ' + owned(last.rank, last.n) + '.'
+            : have ? 'You have ' + NUM[have] + ' ' + Bull.rankName(v.rank, have) + '.' + pick
+              : 'You have no ' + want + ', so you’ll have to bluff.';
+          return { main: '<span class="hl">Your turn:</span> play ' + want + '.' + timer, sub: sub };
+        }
+        var main = this.name(v.turn) + ' is playing ' + want + '…';
+        if (v.canBull && last) {
+          var q = last.n === 1 ? 'Is ' + this.poss(last.by) + ' card really ' + claim(last.rank, 1) : 'Are ' + this.poss(last.by) + ' cards really ' + claim(last.rank, last.n);
+          return { main: main, sub: q + '? If not, call Bull before ' + this.lname(v.turn) + ' plays.' };
+        }
+        if (last && last.by === me) return { main: main, sub: 'You played ' + claim(last.rank, last.n) + '. Will anyone call Bull?' };
+        return { main: main, sub: '' };
+      }
+      case 'lastcall':
+        if (last.by === me) return { main: 'That was your last card! <span class="hl">Will anyone call Bull?</span>', sub: 'If nobody does, you win.' };
+        return { main: '<span class="hl">' + this.name(last.by) + ' played their last ' + (last.n === 1 ? 'card' : 'cards') + '!</span>' + timer, sub: 'Call Bull now, or ' + this.name(last.by) + ' wins.' };
+      case 'reveal': {
+        var who = r.challenger === me ? 'You called' : this.name(r.challenger) + ' called';
+        var taker = r.taker === me ? 'You pick up ' : this.name(r.taker) + ' picks up ';
+        var main = r.lie
+          ? '<span class="em">Bluff!</span> ' + taker + cardsWord(r.count) + '.'
+          : '<span class="hl">True!</span> ' + taker + cardsWord(r.count) + '.';
+        var sub = who + ' Bull on ' + this.poss(r.accused) + ' ' + owned(r.rank, r.n) + ': ' + r.cards.map(UI.cardText).join(' ');
+        if (r.wasLast && !r.lie) sub = this.name(r.accused) + (r.accused === me ? ' were' : ' was') + ' telling the truth with ' + (r.accused === me ? 'your' : 'their') + ' last cards.';
+        return { main: main, sub: sub };
+      }
+      case 'over': {
+        var w = v.winners && v.winners[0];
+        return { main: w === me ? '<span class="hl">You win!</span>' : this.name(w) + ' wins.', sub: (w === me ? 'You' : this.name(w)) + ' got rid of every card.' };
+      }
+    }
+    return { main: '', sub: '' };
+  };
+
+  BullTable.prototype.renderStatus = function (v) {
+    var st = this.statusFor(v);
+    if (this.statusHtml === st.main + '|' + st.sub) return;
+    this.statusHtml = st.main + '|' + st.sub;
+    this.el.statusMain.innerHTML = st.main;
+    this.el.statusSub.innerHTML = st.sub || '';
+    var self = this, pick = this.el.statusSub.querySelector('#b-pick');
+    if (pick) pick.addEventListener('click', function () { self.pickRank(); });
+  };
+
+  BullTable.prototype.renderMe = function (v) {
+    var mine = this.player(v, this.me);
+    this.el.meCount.textContent = mine ? cardsWord(mine.handCount) : '';
+    this.el.bull.hidden = !v.canBull;
+    if (v.canBull && v.last) this.el.bull.setAttribute('aria-label', 'Call Bull on ' + this.poss(v.last.by) + ' ' + owned(v.last.rank, v.last.n));
+    var n = this.selected.length;
+    this.el.play.hidden = !(v.canPlay && n);
+    if (v.canPlay && n) {
+      this.el.play.innerHTML = 'Play ' + n + '<span class="as"> as ' + (n === 1 ? article(v.rank) + ' ' + Bull.rankName(v.rank, 1) : plural(v.rank)) + '</span>';
+      this.el.play.setAttribute('aria-label', 'Play ' + n + ' as ' + claim(v.rank, n).replace(/^(one|two|three|four) /, ''));
+      this.updatePlayWait();
+    }
+  };
+
+  /* Play waits until everyone has had their moment to call Bull. */
+  BullTable.prototype.updatePlayWait = function () {
+    var v = this.v;
+    if (!v || this.el.play.hidden) return;
+    var wait = v.openAt != null ? v.openAt - this.session.now() : 0;
+    var waiting = wait > 0;
+    this.el.play.disabled = waiting;
+    this.el.play.classList.toggle('waiting', waiting);
+  };
+
+  BullTable.prototype.renderHand = function (v) {
+    var cards = sortHand(v.hand);
+    var self = this;
+    this.selected = this.selected.filter(function (id) { return v.hand.some(function (c) { return c.id === id; }); });
+    var keep = {};
+    cards.forEach(function (c, i) {
+      keep[c.id] = true;
+      var el = self.handEls[c.id];
+      if (!el) {
+        el = UI.makeCard(c, 'button');
+        el.type = 'button';
+        el.classList.add('hcard');
+        el.dataset.id = c.id;
+        if (!self.first && !self.hidden['h:' + c.id]) el.classList.add('new');
+        self.el.hand.appendChild(el);
+        self.handEls[c.id] = el;
+      }
+      el.classList.toggle('playable', !!v.canPlay && c.rank === v.rank);
+      el.classList.toggle('selected', self.selected.indexOf(c.id) >= 0);
+      el.style.visibility = self.hidden['h:' + c.id] ? 'hidden' : '';
+    });
+    for (var id in this.handEls) {
+      if (!keep[id]) { this.handEls[id].parentNode.removeChild(this.handEls[id]); delete this.handEls[id]; }
+    }
+    this.layoutHand(cards);
+  };
+
+  /* One row while the cards fit; two overlapping rows for a big hand. */
+  BullTable.prototype.layoutHand = function (cards) {
+    var wrap = this.el.handWrap;
+    var cs = getComputedStyle(wrap);
+    var W = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var cw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hcw')) || 58;
+    var n = cards.length;
+    var two = n > 1 && (W - cw) / (n - 1) < cw * 0.36;
+    wrap.classList.toggle('two', two);
+    this.el.hand.style.width = W + 'px';
+    var rows = two ? [cards.slice(0, Math.ceil(n / 2)), cards.slice(Math.ceil(n / 2))] : [cards];
+    var lift = cw * 1.4 * 0.56;
+    var self = this;
+    rows.forEach(function (row, ri) {
+      var m = row.length;
+      var step = m > 1 ? Math.min(cw + 8, (W - cw) / (m - 1)) : 0;
+      var total = m ? (m - 1) * step + cw : 0;
+      var offset = Math.max(0, (W - total) / 2);
+      row.forEach(function (c, i) {
+        var el = self.handEls[c.id];
+        if (!el) return;
+        el.style.left = (offset + i * step) + 'px';
+        el.style.bottom = (two && ri === 0 ? lift + 4 : 4) + 'px';
+        el.style.zIndex = String(ri * 100 + i + 1);   // a picked card rises, but never covers its neighbours
+      });
+    });
+  };
+
+  /* ~20×/s from the app loop: turn timers, and Play waiting for Bull calls. */
+  BullTable.prototype.frame = function () {
+    var v = this.v;
+    if (!v) return;
+    var now = this.session.now();
+    var self = this;
+    var who = null, endsAt = null, total = 0;
+    if (v.phase === 'play' && v.turnEndsAt && (v.openAt == null || now >= v.openAt)) { who = v.turn; endsAt = v.turnEndsAt; total = v.timing.turnMs; }
+    if (v.phase === 'lastcall' && v.last) { who = v.last.by; endsAt = v.phaseEndsAt; total = v.timing.lastCallMs; }
+    Object.keys(this.seatEls).forEach(function (pid) {
+      var s = self.seatEls[pid];
+      if (!s.ring) return;
+      if (pid === who && endsAt) {
+        s.ring.removeAttribute('hidden');
+        var left = Math.max(0, endsAt - now);
+        s.ringFg.setAttribute('stroke-dashoffset', String(RING * (1 - (total ? left / total : 0))));
+        s.ring.classList.toggle('urgent', left <= 5000);
+      } else s.ring.setAttribute('hidden', '');
+    });
+    var span = this.el.statusMain.querySelector('.secs');
+    var mineToWatch = (who === this.me && v.phase === 'play') || v.phase === 'lastcall';
+    if (span && endsAt && mineToWatch) {
+      var left = Math.max(0, endsAt - now);
+      var sec = Math.ceil(left / 1000);
+      span.textContent = (v.phase === 'lastcall' || left <= 10000) ? '· ' + sec + 's' : '';
+      if (sec !== this.lastSecs) {
+        this.lastSecs = sec;
+        if (v.phase === 'play' && left <= 5000 && sec > 0) UI.Sound.play('tick');
+      }
+    } else if (span) span.textContent = '';
+    // the waiting moment ends: Play comes alive, and the hint changes
+    var waiting = v.phase === 'play' && v.turn === this.me && v.openAt != null && now < v.openAt;
+    if (waiting !== this.wasWaiting) { this.wasWaiting = waiting; this.renderStatus(v); }
+    this.updatePlayWait();
+  };
+
+  /* ---------- input ---------- */
+
+  BullTable.prototype.tapCard = function (id, el) {
+    var v = this.v;
+    if (!v) return;
+    UI.Sound.unlock();
+    var i = this.selected.indexOf(id);
+    if (i >= 0) this.selected.splice(i, 1);
+    else if (this.selected.length >= Bull.maxPlay) {
+      this.shake(el);
+      UI.toast('You can play up to four cards at a time.');
+      return;
+    } else this.selected.push(id);
+    UI.buzz(8);
+    this.renderHand(v);
+    this.renderMe(v);
+    this.renderStatus(v);
+  };
+
+  BullTable.prototype.pickRank = function () {
+    var v = this.v;
+    if (!v) return;
+    this.selected = v.hand.filter(function (c) { return c.rank === v.rank; }).slice(0, 4).map(function (c) { return c.id; });
+    UI.buzz(8);
+    this.renderHand(v);
+    this.renderMe(v);
+    this.renderStatus(v);
+  };
+
+  BullTable.prototype.shake = function (el) {
+    if (!el) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+  };
+
+  /* A move. At this table the answer is immediate; at an online table it
+     comes back from the server a moment later, and further taps wait for it. */
+  BullTable.prototype.send = function (type, payload, then) {
+    if (this.sending) return;
+    var self = this;
+    this.sending = true;
+    var finish = function (res) { self.sending = false; if (then) then(res); };
+    var res = this.session.act(this.me, type, payload, finish);
+    if (!res || !res.pending) finish(res);
+  };
+
+  BullTable.prototype.play = function () {
+    var v = this.v, self = this;
+    if (!v || !v.canPlay || !this.selected.length) return;
+    UI.Sound.unlock();
+    this.send('play', { cardIds: this.selected.slice() }, function (res) {
+      if (!res.ok) {
+        if (res.code !== 'wait') UI.toast(UI.esc(res.message));
+        UI.Sound.play('nope');
+        return;
+      }
+      self.selected = [];
+      UI.buzz(10);
+    });
+  };
+
+  BullTable.prototype.callBull = function () {
+    var v = this.v;
+    if (!v || !v.canBull || !v.last) return;
+    UI.Sound.unlock();
+    var key = v.last.no;
+    if (this.called === key) return;
+    this.called = key;
+    UI.Sound.play('bull');
+    UI.buzz(30);
+    var self = this;
+    this.send('bull', {}, function (res) {
+      if (!res.ok) {
+        if (res.code === 'offline') self.called = null;
+        else if (res.code === 'phase' || res.code === 'nothing') UI.toast('Too late: ' + UI.esc(res.message.charAt(0).toLowerCase() + res.message.slice(1)));
+      }
+    });
+  };
+
+  /* ---------- sounds and notices ---------- */
+
+  BullTable.prototype.react = function (events, v) {
+    var me = this.me;
+    events.forEach(function (e) {
+      switch (e.type) {
+        case 'play':
+          UI.Sound.play(e.player === me ? 'play' : 'deal');
+          break;
+        case 'bull':
+          if (e.challenger !== me) UI.Sound.play('bull');
+          setTimeout(function () { UI.Sound.play('flip'); }, 420);
+          if (e.accused === me || e.challenger === me) UI.buzz(e.taker === me ? 60 : 15);
+          break;
+        case 'pickup':
+          setTimeout(function () { UI.Sound.play(e.player === me ? 'lose' : 'draw'); }, 120);
+          break;
+        case 'lastCall':
+          UI.Sound.play('alert');
+          break;
+        case 'timeout':
+          if (e.player === me) { UI.toast('Time’s up. A card was played for you.'); UI.Sound.play('nope'); }
+          break;
+        case 'gameOver':
+          setTimeout(function () { UI.Sound.play(e.winners.indexOf(me) >= 0 ? 'victory' : 'lose'); }, 700);
+          break;
+      }
+    });
+  };
+
+  /* ---------- play-by-play ---------- */
+
+  BullTable.prototype.pushLog = function (html, cls) {
+    var item = { html: html, cls: cls || '' };
+    this.logItems.push(item);
+    if (this.logItems.length > 600) this.logItems.shift();
+    return item;
+  };
+
+  BullTable.prototype.logEvent = function (e, v) {
+    var me = this.me, self = this;
+    var N = function (pid) { return self.name(pid); };
+    switch (e.type) {
+      case 'deal':
+        this.pushLog('The whole deck is dealt. ' + (e.starter === me ? 'You start' : N(e.starter) + ' starts') + ' with Aces.', 'set');
+        if (e.mine) this.pushLog('Your hand: ' + sortHand(e.mine.hand).map(UI.cardText).join(' '));
+        break;
+      case 'play': {
+        var text = (e.player === me ? 'You played ' : N(e.player) + ' played ') + claim(e.rank, e.n);
+        if (e.player === me && e.mine) {
+          var bluff = e.mine.cards.some(function (c) { return c.rank !== e.rank; });
+          text += ': ' + e.mine.cards.map(UI.cardText).join(' ') + (bluff ? ' (a bluff)' : '');
+        }
+        this.pushLog(text + (e.auto ? ' (time ran out)' : '') + '.');
+        break;
+      }
+      case 'bull':
+        this.pushLog((e.challenger === me ? 'You' : N(e.challenger)) + ' called Bull on ' + this.poss(e.accused) + ' ' + owned(e.rank, e.n) + ': ' +
+          e.cards.map(UI.cardText).join(' ') + '. ' + (e.lie ? 'A bluff!' : 'True!'), 'win');
+        break;
+      case 'pickup':
+        this.pushLog((e.player === me ? 'You pick up ' : N(e.player) + ' picks up ') + cardsWord(e.count) + '.');
+        break;
+      case 'lastCall':
+        this.pushLog((e.player === me ? 'You' : N(e.player)) + ' played ' + (e.player === me ? 'your' : 'their') + ' last cards. Last chance to call Bull!', 'set');
+        break;
+      case 'gameOver':
+        this.pushLog((e.winners[0] === me ? 'You win' : N(e.winners[0]) + ' wins') + ': no cards left.', 'win');
+        break;
+    }
+  };
+
+  /* ---------- end of game ---------- */
+
+  BullTable.prototype.result = function (v) {
+    var me = this.me, self = this;
+    var w = v.winners && v.winners[0];
+    var order = v.players.slice().sort(function (a, b) { return a.handCount - b.handCount; });
+    var rows = order.map(function (p) {
+      var idx = v.players.indexOf(p);
+      var paint = p.id === me ? 'var(--ink)' : PAINTS[idx % PAINTS.length];
+      var nm = p.id === me ? 'You' : UI.esc(p.name);
+      return '<li class="' + (p.id === w ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc(nm.charAt(0)) + '</span>' +
+        '<span>' + nm + '</span><span class="left">' + (p.handCount ? cardsWord(p.handCount) + ' left' : 'out') + '</span></li>';
+    }).join('');
+    return {
+      why: (w === me ? 'You' : this.name(w)) + ' got rid of every card first.',
+      body: '<div class="standings"><ul>' + rows + '</ul></div>'
+    };
+  };
+
+  CT.UI.presenters = CT.UI.presenters || {};
+  CT.UI.presenters.bull = BullTable;
+})(window.CT);
+
 /* ---- src/ui/online.js ---- */
 /* ==========================================================================
    ONLINE · rooms, the lobby, and playing with friends
@@ -6749,7 +8109,7 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
     this.room = null;
     this.you = null;
     this.remote = null;
-    var hello = { token: this.data.token, name: this.data.name || 'Player' };
+    var hello = { token: this.data.token, name: this.data.name || 'Player', engines: this.app.engines() };
     for (var k in extra) hello[k] = extra[k];
     this.conn = new CT.Net.Connection({
       server: serverUrl(), code: code, hello: hello,
@@ -6789,6 +8149,11 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
   };
 
   Online.prototype.onRoom = function (room) {
+    if (!CT.getMode(room.mode)) {
+      // a game this version of the app doesn't have yet
+      this.onError({ code: 'update', message: 'This room is playing a game your app doesn’t have yet. Update the app, then join again with the code.' });
+      return;
+    }
     var first = !this.room;
     this.room = room;
     this.data.room = { code: room.code, mode: room.mode, at: Date.now() };
@@ -7285,7 +8650,7 @@ CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burn
       if (this.online) html += this.online.rejoinHtml();
       html += '<section class="modes">';
       modes.forEach(function (m) {
-        var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
+        var hand = m.handText ? ' · ' + m.handText : m.handSize ? ' · ' + m.handSize + ' cards each' : '';
         html += '<article class="mode-tile" data-mode="' + m.id + '">' +
           '<div class="mode-top"><h2 class="wordmark' + (m.name.length > 10 ? ' long' : '') + '">' + UI.esc(m.name.toUpperCase()) + '</h2>' +
           fanHtml(m) + '</div>' +

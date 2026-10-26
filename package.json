@@ -1,12 +1,12 @@
 {
   "name": "burns-card-game",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
-  "description": "A phone-first card game with several game modes: Burns and Pass-Roun Donkey.",
+  "description": "A phone-first card game with several game modes: Burns, Pass-Roun Donkey and Bull.",
   "server": "wss://burns-card-game.odanew1.workers.dev",
   "scripts": {
     "build": "node build.js",
-    "test": "node test/burns.test.js && node test/donkey.test.js && node test/online.test.mjs",
+    "test": "node test/burns.test.js && node test/donkey.test.js && node test/bull.test.js && node test/online.test.mjs",
     "icons": "node tools/make-icons.js",
     "ui-test": "node test/ui-run.js test/shots phone"
   },

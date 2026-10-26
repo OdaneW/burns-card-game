@@ -29,6 +29,7 @@ const LOBBY_DROP_MS = 120000;   // someone gone from the lobby this long comes o
 const CHECK_MS = 5000;          // how often to look again while someone is away
 const QUIET_MS = 12000;         // during a game phones check in every 4 seconds; silence this long means gone
 const BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
+const FIRST_MODES = ['burns', 'donkey'];   // what apps from before they said which games they have can play
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
@@ -54,6 +55,7 @@ const ERRORS = {
   full: 'This room is full: six people are already in it.',
   'bad-hello': 'Something went wrong joining the room. Try again.',
   replaced: 'You opened this room somewhere else, so this screen has stopped following it.',
+  'no-mode': 'This room is playing a game your app doesn’t have yet. Update the app (the update offer appears at the top of the screen, or reopen it), then join again with the code.',
   closed: 'This room has closed.'
 };
 
@@ -137,6 +139,17 @@ export class RoomCore {
 
   broadcastRoom() {
     if (!this.room) return;
+    // anyone whose app doesn't have this game is asked to update
+    this.room.members.forEach(m => {
+      if (m.connected && m.modes && this.room.mode && m.modes.indexOf(this.room.mode) < 0) {
+        const c = m.connId;
+        this.conns.set(c, null);
+        m.connId = null;
+        m.connected = false;
+        m.goneAt = this.io.now();
+        this.fail(c, 'no-mode');
+      }
+    });
     const msg = { t: 'room', room: this.info() };
     for (const [connId, id] of this.conns) if (id != null) this.io.send(connId, msg);
   }
@@ -208,6 +221,9 @@ export class RoomCore {
     const token = cleanToken(msg.token);
     if (!token) { this.fail(connId, 'bad-hello'); return; }
     const r = this.room;
+    // the games this person's app has (apps from before they said: the first two)
+    const modes = msg.engines && typeof msg.engines === 'object' ? Object.keys(msg.engines) : FIRST_MODES;
+    if (r.mode && modes.indexOf(r.mode) < 0) { this.fail(connId, 'no-mode'); return; }
     let m = r.members.find(x => x.token === token && !x.left);
     if (m) {
       if (m.connId && m.connId !== connId) {
@@ -230,6 +246,7 @@ export class RoomCore {
         this.configure(mode, msg.size, msg.options);
       }
     }
+    m.modes = modes;
     m.connId = connId;
     m.connected = true;
     m.goneAt = null;
@@ -471,7 +488,7 @@ export class RoomCore {
       v: 1,
       room: Object.assign({}, this.room, {
         members: this.room.members.map(m => ({
-          id: m.id, token: m.token, name: m.name, since: m.since, pid: m.pid, computer: m.computer, left: m.left,
+          id: m.id, token: m.token, name: m.name, since: m.since, pid: m.pid, computer: m.computer, left: m.left, modes: m.modes,
           goneAt: m.connected ? now : m.goneAt
         }))
       }),

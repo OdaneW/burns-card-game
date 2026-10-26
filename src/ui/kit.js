@@ -219,6 +219,8 @@
           case 'nope': this.tone(330, 0.1, 0.09, 'triangle'); this.tone(262, 0.15, 0.09, 'triangle', 0.08); break;
           case 'slap': this.tone(140, 0.12, 0.16, 'sine'); this.noise(0.09, 700, 0.32); break;
           case 'thud': this.tone(120, 0.09, 0.08, 'sine'); this.noise(0.06, 600, 0.14); break;
+          case 'bull':   // a short, low call: two notes and a thump
+            this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;
           case 'bray':   // a soft hee-haw
             this.slide(560, 660, 0.22, 0.07, 'triangle', 0); this.slide(330, 280, 0.32, 0.08, 'triangle', 0.24);
             this.slide(540, 640, 0.2, 0.05, 'triangle', 0.62); this.slide(320, 270, 0.3, 0.06, 'triangle', 0.84);

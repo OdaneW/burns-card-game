@@ -146,7 +146,7 @@
       if (this.online) html += this.online.rejoinHtml();
       html += '<section class="modes">';
       modes.forEach(function (m) {
-        var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
+        var hand = m.handText ? ' · ' + m.handText : m.handSize ? ' · ' + m.handSize + ' cards each' : '';
         html += '<article class="mode-tile" data-mode="' + m.id + '">' +
           '<div class="mode-top"><h2 class="wordmark' + (m.name.length > 10 ? ' long' : '') + '">' + UI.esc(m.name.toUpperCase()) + '</h2>' +
           fanHtml(m) + '</div>' +
