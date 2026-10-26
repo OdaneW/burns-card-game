@@ -48,6 +48,7 @@ jobs:
           URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
           echo "Server: $URL"
           test -n "$URL"
+          echo "::notice title=Game server::$URL"
           for i in 1 2 3 4 5 6; do curl -fsS "$URL/" && break; sleep 5; done
           echo
           node -e '
