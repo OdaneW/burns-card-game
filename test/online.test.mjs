@@ -49,13 +49,20 @@ function join(core, connId, token, name, extra) {
 const T = n => ('token-' + n + '-xxxxxxxxxxxxxxxx').slice(0, 24);
 const to = (io, connId, type) => io.sent.filter(s => s.connId === connId && (!type || s.msg.t === type)).map(s => s.msg);
 const last = (io, connId, type) => { const all = to(io, connId, type); return all[all.length - 1]; };
-function run(core, io, ms) { for (let t = 0; t < ms; t += 50) { io.t += 50; core.tick(); } }
+/* Phones check in every few seconds during a game, as the app does. */
+function beat(core, io) {
+  if (io.t - (io.beatAt || 0) < 4000) return;
+  io.beatAt = io.t;
+  for (const [connId, id] of core.conns) if (id != null) core.message(connId, { t: 'ping', c: 0 });
+}
+function run(core, io, ms) { for (let t = 0; t < ms; t += 50) { io.t += 50; beat(core, io); core.tick(); } }
 
 /* Pretend people play their own seats with the computer player's logic, using only what they're sent. */
 function playFor(core, io, connIds, maxMs) {
   const memory = {};
   for (let t = 0; t < maxMs && core.room.phase === 'playing'; t += 50) {
     io.t += 50;
+    beat(core, io);
     core.tick();
     connIds.forEach(c => {
       const st = last(io, c, 'state');
@@ -146,6 +153,7 @@ test('everyone only ever receives their own cards', () => {
   const memory = {};
   for (let t = 0; t < 200000 && core.room.phase === 'playing'; t += 50) {
     io.t += 50;
+    beat(core, io);
     core.tick();
     ['a', 'b'].forEach(c => {
       const m = core.member(core.conns.get(c));
@@ -190,6 +198,24 @@ test('a dropped connection: the computer plays the seat, and gives it back', () 
   const st = to(io, 'b2', 'state')[0];
   assert(st.reset && !st.fresh, 'they get the whole table again');
   eq(st.view.me, 'p1');
+});
+
+test('a phone that goes silent mid-game counts as gone', () => {
+  const { io, core } = setup();
+  join(core, 'a', T(1), 'A', { mode: 'donkey' });
+  join(core, 'b', T(2), 'B');
+  core.message('a', { t: 'start' });
+  // only A keeps checking in; B's signal is lost without the connection closing
+  for (let t = 0; t < 30000; t += 50) {
+    io.t += 50;
+    if (t % 4000 === 0) core.message('a', { t: 'ping', c: 0 });
+    core.tick();
+  }
+  const b = core.member(2);
+  assert(!b.connected, 'B is no longer counted as connected');
+  assert(io.closed.some(c => c.connId === 'b' && c.reason === 'quiet'), 'and their connection was closed');
+  assert(b.computer, 'a computer player covers for them');
+  assert(core.member(1).connected, 'A, who kept checking in, is still here');
 });
 
 test('nobody at the table connected: the game waits for them', () => {
@@ -310,7 +336,7 @@ test('Donkey online: the race uses the time each phone measured', () => {
   const rest = s.players.flatMap(p => p.hand).filter(c => c.rank !== 'K');
   s.players[1].hand = ['KS', 'KH', 'KC', 'KD'].map(card);
   [0, 2, 3].forEach((i, k) => { s.players[i].hand = rest.slice(k * 4, k * 4 + 4); });
-  for (let t = 0; t < 30000 && s.phase !== 'race'; t += 50) { io.t += 50; core.tick(); }
+  for (let t = 0; t < 30000 && s.phase !== 'race'; t += 50) { io.t += 50; beat(core, io); core.tick(); }
   eq(s.phase, 'race');
   io.t += 900;
   core.message('a', { t: 'act', id: 1, type: 'react', payload: { ms: 240 } });

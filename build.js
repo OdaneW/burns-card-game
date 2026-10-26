@@ -18,6 +18,7 @@ const SOURCES = [
   'src/modes/burns/bot.js',
   'src/modes/donkey/rules.js',
   'src/modes/donkey/bot.js',
+  'src/net/online.js',
   'src/ui/kit.js',
   'src/ui/music.js',
   'src/ui/coach.js',
@@ -26,6 +27,7 @@ const SOURCES = [
   'src/modes/burns/tutorial.js',
   'src/modes/donkey/ui.js',
   'src/modes/donkey/tutorial.js',
+  'src/ui/online.js',
   'src/ui/app.js'
 ];
 const FONTS = [
@@ -50,12 +52,12 @@ const body = read('src/shell/body.html');
 const js = SOURCES.map(f => '/* ---- ' + f + ' ---- */\n' + read(f)).join('\n');
 
 // A build id that changes whenever anything shipped changes; shown in the app's menu.
-const hash = crypto.createHash('sha256').update(pkg.version).update(css).update(body).update(js);
+const hash = crypto.createHash('sha256').update(pkg.version).update(pkg.server || '').update(css).update(body).update(js);
 FONTS.forEach(f => hash.update(fs.readFileSync(p('src/assets/fonts/' + f.file))));
 ICONS.forEach(f => hash.update(fs.readFileSync(p('src/assets/icons/' + f))));
 const buildId = hash.digest('hex').slice(0, 7);
 const scriptFor = target => 'window.CT = window.CT || {};\nCT.BUILD = ' +
-  JSON.stringify({ version: pkg.version, id: buildId, target: target }) + ';\n' + js;
+  JSON.stringify({ version: pkg.version, id: buildId, target: target, server: pkg.server || '' }) + ';\n' + js;
 
 /* ---------- dist/burns.html: preview in Claude (the host adds <head>) ---------- */
 const preview = `<title>${APP.name}</title>

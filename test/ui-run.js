@@ -362,6 +362,189 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (SCENARIO === 'online' || SCENARIO === 'online-burns') {
+      // Phones playing together through the game server (run it locally: cd server && npm run dev).
+      const burns = SCENARIO === 'online-burns';
+      const server = process.env.SERVER || 'ws://127.0.0.1:8787';
+      const phone = { viewport: { width: 390, height: 844 } };
+      const storage = { 'cardtable.server': server };
+      const names = burns ? ['Odane', 'Tess', 'Ravi'] : ['Odane', 'Tess'];
+      const pages = [];
+      for (let i = 0; i < names.length; i++) pages.push(await open(browser, { ctx: phone, seed: 31 + i, storage }));
+      const [host, guest] = pages;
+      const tag = burns ? 'ob' : 'od';
+      const checks = [];
+      const info = p => p.evaluate(() => {
+        const o = CT.App.online;
+        return { screen: CT.App.screen, sheet: CT.App.sheet, status: o.conn ? o.conn.status : 'none', code: o.room && o.room.code,
+          phase: o.room && o.room.phase, host: o.isHost(), members: o.room ? o.room.members.map(m => m.name + (m.connected ? '' : ' (away)') + (m.computer ? ' (computer)' : '')) : [],
+          bar: !document.getElementById('net-bar').hidden, game: CT.App.session && CT.App.session.remote ? CT.App.session.game : null };
+      });
+      await shot(host, tag + '-01-home');
+      // the host creates a room
+      await host.tap('[data-online="create"]'); await sleep(300);
+      if (burns) await host.tap('#overlay [data-mode="burns"]');
+      else await host.tap('#overlay [data-mode="donkey"]');
+      await host.fill('#o-name', names[0]);
+      await shot(host, tag + '-02-create');
+      await host.tap('#o-go');
+      await host.waitForSelector('.room-code', { timeout: 10000 });
+      const code = (await host.textContent('.room-code')).trim();
+      checks.push('room created: ' + code);
+      await sleep(300);
+      await shot(host, tag + '-03-lobby-host');
+      // friends join: one by typing the code, one with the invite link
+      for (let i = 1; i < pages.length; i++) {
+        const p = pages[i];
+        if (i === 2) {
+          await p.goto('file://' + wrapperPath + '?room=' + code, { waitUntil: 'domcontentloaded' }); await sleep(800);
+          checks.push('invite link opens the join form with the code: ' + (await p.inputValue('#o-code')));
+        } else {
+          await p.tap('[data-online="join"]'); await sleep(300);
+          await p.fill('#o-code', code.toLowerCase());
+        }
+        await p.fill('#o-name', names[i]);
+        if (i === 1) await shot(p, tag + '-04-join');
+        await p.tap('#o-go');
+        await p.waitForSelector('.room-code', { timeout: 10000 });
+      }
+      await sleep(600);
+      await shot(guest, tag + '-05-lobby-guest');
+      await shot(host, tag + '-06-lobby-host-full');
+      checks.push('lobby (host): ' + JSON.stringify((await info(host)).members) + ' · guest sees host = ' + (await info(guest)).host);
+      if (burns) {
+        await host.tap('[data-l-size="4"]'); await sleep(400);
+        checks.push('host set 4 seats; guest sees ' + await guest.evaluate(() => CT.App.online.room.size) + ' seats');
+      }
+      // start
+      await host.tap('#l-start');
+      for (const p of pages) await p.waitForSelector('#screen-table:not([hidden])', { timeout: 10000 });
+      await sleep(900);
+      await shot(host, tag + '-07-table-host');
+      await shot(guest, tag + '-08-table-guest');
+      const seatsSeen = await Promise.all(pages.map(p => p.evaluate(() => { const s = CT.App.session; const v = s.view(s.me, { events: false }); return s.me + ':' + v.players.map(x => x.name + (x.isBot ? '*' : '')).join(','); })));
+      checks.push('seats as each phone sees them: ' + seatsSeen.join(' | '));
+
+      // play every phone's seat by tapping, as people would
+      const look = p => p.evaluate(() => {
+        const s = CT.App.session;
+        if (!s || !s.remote) return { none: true, screen: CT.App.screen, sheet: CT.App.sheet };
+        const v = s.view(s.me, { events: false });
+        const out = { phase: v.phase, sheet: CT.App.sheet, me: s.me, mode: v.mode };
+        if (v.mode === 'donkey') {
+          const n = {}; v.hand.forEach(c => { n[c.rank] = (n[c.rank] || 0) + 1; });
+          if (v.canPass) { const min = Math.min(...v.hand.map(c => n[c.rank])); out.pick = v.hand.filter(c => n[c.rank] === min)[0].id; }
+          const d = v.tiebreak && v.tiebreak.duel;
+          Object.assign(out, { canPass: v.canPass, canDeclare: v.canDeclare, canReact: v.canReact, canChallenge: v.canChallenge, canCall: v.canCall,
+            call: d && d.myCard ? (CT.rankValue(d.myCard.rank, true) >= 7 ? 'higher' : 'lower') : null });
+        } else {
+          Object.assign(out, { canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake, playable: v.playable });
+        }
+        return out;
+      });
+      const busy = new Map();
+      const act = async (p, v) => {
+        if (v.none || v.phase === 'over' || v.sheet) return;
+        if (busy.get(p) > Date.now()) return;
+        try {
+          if (v.mode === 'donkey') {
+            if (v.canDeclare) { await p.tap('#d-declare', { timeout: 1500 }); busy.set(p, Date.now() + 500); }
+            else if (v.canReact) { await sleep(150 + Math.random() * 350); await p.tap('#d-slap', { timeout: 1500 }); busy.set(p, Date.now() + 500); }
+            else if (v.canPass) {
+              await p.tap(`.hcard[data-id="${v.pick}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); await sleep(120);
+              await p.tap(`.hcard[data-id="${v.pick}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); busy.set(p, Date.now() + 600);
+            } else if (v.canChallenge) { await p.tap('#d-choices button', { timeout: 1500 }); busy.set(p, Date.now() + 600); }
+            else if (v.canCall) { await p.tap(`#d-choices [data-call="${v.call}"]`, { timeout: 1500 }); busy.set(p, Date.now() + 600); }
+          } else {
+            if ((v.canLead || v.canFollow) && v.playable.length && !(v.mayDraw && Math.random() < 0.2)) {
+              const id = v.playable[Math.floor(Math.random() * v.playable.length)];
+              await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); await sleep(140);
+              await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); busy.set(p, Date.now() + 500);
+            } else if (v.mustDraw || v.mayDraw) { await p.tap('#t-deck', { timeout: 1500 }); busy.set(p, Date.now() + 700); }
+            else if (v.canTake) { const t = await p.$('[data-take]'); if (t) await t.tap(); busy.set(p, Date.now() + 500); }
+          }
+        } catch (e) { /* the moment passed; look again */ }
+      };
+      const playUntilOver = async (label, during) => {
+        const start = Date.now();
+        let guard = 0;
+        while (guard++ < 20000 && Date.now() - start < 6 * 60000) {
+          const vs = [];
+          for (const p of pages) vs.push(await look(p));
+          if (vs.every(v => v.none || v.phase === 'over')) return Date.now() - start;
+          if (during) await during(vs, Date.now() - start);
+          for (let i = 0; i < pages.length; i++) await act(pages[i], vs[i]);
+          await sleep(40);
+        }
+        throw new Error(label + ': the game did not finish');
+      };
+
+      // part way through, one phone loses its connection for a while
+      let dropped = false, back = false;
+      const ms1 = await playUntilOver('game 1', async (vs, t) => {
+        if (!dropped && t > 15000 && vs[1].phase && vs[1].phase !== 'over') {
+          dropped = true;
+          await guest.context().setOffline(true);
+          await sleep(21000);
+          const h = await info(host), g = await info(guest);
+          checks.push('guest offline 21 s → host sees ' + JSON.stringify(h.members) + '; guest bar shown = ' + g.bar + ', status = ' + g.status);
+          await shot(guest, tag + '-09-guest-offline');
+          await guest.context().setOffline(false);
+        } else if (dropped && !back) {
+          const g = await info(guest);
+          if (g.status === 'open') {
+            back = true;
+            await sleep(600);
+            const h = await info(host);
+            checks.push('guest back → status ' + g.status + ', bar ' + g.bar + ', host sees ' + JSON.stringify(h.members));
+            await shot(guest, tag + '-10-guest-back');
+          }
+        }
+      });
+      checks.push('game 1 finished in ' + Math.round(ms1 / 1000) + ' s');
+      await sleep(3200);
+      await shot(host, tag + '-11-result-host');
+      await shot(guest, tag + '-12-result-guest');
+      checks.push('result sheets: host ' + (await info(host)).sheet + ' with Play again = ' + !!(await host.$('#r-again')) +
+        ' · guest ' + (await info(guest)).sheet + ' waiting = ' + JSON.stringify(await guest.evaluate(() => (document.getElementById('r-wait') || {}).textContent || '')));
+      // play again: everyone gets a new game
+      await host.tap('#r-again');
+      await sleep(1500);
+      const g2 = await Promise.all(pages.map(p => info(p)));
+      checks.push('play again → ' + g2.map(x => x.screen + '/game ' + x.game + (x.sheet ? '/' + x.sheet : '')).join(' | '));
+      // the host's app reloads mid-game (an update): straight back in
+      await sleep(2500);
+      await host.reload({ waitUntil: 'domcontentloaded' });
+      await host.waitForSelector('#screen-table:not([hidden])', { timeout: 15000 });
+      await sleep(800);
+      checks.push('host reloaded → ' + JSON.stringify(await info(host)));
+      await shot(host, tag + '-13-host-after-reload');
+      // a guest leaves from the menu; the computer takes their seat
+      const leaver = pages[pages.length - 1];
+      await leaver.tap(burns ? '#t-menu' : '#d-menu'); await sleep(300);
+      await shot(leaver, tag + '-14-menu');
+      await leaver.tap('#m-leave'); await sleep(300);
+      await shot(leaver, tag + '-15-leave-confirm');
+      await leaver.tap('#o-leave'); await sleep(800);
+      checks.push('guest left → guest screen ' + (await info(leaver)).screen + '; host sees ' + JSON.stringify((await info(host)).members));
+      const ms2 = await playUntilOver('game 2');
+      checks.push('game 2 finished in ' + Math.round(ms2 / 1000) + ' s');
+      await sleep(3200);
+      // back to the room, then leave
+      await host.tap('#r-lobby'); await sleep(800);
+      await shot(host, tag + '-16-back-in-lobby');
+      checks.push('back to the room → ' + JSON.stringify(await info(host)));
+      await host.tap('#l-back'); await sleep(300);
+      if (await host.$('#o-leave')) await host.tap('#o-leave');
+      await sleep(600);
+      checks.push('host left → ' + (await info(host)).screen);
+      await shot(host, tag + '-17-home-after');
+      checks.forEach(c => console.log('  ' + c));
+      // the browser's own complaints while a phone was offline on purpose are expected
+      const errors = [].concat(...pages.map(p => p.errors)).filter(e => !/ERR_INTERNET_DISCONNECTED/.test(e));
+      console.log('  errors:', errors.length ? errors : 'none');
+    }
+
     if (SCENARIO === 'first-play') {
       // The first time each mode is played, Play offers its tutorial, once.
       const checks = [];

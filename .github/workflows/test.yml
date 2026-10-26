@@ -8,14 +8,16 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
       - name: Burns rules and simulated games
         run: node test/burns.test.js
       - name: Pass-Roun Donkey rules and simulated games
         run: node test/donkey.test.js
+      - name: Online rooms
+        run: node test/online.test.mjs
       - name: Built app matches the source
         run: |
           node build.js

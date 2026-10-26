@@ -27,6 +27,7 @@ const AWAY_MS = 6000;           // a dropped player's seat is played by the comp
 const HOST_WAIT_MS = 45000;     // a host gone this long hands the room to someone who's here
 const LOBBY_DROP_MS = 120000;   // someone gone from the lobby this long comes off the list
 const CHECK_MS = 5000;          // how often to look again while someone is away
+const QUIET_MS = 12000;         // during a game phones check in every 4 seconds; silence this long means gone
 const BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
@@ -60,6 +61,7 @@ export class RoomCore {
   constructor(io, saved) {
     this.io = io;
     this.conns = new Map();     // connId → memberId (null until they say hello)
+    this.seen = new Map();      // connId → when we last heard from it
     this.room = null;
     this.session = null;
     this.dirty = false;
@@ -150,12 +152,14 @@ export class RoomCore {
 
   open(connId) {
     this.conns.set(connId, null);
+    this.seen.set(connId, this.io.now());
     if (!this.room) this.fail(connId, 'no-room');
   }
 
   /* A connection that stayed open while the server object slept. */
   reattach(connId, memberId) {
     this.conns.set(connId, memberId == null ? null : memberId);
+    this.seen.set(connId, this.io.now());
     const m = this.member(memberId);
     if (m && !m.left) { m.connId = connId; m.connected = true; m.goneAt = null; }
   }
@@ -164,6 +168,7 @@ export class RoomCore {
     if (!this.conns.has(connId)) return;
     const id = this.conns.get(connId);
     this.conns.delete(connId);
+    this.seen.delete(connId);
     const m = this.member(id);
     if (!m || m.connId !== connId) return;
     m.connId = null;
@@ -178,6 +183,7 @@ export class RoomCore {
 
   message(connId, msg) {
     if (!this.room || !msg || typeof msg !== 'object') return;
+    this.seen.set(connId, this.io.now());
     if (msg.t === 'ping') {
       this.io.send(connId, { t: 'pong', c: msg.c, gt: this.session ? this.session.now() : null });
       return;
@@ -375,14 +381,14 @@ export class RoomCore {
     m.left = true;
     m.connected = false;
     m.connId = null;
-    if (this.session && r.phase === 'playing' && m.pid) this.handOver(m);   // the computer plays out their seat
-    if (r.phase !== 'playing') r.members = r.members.filter(x => x !== m);
-    if (r.host === m.id) r.host = this.pickHost();
     if (connId) {
       this.conns.set(connId, null);
       this.io.send(connId, { t: 'bye' });
       this.io.close(connId, 1000, 'left');
     }
+    if (this.session && r.phase === 'playing' && m.pid) this.handOver(m);   // the computer plays out their seat
+    if (r.phase !== 'playing') r.members = r.members.filter(x => x !== m);
+    if (r.host === m.id) r.host = this.pickHost();
     if (!this.active().length) { this.closeRoom(); return; }
     this.flush();
     this.broadcastRoom();
@@ -411,6 +417,14 @@ export class RoomCore {
         this.session.pause();              // nobody at the table is here: wait for them
       } else {
         this.session.resume();
+        // a phone that has gone silent (signal lost, screen locked) counts as gone
+        this.room.members.forEach(m => {
+          if (m.pid && m.connected && now - (this.seen.get(m.connId) || 0) > QUIET_MS) {
+            const c = m.connId;
+            this.io.close(c, 4002, 'quiet');
+            this.disconnect(c);
+          }
+        });
         this.room.members.forEach(m => {
           if (m.pid && !m.connected && !m.computer && !m.left && now - (m.goneAt || 0) >= AWAY_MS) this.handOver(m);
         });

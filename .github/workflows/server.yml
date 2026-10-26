@@ -24,8 +24,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Room tests
@@ -51,17 +51,4 @@ jobs:
           echo "::notice title=Game server::$URL"
           for i in 1 2 3 4 5 6; do curl -fsS "$URL/" && break; sleep 5; done
           echo
-          node -e '
-            const url = process.argv[1].replace(/^https/, "wss") + "/rooms/new";
-            const ws = new WebSocket(url);
-            const fail = m => { console.error(m); process.exit(1); };
-            setTimeout(() => fail("no answer from the server"), 15000);
-            ws.onopen = () => ws.send(JSON.stringify({ t: "hello", v: 1, token: "deploy-check-" + Date.now(), name: "Deploy check", mode: "donkey" }));
-            ws.onmessage = e => {
-              const m = JSON.parse(e.data);
-              if (m.t === "welcome") { console.log("Created room " + m.code + " over a WebSocket"); ws.send(JSON.stringify({ t: "leave" })); }
-              if (m.t === "bye") { console.log("Left it again. All good."); process.exit(0); }
-              if (m.t === "error") fail(m.message);
-            };
-            ws.onerror = () => fail("WebSocket error");
-          ' "$URL"
+          node check.mjs "$URL"

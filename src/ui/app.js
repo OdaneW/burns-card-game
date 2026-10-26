@@ -74,9 +74,19 @@
         try { hot.snapshot(function () { return self.snapshot(); }); } catch (e) { /* optional */ }
       }
 
+      this.online = UI.Online ? new UI.Online(this) : null;
+
       data = data || {};
       if (data.save && data.screen === 'table' && this.resume(data.save)) return;
       this.showHome();
+      if (this.online) this.online.boot();
+    },
+
+    /* Each mode's rules version, to check an online room runs the same game. */
+    engines: function () {
+      var out = {};
+      CT.listModes().forEach(function (m) { out[m.id] = m.engineVersion; });
+      return out;
     },
 
     snapshot: function () {
@@ -110,7 +120,7 @@
 
     show: function (name) {
       this.screen = name;
-      ['home', 'setup', 'table'].forEach(function (s) { $('screen-' + s).hidden = s !== name; });
+      ['home', 'setup', 'table', 'lobby'].forEach(function (s) { var el = $('screen-' + s); if (el) el.hidden = s !== name; });
     },
 
     showHome: function () {
@@ -133,6 +143,7 @@
           (line ? '<small>' + UI.esc(line) + '</small>' : '') + '</p>' +
           '<button class="btn btn-primary" id="h-resume" type="button">Resume</button></div>';
       }
+      if (this.online) html += this.online.rejoinHtml();
       html += '<section class="modes">';
       modes.forEach(function (m) {
         var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
@@ -145,6 +156,7 @@
           '<button class="btn btn-ghost" type="button" data-rules="' + m.id + '">How to play</button></div>' +
           '</article>';
       });
+      if (this.online) html += this.online.tileHtml();
       html += '<article class="mode-tile soon"><h3>More games</h3><p>New modes appear here as their rules are added.</p></article></section>';
       var lines = modes.map(function (m) {
         var s = self.stats[m.id];
@@ -178,6 +190,7 @@
           self.openRules(m.id, CT.resolveOptions(m.options, (self.settings[m.id] || {}).options));
         });
       });
+      if (this.online) this.online.wireHome(home);
     },
 
     modeSettings: function (mode) {
@@ -285,6 +298,26 @@
       this.save();
     },
 
+    /* ---------- online ---------- */
+
+    /* An online game on the table: the same table screens, fed by the server. */
+    attachOnline: function (session, opts) {
+      if (this.sheet !== 'rules') this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.session = session;
+      this.show('table');
+      var Presenter = UI.presenters[session.mode.presenter];
+      this.table = new Presenter(this, session, session.me, { restored: !!(opts && opts.restored) });
+    },
+
+    detachOnline: function () {
+      if (!this.session || !this.session.remote) return;
+      if (this.sheet === 'result' || this.sheet === 'menu' || this.sheet === 'log') this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.table = null;
+      this.session = null;
+    },
+
     /* ---------- tutorial ---------- */
 
     /* Play on the home screen. The first time, offer the mode's tutorial. */
@@ -375,12 +408,12 @@
     },
 
     currentSave: function () {
-      if (!this.session || this.tutorial || this.session.state.phase === 'over') return null;
+      if (!this.session || this.tutorial || this.session.remote || this.session.state.phase === 'over') return null;
       return { session: this.session.serialize(), game: this.game, me: 'p0', savedAt: Date.now() };
     },
 
     save: function () {
-      if (!this.session || this.tutorial) return;
+      if (!this.session || this.tutorial || this.session.remote) return;   // online games live on the server
       if (this.session.state.phase === 'over') { UI.store.del(SAVE_KEY); return; }
       var s = this.currentSave();
       if (s) UI.store.set(SAVE_KEY, s);
@@ -406,6 +439,7 @@
         return;
       }
       if (UI.Music.on) UI.Music.start();
+      if (this.online) this.online.wake();
       this.resumePlay();
     },
 
@@ -465,7 +499,8 @@
         return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
       }).join(' · ');
       var self = this;
-      var Tutorial = !this.tutorial && UI.tutorials && UI.tutorials[modeId];
+      var online = this.online && this.online.inRoom();
+      var Tutorial = !this.tutorial && !online && UI.tutorials && UI.tutorials[modeId];
       var inGame = this.session && this.session.state.phase !== 'over';
       var tutorial = Tutorial
         ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.lessons.length +
@@ -482,6 +517,7 @@
 
     openMenu: function () {
       var self = this;
+      if (this.session && this.session.remote && this.online) { this.online.openMenu(); return; }
       if (this.tutorial) {
         var t = this.openSheet('menu', this.sheetHead('Tutorial') +
           '<div class="menu-list">' +
@@ -539,18 +575,20 @@
       this.startGame(g.modeId, { opponents: g.opponents, options: g.options, names: g.names });
     },
 
-    record: function (v) {
-      if (this.recorded) return;
-      this.recorded = true;
+    record: function (v, me) {
+      // once per game: online games are told apart by room and game number
+      var key = this.session.remote ? 'online:' + (this.online && this.online.room ? this.online.room.code : '') + ':' + this.session.game : null;
+      if (key ? this.recordedKey === key : this.recorded) return;
+      if (key) this.recordedKey = key; else this.recorded = true;
       var id = this.session.mode.id;
       var s = this.stats[id] || (this.stats[id] = { played: 0, won: 0, flushWins: 0 });
       s.played++;
-      if ((v.winners || []).indexOf('p0') >= 0) {
+      if ((v.winners || []).indexOf(me || 'p0') >= 0) {
         s.won++;
         if (v.winReason === 'flush') s.flushWins++;
       }
       UI.store.set(STATS_KEY, this.stats);
-      UI.store.del(SAVE_KEY);
+      if (!key) UI.store.del(SAVE_KEY);
     },
 
     /* The end-of-game sheet. The table screen fills in what's particular to
@@ -558,8 +596,9 @@
     showResult: function (v) {
       var self = this;
       if (this.tutorial) return;   // the tutorial explains the ending itself
-      this.record(v);
-      var me = 'p0';
+      var me = this.table ? this.table.me : 'p0';
+      var online = !!(this.session && this.session.remote && this.online);
+      this.record(v, me);
       var names = {};
       v.players.forEach(function (p) { names[p.id] = p.id === me ? 'You' : p.name; });
       var winners = v.winners || [];
@@ -573,12 +612,13 @@
         '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
         '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
         (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
-        '<div class="result-actions">' +
+        '<div class="result-actions">' + (online ? this.online.resultActions() :
           '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
           '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
-          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>') +
         '</div>', { cls: 'result', center: true, label: 'Game result' });
       if (r.after) r.after(sheet);
+      if (online) { this.online.wireResult(); return; }
       $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
       $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
       $('r-table').addEventListener('click', function () { self.closeSheet(); });

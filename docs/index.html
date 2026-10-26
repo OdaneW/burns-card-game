@@ -835,6 +835,91 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .dk-handwrap { grid-row: 5; align-self: end; }
 }
 
+/* ---------- online: playing with friends ---------- */
+.online-tile { background: linear-gradient(160deg, #1D5662, var(--board-deep)); }
+.online-top { display: flex; align-items: center; gap: 12px; }
+.online-top h2 { flex: 1; font: 800 23px/1.15 var(--font-ui); }
+.online-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(244, 185, 66, .16); color: var(--marigold); flex: none; }
+.online-icon svg { width: 25px; height: 25px; }
+.online-chip { background: rgba(127, 209, 193, .16); color: #9FE3D6; }
+.rejoin .icon-btn { width: 36px; height: 36px; margin-right: -6px; }
+
+.online-form { display: grid; gap: 16px; }
+.online-form .field .help { min-height: 0; }
+.text-input {
+  width: 100%; box-sizing: border-box;
+  padding: 13px 14px; border: 0; border-radius: 10px;
+  background: var(--board-deep); color: var(--ink);
+  font: 600 17px/1.2 var(--font-ui);
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+.text-input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--marigold); }
+.text-input::placeholder { color: var(--ink-soft); opacity: .75; font-weight: 500; }
+.code-input { padding: 14px 10px 12px; font: 400 30px/1 var(--font-display); letter-spacing: .3em; text-align: center; text-transform: uppercase; color: var(--marigold); }
+.code-input::placeholder { letter-spacing: .3em; opacity: .35; }
+.form-error { color: #FFB59B; font-weight: 700; font-size: 14px; }
+.form-help { color: var(--ink-soft); font-size: 14px; text-align: center; max-width: 40ch; justify-self: center; }
+.sheet-text { color: var(--ink); font-size: 15px; line-height: 1.45; }
+
+#screen-lobby { padding-block: 10px 16px; gap: 10px; }
+.lobby-head .wordmark { font-size: 26px; }
+.lobby-body { gap: 20px; }
+.net-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 12px; background: var(--ember); }
+.net-dot.on { background: #7FD1C1; box-shadow: 0 0 0 4px rgba(127, 209, 193, .18); }
+.invite {
+  display: grid; justify-items: center; gap: 6px;
+  padding: 16px 14px; border-radius: 16px; text-align: center;
+  background: rgba(244, 185, 66, .1);
+  box-shadow: inset 0 0 0 1.5px rgba(244, 185, 66, .4);
+}
+.room-code {
+  margin: 2px 0; padding-left: .14em;
+  font: 400 54px/1 var(--font-display); letter-spacing: .14em;
+  color: var(--marigold);
+  text-shadow: .05em .05em 0 var(--ember), .1em .1em 0 rgba(0, 0, 0, .35);
+  user-select: all;
+}
+.invite-help { color: var(--ink-soft); font-size: 14px; max-width: 34ch; }
+.invite-help b { color: var(--ink); }
+.invite-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
+.invite-actions .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 16px; font-size: 15px; }
+.invite-actions svg { width: 18px; height: 18px; }
+.lobby-value { font: 700 17px/1.3 var(--font-ui); color: var(--marigold); }
+.lobby-seats { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lobby-seat { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(6, 30, 29, .45); }
+.lobby-seat .avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--paint, var(--marigold)); color: var(--ink-on-paint); font: 800 14px/1 var(--font-ui); }
+.lobby-seat.bot .avatar { background: transparent; color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.lobby-seat.bot .avatar svg { width: 18px; height: 18px; }
+.lobby-seat .who { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lobby-seat .who small { margin-left: 4px; color: var(--ink-soft); font-weight: 600; }
+.lobby-seat.bot .who { color: var(--ink-soft); font-weight: 600; }
+.lobby-seat .state { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.lobby-seat .state.on { color: #9FE3D6; }
+.lobby-seat .state.off { color: #FFB59B; }
+.lobby-seat.waits { opacity: .7; }
+.lobby-choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lobby-choices li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 10px; background: rgba(6, 30, 29, .35); }
+.lobby-choices b { color: var(--marigold); text-align: right; }
+.lobby-note { padding: 10px 12px; border-radius: 12px; font-weight: 600; background: rgba(127, 209, 193, .12); box-shadow: inset 0 0 0 1.5px rgba(127, 209, 193, .35); }
+.lobby-wait { padding: 12px 0 4px; text-align: center; font-weight: 700; color: var(--ink-soft); }
+.result-wait { grid-column: 1 / -1; padding: 4px 0; text-align: center; font-weight: 700; color: var(--ink-soft); }
+
+/* the connection dropped: shown until it's back */
+.net-bar {
+  position: fixed; z-index: 70;
+  left: 12px; right: 12px; margin-inline: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  width: max-content; max-width: calc(100vw - 24px); box-sizing: border-box;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-radius: 99px;
+  background: var(--ember); color: #2A0F07;
+  font: 700 14px/1.2 var(--font-ui);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
+  animation: rise .28s cubic-bezier(.2, .8, .2, 1);
+}
+.net-spin { width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid rgba(42, 15, 7, .3); border-top-color: #2A0F07; animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
@@ -856,7 +941,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   <main class="screen" id="screen-home" aria-label="Games"></main>
   <main class="screen" id="screen-setup" aria-label="Game setup" hidden></main>
   <main class="screen" id="screen-table" aria-label="Card table" hidden></main>
+  <main class="screen" id="screen-lobby" aria-label="Online room" hidden></main>
 </div>
+<div class="net-bar" id="net-bar" role="status" hidden><span class="net-spin" aria-hidden="true"></span>Connection lost. Reconnecting…</div>
 <div class="overlay" id="overlay" hidden></div>
 <div id="fx" aria-hidden="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -868,7 +955,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
+CT.BUILD = {"version":"0.7.0","id":"7198f76","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -2660,6 +2747,317 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
 
   Donkey.bot = bot;
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/net/online.js ---- */
+/* ==========================================================================
+   ONLINE · the link to the game server
+   Connection   keeps one phone connected to one room: says who it is,
+                reconnects after a dropped signal or a locked screen, and
+                keeps its idea of the game clock in step with the server's.
+   RemoteSession  stands in for the engine's Session at an online table, so
+                the Burns and Donkey table screens work unchanged: view(),
+                act(), now() and on() look the same, but the game itself runs
+                on the server and every view is that player's own.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  var PROTOCOL = 1;
+  var RETRY_MS = [400, 1000, 2000, 4000, 8000];
+  var PING_MS = 4000;          // clock checks during a game
+  var KEEPALIVE_MS = 25000;    // a tiny ping otherwise, so idle connections aren't dropped
+  // Refusals that won't change by trying again.
+  var FINAL = { 'no-room': 1, update: 1, full: 1, 'bad-hello': 1, replaced: 1, closed: 1 };
+
+  function perfNow() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  /* ---------- the connection ---------- */
+
+  /* new Connection({ server, code: 'new' | 'ABCD', hello: { token, name, mode?, size?, options? },
+       on: { welcome, room, state, result, notice, error, status, bye } }) */
+  function Connection(opts) {
+    this.server = String(opts.server || '').replace(/\/+$/, '');
+    this.code = opts.code || 'new';
+    this.hello = opts.hello;
+    this.on = opts.on || {};
+    this.status = 'connecting';     // connecting → open ⇄ reconnecting; closed at the end
+    this.tries = 0;
+    this.queue = [];
+    this.stopped = false;
+    this.offset = null;             // server game time minus this phone's clock
+    this.samples = [];
+    this.syncing = false;           // during a game: check the clock often
+    this.ws = null;
+    this.connect();
+  }
+
+  Connection.prototype.emit = function (name, arg) {
+    var fn = this.on[name];
+    if (fn) try { fn(arg); } catch (e) { setTimeout(function () { throw e; }, 0); }
+  };
+
+  Connection.prototype.setStatus = function (s) {
+    if (this.status === s) return;
+    this.status = s;
+    this.emit('status', s);
+  };
+
+  Connection.prototype.isOpen = function () { return this.status === 'open'; };
+
+  Connection.prototype.connect = function () {
+    if (this.stopped) return;
+    var self = this, ws;
+    clearTimeout(this.retryTimer);
+    this.setStatus(this.tries || this.welcomed ? 'reconnecting' : 'connecting');
+    try { ws = new WebSocket(this.server + '/rooms/' + this.code); }
+    catch (e) { this.retry(); return; }
+    this.ws = ws;
+    ws.onopen = function () {
+      if (self.ws !== ws) return;
+      var hello = { t: 'hello', v: PROTOCOL };
+      for (var k in self.hello) hello[k] = self.hello[k];
+      ws.send(JSON.stringify(hello));
+    };
+    ws.onmessage = function (e) { if (self.ws === ws) self.receive(e.data); };
+    ws.onclose = function () {
+      if (self.ws !== ws) return;
+      self.ws = null;
+      self.stopTimers();
+      if (self.stopped) { self.setStatus('closed'); return; }
+      self.emit('lost');
+      self.retry();
+    };
+    ws.onerror = function () { /* onclose follows */ };
+  };
+
+  Connection.prototype.retry = function () {
+    if (this.stopped) return;
+    var self = this;
+    var wait = RETRY_MS[Math.min(this.tries, RETRY_MS.length - 1)];
+    this.tries++;
+    this.setStatus(this.welcomed ? 'reconnecting' : 'connecting');
+    clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(function () { self.connect(); }, wait);
+  };
+
+  /* Back in the app after the screen was off. A phone often keeps a dead
+     connection looking alive, so check it answers; if not, start afresh. */
+  Connection.prototype.wake = function () {
+    if (this.stopped) return;
+    if (!this.ws) { this.tries = 0; this.connect(); return; }
+    if (this.status !== 'open') return;
+    var self = this, ws = this.ws, heard = this.heardAt;
+    this.ping();
+    clearTimeout(this.probeTimer);
+    this.probeTimer = setTimeout(function () {
+      if (self.ws === ws && self.heardAt === heard) self.drop();
+    }, 4000);
+  };
+
+  /* Give up on a connection that has gone quiet, and make a new one. */
+  Connection.prototype.drop = function () {
+    var ws = this.ws;
+    if (!ws) return;
+    this.ws = null;
+    ws.onclose = ws.onmessage = ws.onopen = null;
+    try { ws.close(); } catch (e) { /* already dead */ }
+    this.stopTimers();
+    this.emit('lost');
+    this.tries = 0;
+    this.connect();
+  };
+
+  Connection.prototype.live = function () { return !!this.ws && this.ws.readyState === 1 && this.status === 'open'; };
+
+  Connection.prototype.receive = function (data) {
+    this.heardAt = perfNow();
+    if (data === 'pong') return;              // keep-alive answer
+    var msg;
+    try { msg = JSON.parse(data); } catch (e) { return; }
+    switch (msg.t) {
+      case 'welcome':
+        this.code = msg.code;
+        this.welcomed = true;
+        this.tries = 0;
+        this.setStatus('open');
+        this.startTimers();
+        while (this.queue.length) this.ws.send(this.queue.shift());
+        this.emit('welcome', msg);
+        break;
+      case 'pong': this.pong(msg); break;
+      case 'error':
+        if (FINAL[msg.code]) this.stop();
+        this.emit('error', msg);
+        break;
+      case 'bye': this.stop(); this.emit('bye', msg); break;
+      default: this.emit(msg.t, msg);
+    }
+  };
+
+  Connection.prototype.send = function (msg) {
+    var data = JSON.stringify(msg);
+    if (this.live()) this.ws.send(data);
+    else this.queue.push(data);
+  };
+
+  Connection.prototype.stop = function () {
+    this.stopped = true;
+    clearTimeout(this.retryTimer);
+    this.stopTimers();
+    var ws = this.ws;
+    this.ws = null;
+    if (ws) try { ws.close(1000); } catch (e) { /* closed */ }
+    this.setStatus('closed');
+  };
+
+  /* ---------- keeping time with the server ---------- */
+
+  Connection.prototype.startTimers = function () {
+    var self = this;
+    this.stopTimers();
+    this.heardAt = perfNow();
+    this.ping();
+    this.pingTimer = setInterval(function () { if (self.syncing) self.ping(); }, PING_MS);
+    this.keepTimer = setInterval(function () {
+      if (!self.syncing && self.live()) self.ws.send('ping');
+    }, KEEPALIVE_MS);
+    // a connection that has stopped answering is dead, even if the phone hasn't noticed
+    this.watchTimer = setInterval(function () {
+      if (!self.ws || self.status !== 'open' || document.hidden) return;
+      var quiet = perfNow() - (self.heardAt || 0);
+      if (self.ws.readyState > 1 || quiet > (self.syncing ? 10000 : KEEPALIVE_MS * 2 + 10000)) self.drop();
+    }, 2000);
+  };
+
+  Connection.prototype.stopTimers = function () {
+    clearInterval(this.pingTimer);
+    clearInterval(this.keepTimer);
+    clearInterval(this.watchTimer);
+    clearTimeout(this.probeTimer);
+  };
+
+  Connection.prototype.ping = function () {
+    if (this.live()) this.ws.send(JSON.stringify({ t: 'ping', c: perfNow() }));
+  };
+
+  /* The quickest recent round trip gives the best estimate of the server's clock. */
+  Connection.prototype.pong = function (msg) {
+    if (msg.gt == null || typeof msg.c !== 'number') return;
+    var now = perfNow(), rtt = now - msg.c;
+    this.samples.push({ rtt: rtt, offset: msg.gt + rtt / 2 - now, at: now });
+    this.samples = this.samples.filter(function (s) { return now - s.at < 60000; }).slice(-12);
+    var best = this.samples.reduce(function (a, b) { return b.rtt < a.rtt ? b : a; });
+    this.offset = best.offset;
+    this.rtt = best.rtt;
+  };
+
+  /* Every view comes with the server's game time: a first estimate, and a
+     reset if the game clock was stopped and started while we were away. */
+  Connection.prototype.syncFrom = function (gt) {
+    if (typeof gt !== 'number') return;
+    var now = perfNow();
+    if (this.offset == null || Math.abs(now + this.offset - gt) > 1500) {
+      this.offset = gt - now;
+      this.samples = [];
+    }
+  };
+
+  Connection.prototype.gameNow = function () { return perfNow() + (this.offset || 0); };
+
+  /* ---------- a game seen from one seat ---------- */
+
+  function RemoteSession(conn, first) {
+    this.conn = conn;
+    this.remote = true;
+    this.me = first.view.me;
+    this.game = first.game;
+    this.mode = CT.getMode(first.view.mode);
+    this.listeners = [];
+    this.events = [];
+    this.latest = null;
+    this.state = { players: [], events: this.events, phase: null, seq: 0, options: {} };
+    this.pending = {};
+    this.nextId = 1;
+    this.race = null;
+    this.apply(first, true);
+  }
+
+  RemoteSession.prototype.apply = function (msg, quiet) {
+    var v = msg.view;
+    var incoming = v.events || [];
+    delete v.events;
+    if (msg.reset) this.events.length = 0;
+    var lastSeq = this.events.length ? this.events[this.events.length - 1].seq : 0;
+    for (var i = 0; i < incoming.length; i++) if (incoming[i].seq > lastSeq) this.events.push(incoming[i]);
+    if (this.events.length > 800) this.events.splice(0, this.events.length - 800);
+    this.latest = v;
+    var st = this.state;
+    st.players = v.players;
+    st.phase = v.phase;
+    st.seq = v.seq;
+    st.options = v.options;
+    st.winners = v.winners;
+    // when a race showed on this screen, so the reaction is timed on this phone
+    if (v.canReact) {
+      var key = v.round + ':' + (v.race && v.race.startAt);
+      if (!this.race || this.race.key !== key) this.race = { key: key, at: perfNow() };
+    }
+    this.conn.syncFrom(msg.gt);
+    if (!quiet) for (var j = 0; j < this.listeners.length; j++) this.listeners[j]({ type: 'remote' });
+  };
+
+  RemoteSession.prototype.view = function (pid, opts) {
+    opts = opts || {};
+    var v = JSON.parse(JSON.stringify(this.latest));
+    if (opts.events !== false) {
+      var since = opts.sinceSeq || 0;
+      v.events = JSON.parse(JSON.stringify(this.events.filter(function (e) { return e.seq > since; })));
+    }
+    return v;
+  };
+
+  /* Moves go to the server; the answer comes back a moment later, to `done`.
+     Returns { pending: true } so the table knows to wait for it. */
+  RemoteSession.prototype.act = function (pid, type, payload, done) {
+    if (!this.conn.live()) return CT.fail('offline', 'The connection dropped. Reconnecting…');
+    payload = JSON.parse(JSON.stringify(payload || {}));
+    if (type === 'react' && this.race) payload.ms = Math.round(perfNow() - this.race.at);
+    var id = this.nextId++;
+    this.pending[id] = done || function () {};
+    this.conn.send({ t: 'act', id: id, type: type, payload: payload });
+    return { ok: true, pending: true };
+  };
+
+  RemoteSession.prototype.result = function (msg) {
+    var done = this.pending[msg.id];
+    if (!done) return;
+    delete this.pending[msg.id];
+    done(msg.res || CT.fail('error', 'Something went wrong. Try again.'));
+  };
+
+  /* The connection dropped: nothing in flight will be answered now. */
+  RemoteSession.prototype.dropPending = function () {
+    var pending = this.pending;
+    this.pending = {};
+    for (var id in pending) pending[id](CT.fail('offline', 'The connection dropped. Reconnecting…'));
+  };
+
+  RemoteSession.prototype.now = function () { return this.conn.gameNow(); };
+
+  RemoteSession.prototype.on = function (fn) {
+    var list = this.listeners;
+    list.push(fn);
+    return function () { var i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); };
+  };
+
+  // The server keeps time and runs the computer players; nothing to do here.
+  RemoteSession.prototype.tick = function () {};
+  RemoteSession.prototype.pause = function () {};
+  RemoteSession.prototype.resume = function () {};
+  RemoteSession.prototype.serialize = function () { return null; };
+
+  CT.Net = { PROTOCOL: PROTOCOL, Connection: Connection, RemoteSession: RemoteSession };
+})(window.CT);
 
 /* ---- src/ui/kit.js ---- */
 /* ==========================================================================
@@ -6120,6 +6518,624 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
   });
 })(window.CT);
 
+/* ---- src/ui/online.js ---- */
+/* ==========================================================================
+   ONLINE · rooms, the lobby, and playing with friends
+   Create a room or join one with its code (or a shared link), wait in the
+   lobby while people arrive, then play on the same table screens as an
+   offline game. The host picks the game and starts it; computer players
+   take any empty seats. If the connection drops, the app reconnects by
+   itself, and a computer player looks after your seat until you're back.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var KEY = 'cardtable.online.v1';            // this device: { token, name, lastMode, room: { code, mode, at } }
+  var REJOIN_MS = 12 * 60 * 60 * 1000;        // offer to go back to a room for this long
+  var AUTO_REJOIN_MS = 3 * 60 * 1000;         // after a quick reload (an update), go straight back in
+  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#C9A8F0', '#9BC76B', '#F59BB8'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return UI.esc(s); }
+
+  UI.icon.share = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg>';
+  UI.icon.people = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c.6-3.6 3.2-5.6 6.2-5.6s5.6 2 6.2 5.6"/><circle cx="17.2" cy="9" r="2.6"/><path d="M16.4 14.6c2.5.2 4.3 1.9 4.8 5"/></svg>';
+
+  function newToken() {
+    var bytes = new Uint8Array(18);
+    window.crypto.getRandomValues(bytes);
+    return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+
+  /* Where the game server is: set at build time; tests may point elsewhere. */
+  function serverUrl() {
+    var override = UI.store.get('cardtable.server', null);
+    if (typeof override === 'string' && /^wss?:\/\//.test(override)) return override;
+    return (CT.BUILD && CT.BUILD.server) || '';
+  }
+
+  function cleanCode(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); }
+  function cleanName(s) { return String(s || '').replace(/\s+/g, ' ').trim().slice(0, 16); }
+
+  /* A room code from a shared link: …/?room=ABCD or …/#room=ABCD */
+  function linkCode() {
+    var m = (location.search + '&' + location.hash).match(/[?&#]room=([A-Za-z0-9]{4})/);
+    return m ? cleanCode(m[1]) : null;
+  }
+
+  function Online(app) {
+    this.app = app;
+    this.data = UI.store.get(KEY, {}) || {};
+    if (!this.data.token) { this.data.token = newToken(); this.store(); }
+    this.conn = null;
+    this.room = null;        // the latest room from the server
+    this.you = null;         // my id in the room
+    this.remote = null;      // the game in progress (a RemoteSession)
+    this.form = null;        // the create/join sheet, while it's waiting
+  }
+
+  Online.prototype.store = function () { UI.store.set(KEY, this.data); };
+  Online.prototype.available = function () { return !!serverUrl(); };
+  Online.prototype.inRoom = function () { return !!this.conn; };
+  Online.prototype.me = function () {
+    var self = this;
+    return this.room ? this.room.members.filter(function (m) { return m.id === self.you; })[0] || null : null;
+  };
+  Online.prototype.isHost = function () { return !!this.room && this.room.host === this.you; };
+  Online.prototype.hostName = function () {
+    var r = this.room;
+    var h = r && r.members.filter(function (m) { return m.id === r.host; })[0];
+    return h ? h.name : 'the host';
+  };
+
+  /* ---------- home ---------- */
+
+  /* "You're in a room": near the top of the home screen. */
+  Online.prototype.rejoinHtml = function () {
+    var r = this.data.room;
+    if (!this.available() || !r || this.conn || Date.now() - r.at >= REJOIN_MS) return '';
+    var mode = CT.getMode(r.mode);
+    return '<div class="resume rejoin"><p>Online room ' + esc(r.code) +
+      '<small>' + esc(mode ? mode.name : 'Card game') + ' with friends</small></p>' +
+      '<button class="btn btn-primary" type="button" id="o-rejoin">Rejoin</button>' +
+      '<button class="icon-btn" type="button" id="o-forget" aria-label="Forget this room">' + UI.icon.close + '</button></div>';
+  };
+
+  /* The "Play with friends" tile, after the games. */
+  Online.prototype.tileHtml = function () {
+    if (!this.available()) return '';
+    return '<article class="mode-tile online-tile">' +
+      '<div class="online-top"><span class="online-icon">' + UI.icon.people + '</span>' +
+      '<h2>Play with friends</h2><span class="chip online-chip">Online</span></div>' +
+      '<p class="tag">Make a room, share the code, and everyone plays on their own phone. Computer players fill any empty seats.</p>' +
+      '<div class="mode-actions">' +
+        '<button class="btn btn-primary" type="button" data-online="create">Create a room</button>' +
+        '<button class="btn btn-ghost" type="button" data-online="join">Join a room</button>' +
+      '</div></article>';
+  };
+
+  Online.prototype.wireHome = function (root) {
+    var self = this;
+    root.querySelectorAll('[data-online]').forEach(function (b) {
+      b.addEventListener('click', function () { if (b.dataset.online === 'create') self.openCreate(); else self.openJoin(); });
+    });
+    var rejoin = $('o-rejoin');
+    if (rejoin) rejoin.addEventListener('click', function () {
+      UI.Sound.unlock();
+      rejoin.disabled = true;
+      rejoin.textContent = 'Joining…';
+      self.connect(self.data.room.code, {});
+    });
+    var forget = $('o-forget');
+    if (forget) forget.addEventListener('click', function () { delete self.data.room; self.store(); self.app.showHome(); });
+  };
+
+  /* On start: a shared link opens the join form; a reload during a game goes straight back in. */
+  Online.prototype.boot = function () {
+    if (!this.available()) return;
+    var code = linkCode();
+    if (code) {
+      try { history.replaceState(null, '', location.pathname); } catch (e) { /* keep the address */ }
+      this.openJoin(code);
+      return;
+    }
+    var r = this.data.room;
+    if (r && Date.now() - r.at < AUTO_REJOIN_MS && this.app.screen === 'home') this.connect(r.code, {});
+  };
+
+  /* ---------- create and join ---------- */
+
+  Online.prototype.nameField = function () {
+    return '<section class="field"><h3><label for="o-name">Your name</label></h3>' +
+      '<input class="text-input" id="o-name" type="text" maxlength="16" autocomplete="nickname" autocapitalize="words" enterkeyhint="go" spellcheck="false" placeholder="So your friends know it’s you" value="' + esc(this.data.name || '') + '"></section>';
+  };
+
+  Online.prototype.openCreate = function () {
+    var self = this, app = this.app;
+    var modes = CT.listModes();
+    var chosen = CT.getMode(this.data.lastMode) ? this.data.lastMode : modes[0].id;
+    var sheet = app.openSheet('online', app.sheetHead('Create a room') +
+      '<div class="online-form">' +
+        '<section class="field"><h3 id="lbl-o-mode">Game</h3><div class="seg" role="group" aria-labelledby="lbl-o-mode">' +
+          modes.map(function (m) { return '<button type="button" data-mode="' + m.id + '" aria-pressed="' + (m.id === chosen) + '">' + esc(m.shortName || m.name) + '</button>'; }).join('') +
+        '</div></section>' +
+        this.nameField() +
+        '<p class="form-error" id="o-error" role="alert" hidden></p>' +
+        '<button class="btn btn-primary btn-wide" type="button" id="o-go">Create room</button>' +
+        '<p class="form-help">You’ll get a code to share with your friends. You can change the game and its choices in the room.</p>' +
+      '</div>', { label: 'Create a room' });
+    app.wireClose(sheet);
+    sheet.querySelectorAll('[data-mode]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        chosen = b.dataset.mode;
+        sheet.querySelectorAll('[data-mode]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      });
+    });
+    var go = function () {
+      var name = self.readName();
+      if (!name) return;
+      var mode = CT.getMode(chosen);
+      var cfg = app.modeSettings(mode);        // your own choices for this game start the room off
+      self.data.lastMode = chosen;
+      self.store();
+      self.wait('Creating…');
+      self.connect('new', { mode: chosen, size: cfg.opponents + 1, options: cfg.options });
+    };
+    $('o-go').addEventListener('click', go);
+    $('o-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+  };
+
+  Online.prototype.openJoin = function (code) {
+    var self = this, app = this.app;
+    var sheet = app.openSheet('online', app.sheetHead('Join a room') +
+      '<div class="online-form">' +
+        '<section class="field"><h3><label for="o-code">Room code</label></h3>' +
+          '<input class="text-input code-input" id="o-code" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="next" placeholder="ABCD" value="' + esc(code || '') + '"></section>' +
+        this.nameField() +
+        '<p class="form-error" id="o-error" role="alert" hidden></p>' +
+        '<button class="btn btn-primary btn-wide" type="button" id="o-go">Join room</button>' +
+        '<p class="form-help">Ask whoever made the room for its four-letter code, or for the link.</p>' +
+      '</div>', { label: 'Join a room' });
+    app.wireClose(sheet);
+    var input = $('o-code');
+    input.addEventListener('input', function () {
+      var v = cleanCode(input.value);
+      if (v !== input.value) input.value = v;
+      if (v.length === 4 && !$('o-name').value) $('o-name').focus();
+    });
+    var go = function () {
+      var c = cleanCode(input.value);
+      if (c.length !== 4) { self.formError('Type the four-letter room code.'); input.focus(); return; }
+      var name = self.readName();
+      if (!name) return;
+      self.wait('Joining…');
+      self.connect(c, {});
+    };
+    $('o-go').addEventListener('click', go);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') $('o-name').focus(); });
+    $('o-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+    if (code && this.data.name) try { $('o-go').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+  };
+
+  Online.prototype.readName = function () {
+    var input = $('o-name');
+    var name = cleanName(input && input.value);
+    if (!name) { this.formError('Type your name, so the others know who you are.'); if (input) input.focus(); return null; }
+    this.data.name = name;
+    this.store();
+    return name;
+  };
+
+  Online.prototype.formError = function (text) {
+    var el = $('o-error');
+    if (el) { el.textContent = text; el.hidden = false; }
+    var go = $('o-go');
+    if (go && go.dataset.label) { go.disabled = false; go.textContent = go.dataset.label; }
+    this.form = null;
+  };
+
+  Online.prototype.wait = function (label) {
+    var go = $('o-go'), err = $('o-error');
+    if (err) err.hidden = true;
+    if (go) { go.dataset.label = go.dataset.label || go.textContent; go.disabled = true; go.textContent = label; }
+    this.form = true;
+  };
+
+  /* ---------- the connection ---------- */
+
+  Online.prototype.connect = function (code, extra) {
+    var self = this;
+    if (this.conn) this.conn.stop();
+    this.room = null;
+    this.you = null;
+    this.remote = null;
+    var hello = { token: this.data.token, name: this.data.name || 'Player' };
+    for (var k in extra) hello[k] = extra[k];
+    this.conn = new CT.Net.Connection({
+      server: serverUrl(), code: code, hello: hello,
+      on: {
+        welcome: function (m) { self.onWelcome(m); },
+        room: function (m) { self.onRoom(m.room); },
+        state: function (m) { self.onState(m); },
+        result: function (m) { if (self.remote) self.remote.result(m); },
+        notice: function (m) { UI.toast(esc(m.message)); },
+        error: function (m) { self.onError(m); },
+        lost: function () { if (self.remote) self.remote.dropPending(); },
+        status: function (s) { self.onStatus(s); }
+      }
+    });
+    // the first connection failing (no network, server unreachable)
+    clearTimeout(this.slowTimer);
+    this.slowTimer = setTimeout(function () {
+      if (self.conn && !self.conn.welcomed && self.form) {
+        self.conn.stop();
+        self.conn = null;
+        self.formError('Can’t reach the game server. Check your internet connection and try again.');
+      }
+    }, 12000);
+  };
+
+  Online.prototype.onWelcome = function (msg) {
+    var mine = this.app.engines();
+    for (var id in msg.engines) {
+      if (mine[id] != null && mine[id] !== msg.engines[id]) {
+        this.onError({ code: 'update', message: 'This room runs a different version of the game. Make sure everyone has updated the app (the version is at the bottom of the home screen).' });
+        return;
+      }
+    }
+    this.you = msg.you;
+    this.data.room = { code: msg.code, mode: this.data.room && this.data.room.code === msg.code ? this.data.room.mode : null, at: Date.now() };
+    this.store();
+  };
+
+  Online.prototype.onRoom = function (room) {
+    var first = !this.room;
+    this.room = room;
+    this.data.room = { code: room.code, mode: room.mode, at: Date.now() };
+    this.store();
+    if (this.form) { this.form = null; this.app.closeSheet(true); }
+    var me = this.me();
+    var seated = me && me.pid;
+    if (room.phase === 'lobby') {
+      if (this.remote || this.app.screen !== 'lobby') this.leaveTable();
+      this.showLobby();
+      return;
+    }
+    // a game is on or just finished
+    if (seated && (this.remote || first)) {
+      // at the table (or about to be: the view follows straight after)
+      if (this.remote && this.app.sheet === 'result') this.refreshResult();
+      return;
+    }
+    if (this.remote) this.leaveTable();
+    this.showLobby();
+  };
+
+  Online.prototype.onState = function (msg) {
+    if (!this.remote || msg.game !== this.remote.game) {
+      // a new game, or one already going when we joined
+      this.remote = new CT.Net.RemoteSession(this.conn, msg);
+      this.conn.syncing = true;
+      this.app.attachOnline(this.remote, { restored: !msg.fresh });
+      return;
+    }
+    if (msg.reset) {
+      // back after a dropped connection: redraw the table as it is now
+      this.remote.apply(msg, true);
+      this.app.attachOnline(this.remote, { restored: true });
+      return;
+    }
+    this.remote.apply(msg);
+  };
+
+  Online.prototype.onError = function (msg) {
+    var text = msg.message || 'Something went wrong.';
+    if (this.form) {
+      if (this.conn) this.conn.stop();
+      this.conn = null;
+      if (msg.code === 'no-room' && this.data.room) { delete this.data.room; this.store(); }
+      this.formError(text);
+      return;
+    }
+    if (this.conn && !this.conn.stopped && msg.code !== 'update') { UI.toast(esc(text)); return; }
+    // the room is gone for this phone: say why, then back to the games
+    if (this.conn) this.conn.stop();
+    this.conn = null;
+    if (msg.code !== 'replaced') { delete this.data.room; this.store(); }
+    this.endOnline();
+    var self = this, app = this.app;
+    var sheet = app.openSheet('confirm', '<div class="sheet-head"><h2>' + (msg.code === 'no-room' ? 'That room has closed' : 'Left the room') + '</h2></div>' +
+      '<p class="sheet-text">' + esc(text) + '</p>' +
+      '<button class="btn btn-primary" type="button" id="o-ok">Back to games</button>', { label: 'Online room', center: true });
+    $('o-ok').addEventListener('click', function () { app.closeSheet(true); self.app.showHome(); });
+    if (sheet) try { $('o-ok').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+  };
+
+  Online.prototype.onStatus = function (s) {
+    var bar = $('net-bar');
+    clearTimeout(this.barTimer);
+    if (s === 'reconnecting' && bar) {
+      this.barTimer = setTimeout(function () { bar.hidden = false; }, 1200);
+    } else if (bar) {
+      bar.hidden = true;
+    }
+    var dot = $('l-net');
+    if (dot) dot.className = 'net-dot ' + (s === 'open' ? 'on' : 'off');
+  };
+
+  /* Back in the app: if the screen was off, reconnect straight away. */
+  Online.prototype.wake = function () { if (this.conn) this.conn.wake(); };
+
+  /* ---------- the lobby ---------- */
+
+  Online.prototype.inviteUrl = function () {
+    return location.href.split(/[?#]/)[0] + '?room=' + this.room.code;
+  };
+
+  Online.prototype.showLobby = function () {
+    var app = this.app;
+    if (app.sheet && app.sheet !== 'online' && app.sheet !== 'rules') app.closeSheet(true);
+    app.show('lobby');
+    this.renderLobby();
+  };
+
+  Online.prototype.renderLobby = function () {
+    var self = this, app = this.app, r = this.room;
+    if (!r || app.screen !== 'lobby') return;
+    var mode = CT.getMode(r.mode);
+    var host = this.isHost();
+    var lobby = r.phase === 'lobby';
+    var fixed = mode.players.min === mode.players.max;
+    var size = r.size;
+    var people = r.members;
+    var rows = [];
+    var me = this.me();
+    // who sits where: in the lobby, the first `size` people, then computer players; during a game, the actual seats
+    if (lobby) {
+      people.forEach(function (m, i) { rows.push({ m: m, waits: i >= size }); });
+      for (var k = people.length; k < size; k++) rows.push({ bot: true });
+    } else {
+      people.forEach(function (m) { rows.push({ m: m, waits: !m.pid }); });
+      (r.bots || []).forEach(function (b) { rows.push({ bot: true, name: b.name }); });
+    }
+    var humans = Math.min(people.length, size);
+    var seatsHelp = lobby
+      ? size + ' at the table: ' + humans + (humans === 1 ? ' person' : ' people') + (size - humans ? ' and ' + (size - humans) + ' computer ' + (size - humans === 1 ? 'player' : 'players') : '') + '.' +
+        (people.length > size ? ' Everyone else waits for the next game.' : '')
+      : '';
+    var seatRows = rows.map(function (row, i) {
+      if (row.bot) {
+        return '<li class="lobby-seat bot"><span class="avatar">' + UI.icon.people + '</span><span class="who">' + (row.name ? esc(row.name) + ' <small>computer player</small>' : 'Computer player') + '</span>' +
+          '<span class="state">' + (lobby ? '' : 'Playing') + '</span></li>';
+      }
+      var m = row.m;
+      var tags = [];
+      if (m.id === self.you) tags.push('you');
+      if (m.id === r.host) tags.push('host');
+      var state = row.waits ? (lobby ? 'Waits' : 'Next game') : m.computer ? 'Computer covering' : m.connected ? 'Here' : 'Away';
+      return '<li class="lobby-seat' + (row.waits ? ' waits' : '') + '"><span class="avatar" style="--paint:' + PAINTS[i % PAINTS.length] + '">' + esc(m.name.charAt(0).toUpperCase()) + '</span>' +
+        '<span class="who">' + esc(m.name) + (tags.length ? ' <small>' + tags.join(' · ') + '</small>' : '') + '</span>' +
+        '<span class="state ' + (m.connected ? 'on' : 'off') + '">' + state + '</span></li>';
+    }).join('');
+
+    var gameField = host && lobby
+      ? '<div class="seg" role="group" aria-labelledby="lbl-l-mode">' + CT.listModes().map(function (m) {
+          return '<button type="button" data-l-mode="' + m.id + '" aria-pressed="' + (m.id === r.mode) + '">' + esc(m.shortName || m.name) + '</button>';
+        }).join('') + '</div>'
+      : '<p class="lobby-value">' + esc(mode.name) + '</p>';
+    var sizeField = '';
+    if (!fixed && host && lobby) {
+      var segs = '';
+      for (var n = mode.players.min; n <= mode.players.max; n++) segs += '<button type="button" data-l-size="' + n + '" aria-pressed="' + (n === size) + '">' + n + '</button>';
+      sizeField = '<section class="field"><h3 id="lbl-l-size">Seats at the table</h3><div class="seg" role="group" aria-labelledby="lbl-l-size">' + segs + '</div></section>';
+    }
+    var opts = (mode.options || []).map(function (o) {
+      var current = r.options[o.id];
+      if (host && lobby) {
+        var segs = o.choices.map(function (c) {
+          return '<button type="button" data-l-opt="' + o.id + '" data-val="' + c.value + '" aria-pressed="' + (current === c.value) + '">' + esc(c.label) + '</button>';
+        }).join('');
+        var choice = o.choices.filter(function (c) { return c.value === current; })[0];
+        return '<section class="field"><h3 id="lbl-l-' + o.id + '">' + esc(o.label) + '</h3><div class="seg" role="group" aria-labelledby="lbl-l-' + o.id + '">' + segs + '</div>' +
+          '<p class="help">' + esc(choice ? choice.help : '') + '</p></section>';
+      }
+      var c = o.choices.filter(function (x) { return x.value === current; })[0];
+      return '<li><span>' + esc(o.label) + '</span><b>' + esc(c ? c.label : '') + '</b></li>';
+    });
+    var optsHtml = !opts.length ? '' : (host && lobby)
+      ? '<p class="eyebrow">Game choices</p>' + opts.join('')
+      : '<section class="field"><h3>Game choices</h3><ul class="lobby-choices">' + opts.join('') + '</ul></section>';
+
+    var banner = '';
+    if (r.phase === 'playing') banner = '<p class="lobby-note">A game is under way. ' + (me && !me.pid ? 'You’ll get a seat in the next one.' : '') + '</p>';
+    if (r.phase === 'over') banner = '<p class="lobby-note">The game has just finished. ' + (host ? 'Start the next one when everyone’s ready.' : 'Waiting for ' + esc(this.hostName()) + ' to start the next one.') + '</p>';
+
+    var foot = host
+      ? '<button class="btn btn-primary btn-wide" type="button" id="l-start"' + (r.phase === 'playing' ? ' disabled' : '') + '>' + (r.phase === 'playing' ? 'Game under way' : 'Start game') + '</button>'
+      : '<p class="lobby-wait">' + (r.phase === 'playing' ? 'Waiting for this game to finish…' : 'Waiting for ' + esc(this.hostName()) + ' to start the game…') + '</p>';
+
+    var oldBody = document.querySelector('#screen-lobby .lobby-body');
+    var scrolled = oldBody ? oldBody.scrollTop : 0;   // someone joining shouldn't scroll the host back up
+    $('screen-lobby').innerHTML =
+      '<header class="setup-head lobby-head">' +
+        '<button class="icon-btn" id="l-back" type="button" aria-label="Leave the room">' + UI.icon.back + '</button>' +
+        '<span class="wordmark">ROOM</span><span class="spacer"></span>' +
+        '<span class="net-dot ' + (this.conn && this.conn.isOpen() ? 'on' : 'off') + '" id="l-net" title="Connection"></span>' +
+      '</header>' +
+      '<div class="setup-body lobby-body">' +
+        banner +
+        '<section class="invite">' +
+          '<p class="eyebrow">Room code</p>' +
+          '<p class="room-code" aria-label="Room code ' + esc(r.code.split('').join(' ')) + '">' + esc(r.code) + '</p>' +
+          '<p class="invite-help">Friends tap <b>Join a room</b> and type the code, or open your invite link.</p>' +
+          '<div class="invite-actions"><button class="btn btn-primary" type="button" id="l-share">' + UI.icon.share + '<span>Share invite</span></button>' +
+          '<button class="btn btn-ghost" type="button" id="l-copy">Copy link</button></div>' +
+        '</section>' +
+        '<section class="field"><h3 id="lbl-l-mode">Game</h3>' + gameField + '</section>' +
+        sizeField +
+        '<section class="field"><h3>At the table</h3><ul class="lobby-seats">' + seatRows + '</ul>' +
+          (seatsHelp ? '<p class="help">' + esc(seatsHelp) + '</p>' : '') + '</section>' +
+        optsHtml +
+      '</div>' +
+      '<div class="setup-foot">' + foot +
+        '<button class="link-btn" id="l-rules" type="button">How to play ' + esc(mode.name) + '</button></div>';
+
+    if (scrolled) document.querySelector('#screen-lobby .lobby-body').scrollTop = scrolled;
+    $('l-back').addEventListener('click', function () { self.confirmLeave(); });
+    $('l-share').addEventListener('click', function () { self.share(); });
+    $('l-copy').addEventListener('click', function () { self.copy(self.inviteUrl()); });
+    $('l-rules').addEventListener('click', function () { app.openRules(mode.id, r.options); });
+    var start = $('l-start');
+    if (start) start.addEventListener('click', function () {
+      UI.Sound.unlock();
+      start.disabled = true;
+      start.textContent = 'Starting…';
+      self.conn.send({ t: 'start' });
+    });
+    var screen = $('screen-lobby');
+    screen.querySelectorAll('[data-l-mode]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.lMode === r.mode) return;
+        var m = CT.getMode(b.dataset.lMode), cfg = app.modeSettings(m);
+        self.conn.send({ t: 'setup', mode: m.id, size: cfg.opponents + 1, options: cfg.options });
+      });
+    });
+    screen.querySelectorAll('[data-l-size]').forEach(function (b) {
+      b.addEventListener('click', function () { self.conn.send({ t: 'setup', size: +b.dataset.lSize }); });
+    });
+    screen.querySelectorAll('[data-l-opt]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var o = {};
+        for (var k in r.options) o[k] = r.options[k];
+        o[b.dataset.lOpt] = b.dataset.val;
+        self.conn.send({ t: 'setup', options: o });
+      });
+    });
+  };
+
+  Online.prototype.share = function () {
+    var self = this, url = this.inviteUrl(), mode = CT.getMode(this.room.mode);
+    var text = 'Join my game of ' + mode.name + '! Room code ' + this.room.code + '.';
+    if (navigator.share) {
+      navigator.share({ title: 'Join my card game', text: text, url: url }).catch(function (e) {
+        if (e && e.name !== 'AbortError') self.copy(url);
+      });
+    } else {
+      this.copy(url);
+    }
+  };
+
+  Online.prototype.copy = function (text) {
+    var done = function () { UI.toast('Invite link copied. Paste it in a message to your friends.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy this link:', text); });
+    } else {
+      window.prompt('Copy this link:', text);
+    }
+  };
+
+  /* ---------- leaving ---------- */
+
+  Online.prototype.confirmLeave = function () {
+    var self = this, app = this.app;
+    var playing = this.room && this.room.phase === 'playing' && this.me() && this.me().pid;
+    var alone = !this.room || this.room.members.length <= 1;
+    if (alone && !playing) { this.leave(); return; }
+    app.openSheet('confirm', '<div class="sheet-head"><h2>Leave the room?</h2></div>' +
+      '<p class="sheet-text">' + (playing ? 'A computer player takes over your seat for the rest of this game.' : 'You can come back with the code while the room is open.') + '</p>' +
+      '<div class="confirm-actions"><button class="btn btn-primary" type="button" id="o-leave">Leave room</button>' +
+      '<button class="btn btn-ghost" type="button" id="o-stay">Stay</button></div>', { label: 'Leave the room', center: true });
+    $('o-leave').addEventListener('click', function () { app.closeSheet(true); self.leave(); });
+    $('o-stay').addEventListener('click', function () { app.closeSheet(); });
+  };
+
+  Online.prototype.leave = function () {
+    if (this.conn) {
+      var conn = this.conn;
+      conn.on = {};                                     // nothing more from this room
+      if (conn.live()) conn.send({ t: 'leave' });
+      setTimeout(function () { conn.stop(); }, 300);   // let the goodbye go out first
+    }
+    this.conn = null;
+    delete this.data.room;
+    this.store();
+    this.endOnline();
+    this.app.showHome();
+  };
+
+  /* Off the table (back to the lobby, or out of the room). */
+  Online.prototype.leaveTable = function () {
+    this.remote = null;
+    if (this.conn) this.conn.syncing = false;
+    this.app.detachOnline();
+  };
+
+  Online.prototype.endOnline = function () {
+    clearTimeout(this.barTimer);
+    var bar = $('net-bar');
+    if (bar) bar.hidden = true;
+    this.leaveTable();
+    this.room = null;
+    this.you = null;
+  };
+
+  /* ---------- the table's menu and the end of a game ---------- */
+
+  Online.prototype.openMenu = function () {
+    var self = this, app = this.app;
+    var over = this.room && this.room.phase === 'over';
+    var host = this.isHost();
+    var sheet = app.openSheet('menu', app.sheetHead('Room ' + esc(this.room ? this.room.code : '')) +
+      '<div class="menu-list">' +
+        '<button class="btn btn-primary" type="button" data-close>' + (over ? 'Back to the table' : 'Keep playing') + '</button>' +
+        (over && host ? '<button class="btn btn-ghost" type="button" id="m-again">Play again</button><button class="btn btn-ghost" type="button" id="m-lobby">Back to the room</button>' : '') +
+        '<button class="btn btn-ghost" type="button" id="m-rules">How to play</button>' +
+        '<button class="btn btn-ghost" type="button" id="m-log">Play-by-play</button>' +
+        '<button class="btn btn-ghost" type="button" id="m-invite">Invite friends</button>' +
+        '<button class="btn btn-ghost" type="button" id="m-leave">Leave room</button>' +
+      '</div>', { label: 'Game menu' });
+    app.wireClose(sheet);
+    var again = $('m-again'), lobby = $('m-lobby');
+    if (again) again.addEventListener('click', function () { app.closeSheet(true); self.conn.send({ t: 'start' }); });
+    if (lobby) lobby.addEventListener('click', function () { app.closeSheet(true); self.conn.send({ t: 'lobby' }); });
+    $('m-rules').addEventListener('click', function () { app.openRules(app.session.mode.id, app.session.state.options); });
+    $('m-log').addEventListener('click', function () { app.openLog(); });
+    $('m-invite').addEventListener('click', function () { self.share(); });
+    $('m-leave').addEventListener('click', function () { app.closeSheet(true); self.confirmLeave(); });
+  };
+
+  /* The buttons under an online result: the host decides what's next. */
+  Online.prototype.resultActions = function () {
+    if (this.isHost()) {
+      return '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
+        '<button class="btn btn-ghost" type="button" id="r-lobby">Back to the room</button>' +
+        '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+        '<button class="btn btn-ghost" type="button" id="r-leave">Leave room</button>';
+    }
+    return '<p class="result-wait" id="r-wait">Waiting for ' + esc(this.hostName()) + ' to start the next game…</p>' +
+      '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+      '<button class="btn btn-ghost" type="button" id="r-leave">Leave room</button>';
+  };
+
+  Online.prototype.wireResult = function () {
+    var self = this, app = this.app;
+    var again = $('r-again'), lobby = $('r-lobby');
+    if (again) again.addEventListener('click', function () { again.disabled = true; again.textContent = 'Starting…'; self.conn.send({ t: 'start' }); });
+    if (lobby) lobby.addEventListener('click', function () { self.conn.send({ t: 'lobby' }); });
+    $('r-table').addEventListener('click', function () { app.closeSheet(); });
+    $('r-leave').addEventListener('click', function () { app.closeSheet(true); self.confirmLeave(); });
+  };
+
+  /* Someone else became host while the result was up. */
+  Online.prototype.refreshResult = function () {
+    var wait = $('r-wait');
+    if (wait && this.isHost() && this.app.table) { this.app.closeSheet(true); this.app.showResult(this.app.table.v); }
+    else if (wait) wait.textContent = 'Waiting for ' + this.hostName() + ' to start the next game…';
+  };
+
+  UI.Online = Online;
+})(window.CT);
+
 /* ---- src/ui/app.js ---- */
 /* ==========================================================================
    APP SHELL — menu, setup, sheets, saving, and the game loop.
@@ -6197,9 +7213,19 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
         try { hot.snapshot(function () { return self.snapshot(); }); } catch (e) { /* optional */ }
       }
 
+      this.online = UI.Online ? new UI.Online(this) : null;
+
       data = data || {};
       if (data.save && data.screen === 'table' && this.resume(data.save)) return;
       this.showHome();
+      if (this.online) this.online.boot();
+    },
+
+    /* Each mode's rules version, to check an online room runs the same game. */
+    engines: function () {
+      var out = {};
+      CT.listModes().forEach(function (m) { out[m.id] = m.engineVersion; });
+      return out;
     },
 
     snapshot: function () {
@@ -6233,7 +7259,7 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
 
     show: function (name) {
       this.screen = name;
-      ['home', 'setup', 'table'].forEach(function (s) { $('screen-' + s).hidden = s !== name; });
+      ['home', 'setup', 'table', 'lobby'].forEach(function (s) { var el = $('screen-' + s); if (el) el.hidden = s !== name; });
     },
 
     showHome: function () {
@@ -6256,6 +7282,7 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
           (line ? '<small>' + UI.esc(line) + '</small>' : '') + '</p>' +
           '<button class="btn btn-primary" id="h-resume" type="button">Resume</button></div>';
       }
+      if (this.online) html += this.online.rejoinHtml();
       html += '<section class="modes">';
       modes.forEach(function (m) {
         var hand = m.handSize ? ' · ' + m.handSize + ' cards each' : '';
@@ -6268,6 +7295,7 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
           '<button class="btn btn-ghost" type="button" data-rules="' + m.id + '">How to play</button></div>' +
           '</article>';
       });
+      if (this.online) html += this.online.tileHtml();
       html += '<article class="mode-tile soon"><h3>More games</h3><p>New modes appear here as their rules are added.</p></article></section>';
       var lines = modes.map(function (m) {
         var s = self.stats[m.id];
@@ -6301,6 +7329,7 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
           self.openRules(m.id, CT.resolveOptions(m.options, (self.settings[m.id] || {}).options));
         });
       });
+      if (this.online) this.online.wireHome(home);
     },
 
     modeSettings: function (mode) {
@@ -6408,6 +7437,26 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
       this.save();
     },
 
+    /* ---------- online ---------- */
+
+    /* An online game on the table: the same table screens, fed by the server. */
+    attachOnline: function (session, opts) {
+      if (this.sheet !== 'rules') this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.session = session;
+      this.show('table');
+      var Presenter = UI.presenters[session.mode.presenter];
+      this.table = new Presenter(this, session, session.me, { restored: !!(opts && opts.restored) });
+    },
+
+    detachOnline: function () {
+      if (!this.session || !this.session.remote) return;
+      if (this.sheet === 'result' || this.sheet === 'menu' || this.sheet === 'log') this.closeSheet(true);
+      if (this.table) this.table.destroy();
+      this.table = null;
+      this.session = null;
+    },
+
     /* ---------- tutorial ---------- */
 
     /* Play on the home screen. The first time, offer the mode's tutorial. */
@@ -6498,12 +7547,12 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
     },
 
     currentSave: function () {
-      if (!this.session || this.tutorial || this.session.state.phase === 'over') return null;
+      if (!this.session || this.tutorial || this.session.remote || this.session.state.phase === 'over') return null;
       return { session: this.session.serialize(), game: this.game, me: 'p0', savedAt: Date.now() };
     },
 
     save: function () {
-      if (!this.session || this.tutorial) return;
+      if (!this.session || this.tutorial || this.session.remote) return;   // online games live on the server
       if (this.session.state.phase === 'over') { UI.store.del(SAVE_KEY); return; }
       var s = this.currentSave();
       if (s) UI.store.set(SAVE_KEY, s);
@@ -6529,6 +7578,7 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
         return;
       }
       if (UI.Music.on) UI.Music.start();
+      if (this.online) this.online.wake();
       this.resumePlay();
     },
 
@@ -6588,7 +7638,8 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
         return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
       }).join(' · ');
       var self = this;
-      var Tutorial = !this.tutorial && UI.tutorials && UI.tutorials[modeId];
+      var online = this.online && this.online.inRoom();
+      var Tutorial = !this.tutorial && !online && UI.tutorials && UI.tutorials[modeId];
       var inGame = this.session && this.session.state.phase !== 'over';
       var tutorial = Tutorial
         ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.lessons.length +
@@ -6605,6 +7656,7 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
 
     openMenu: function () {
       var self = this;
+      if (this.session && this.session.remote && this.online) { this.online.openMenu(); return; }
       if (this.tutorial) {
         var t = this.openSheet('menu', this.sheetHead('Tutorial') +
           '<div class="menu-list">' +
@@ -6662,18 +7714,20 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
       this.startGame(g.modeId, { opponents: g.opponents, options: g.options, names: g.names });
     },
 
-    record: function (v) {
-      if (this.recorded) return;
-      this.recorded = true;
+    record: function (v, me) {
+      // once per game: online games are told apart by room and game number
+      var key = this.session.remote ? 'online:' + (this.online && this.online.room ? this.online.room.code : '') + ':' + this.session.game : null;
+      if (key ? this.recordedKey === key : this.recorded) return;
+      if (key) this.recordedKey = key; else this.recorded = true;
       var id = this.session.mode.id;
       var s = this.stats[id] || (this.stats[id] = { played: 0, won: 0, flushWins: 0 });
       s.played++;
-      if ((v.winners || []).indexOf('p0') >= 0) {
+      if ((v.winners || []).indexOf(me || 'p0') >= 0) {
         s.won++;
         if (v.winReason === 'flush') s.flushWins++;
       }
       UI.store.set(STATS_KEY, this.stats);
-      UI.store.del(SAVE_KEY);
+      if (!key) UI.store.del(SAVE_KEY);
     },
 
     /* The end-of-game sheet. The table screen fills in what's particular to
@@ -6681,8 +7735,9 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
     showResult: function (v) {
       var self = this;
       if (this.tutorial) return;   // the tutorial explains the ending itself
-      this.record(v);
-      var me = 'p0';
+      var me = this.table ? this.table.me : 'p0';
+      var online = !!(this.session && this.session.remote && this.online);
+      this.record(v, me);
       var names = {};
       v.players.forEach(function (p) { names[p.id] = p.id === me ? 'You' : p.name; });
       var winners = v.winners || [];
@@ -6696,12 +7751,13 @@ CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
         '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
         '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
         (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
-        '<div class="result-actions">' +
+        '<div class="result-actions">' + (online ? this.online.resultActions() :
           '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
           '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
-          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>') +
         '</div>', { cls: 'result', center: true, label: 'Game result' });
       if (r.after) r.after(sheet);
+      if (online) { this.online.wireResult(); return; }
       $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
       $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
       $('r-table').addEventListener('click', function () { self.closeSheet(); });

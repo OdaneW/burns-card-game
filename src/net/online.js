@@ -89,14 +89,37 @@
     this.retryTimer = setTimeout(function () { self.connect(); }, wait);
   };
 
-  /* Back in the app after the screen was off: try again straight away. */
+  /* Back in the app after the screen was off. A phone often keeps a dead
+     connection looking alive, so check it answers; if not, start afresh. */
   Connection.prototype.wake = function () {
-    if (this.stopped || this.ws) return;
+    if (this.stopped) return;
+    if (!this.ws) { this.tries = 0; this.connect(); return; }
+    if (this.status !== 'open') return;
+    var self = this, ws = this.ws, heard = this.heardAt;
+    this.ping();
+    clearTimeout(this.probeTimer);
+    this.probeTimer = setTimeout(function () {
+      if (self.ws === ws && self.heardAt === heard) self.drop();
+    }, 4000);
+  };
+
+  /* Give up on a connection that has gone quiet, and make a new one. */
+  Connection.prototype.drop = function () {
+    var ws = this.ws;
+    if (!ws) return;
+    this.ws = null;
+    ws.onclose = ws.onmessage = ws.onopen = null;
+    try { ws.close(); } catch (e) { /* already dead */ }
+    this.stopTimers();
+    this.emit('lost');
     this.tries = 0;
     this.connect();
   };
 
+  Connection.prototype.live = function () { return !!this.ws && this.ws.readyState === 1 && this.status === 'open'; };
+
   Connection.prototype.receive = function (data) {
+    this.heardAt = perfNow();
     if (data === 'pong') return;              // keep-alive answer
     var msg;
     try { msg = JSON.parse(data); } catch (e) { return; }
@@ -122,7 +145,7 @@
 
   Connection.prototype.send = function (msg) {
     var data = JSON.stringify(msg);
-    if (this.ws && this.status === 'open') this.ws.send(data);
+    if (this.live()) this.ws.send(data);
     else this.queue.push(data);
   };
 
@@ -141,20 +164,29 @@
   Connection.prototype.startTimers = function () {
     var self = this;
     this.stopTimers();
+    this.heardAt = perfNow();
     this.ping();
     this.pingTimer = setInterval(function () { if (self.syncing) self.ping(); }, PING_MS);
     this.keepTimer = setInterval(function () {
-      if (!self.syncing && self.ws && self.status === 'open') try { self.ws.send('ping'); } catch (e) { /* closed */ }
+      if (!self.syncing && self.live()) self.ws.send('ping');
     }, KEEPALIVE_MS);
+    // a connection that has stopped answering is dead, even if the phone hasn't noticed
+    this.watchTimer = setInterval(function () {
+      if (!self.ws || self.status !== 'open' || document.hidden) return;
+      var quiet = perfNow() - (self.heardAt || 0);
+      if (self.ws.readyState > 1 || quiet > (self.syncing ? 10000 : KEEPALIVE_MS * 2 + 10000)) self.drop();
+    }, 2000);
   };
 
   Connection.prototype.stopTimers = function () {
     clearInterval(this.pingTimer);
     clearInterval(this.keepTimer);
+    clearInterval(this.watchTimer);
+    clearTimeout(this.probeTimer);
   };
 
   Connection.prototype.ping = function () {
-    if (this.ws && this.status === 'open') this.ws.send(JSON.stringify({ t: 'ping', c: perfNow() }));
+    if (this.live()) this.ws.send(JSON.stringify({ t: 'ping', c: perfNow() }));
   };
 
   /* The quickest recent round trip gives the best estimate of the server's clock. */
@@ -236,7 +268,7 @@
   /* Moves go to the server; the answer comes back a moment later, to `done`.
      Returns { pending: true } so the table knows to wait for it. */
   RemoteSession.prototype.act = function (pid, type, payload, done) {
-    if (!this.conn.isOpen()) return CT.fail('offline', 'The connection dropped. Reconnecting…');
+    if (!this.conn.live()) return CT.fail('offline', 'The connection dropped. Reconnecting…');
     payload = JSON.parse(JSON.stringify(payload || {}));
     if (type === 'react' && this.race) payload.ms = Math.round(perfNow() - this.race.at);
     var id = this.nextId++;
