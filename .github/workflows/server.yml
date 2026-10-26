@@ -1,0 +1,66 @@
+name: Game server
+
+# Deploys the online game server (server/) to Cloudflare whenever it, or the
+# game rules it runs, change. Needs two repository secrets:
+#   CLOUDFLARE_API_TOKEN   an API token made from the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  the Cloudflare account it deploys to
+on:
+  push:
+    branches: [main, online]
+    paths:
+      - 'server/**'
+      - 'src/engine/**'
+      - 'src/modes/*/rules.js'
+      - 'src/modes/*/bot.js'
+      - 'test/online.test.mjs'
+      - '.github/workflows/server.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: game-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Room tests
+        run: node test/online.test.mjs
+      - name: Install wrangler
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+      - name: Deploy
+        working-directory: server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -o pipefail
+          npx wrangler deploy 2>&1 | tee deploy.log
+      - name: Check the live server
+        working-directory: server
+        run: |
+          URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "Server: $URL"
+          test -n "$URL"
+          for i in 1 2 3 4 5 6; do curl -fsS "$URL/" && break; sleep 5; done
+          echo
+          node -e '
+            const url = process.argv[1].replace(/^https/, "wss") + "/rooms/new";
+            const ws = new WebSocket(url);
+            const fail = m => { console.error(m); process.exit(1); };
+            setTimeout(() => fail("no answer from the server"), 15000);
+            ws.onopen = () => ws.send(JSON.stringify({ t: "hello", v: 1, token: "deploy-check-" + Date.now(), name: "Deploy check", mode: "donkey" }));
+            ws.onmessage = e => {
+              const m = JSON.parse(e.data);
+              if (m.t === "welcome") { console.log("Created room " + m.code + " over a WebSocket"); ws.send(JSON.stringify({ t: "leave" })); }
+              if (m.t === "bye") { console.log("Left it again. All good."); process.exit(0); }
+              if (m.t === "error") fail(m.message);
+            };
+            ws.onerror = () => fail("WebSocket error");
+          ' "$URL"

@@ -690,44 +690,64 @@
     el.classList.add('shake');
   };
 
+  /* A move. At this table the answer is immediate; at an online table it
+     comes back from the server a moment later, and further taps wait for it. */
+  DonkeyTable.prototype.send = function (type, payload, then) {
+    if (this.sending) return;
+    var self = this;
+    this.sending = true;
+    var finish = function (res) { self.sending = false; if (then) then(res); };
+    var res = this.session.act(this.me, type, payload, finish);
+    if (!res || !res.pending) finish(res);
+  };
+
   DonkeyTable.prototype.pass = function (id) {
-    var res = this.session.act(this.me, 'pass', { cardId: id });
-    this.selected = null;
-    if (!res.ok) {
-      // put the card back so it's clear nothing was passed
-      if (this.v) { this.renderHand(this.v); this.renderMe(this.v); }
-      UI.toast(UI.esc(res.message));
-      UI.Sound.play('nope');
-      return;
-    }
-    UI.Sound.play('play');
-    UI.buzz(10);
+    var self = this;
+    this.send('pass', { cardId: id }, function (res) {
+      self.selected = null;
+      if (!res.ok) {
+        // put the card back so it's clear nothing was passed
+        if (self.v) { self.renderHand(self.v); self.renderMe(self.v); }
+        UI.toast(UI.esc(res.message));
+        UI.Sound.play('nope');
+        return;
+      }
+      UI.Sound.play('play');
+      UI.buzz(10);
+    });
   };
 
   DonkeyTable.prototype.declare = function () {
     UI.Sound.unlock();
-    var res = this.session.act(this.me, 'declare');
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
-    UI.buzz(20);
+    this.send('declare', {}, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+      UI.buzz(20);
+    });
   };
 
+  /* In a race every millisecond counts: the slap sounds the moment you tap. */
   DonkeyTable.prototype.slap = function () {
     var v = this.v;
     if (!v || !v.canReact) return;
-    var res = this.session.act(this.me, 'react');
-    if (!res.ok) return;
+    var key = v.round + ':' + (v.race && v.race.startAt);
+    if (this.slapped === key) return;
+    this.slapped = key;
     UI.Sound.play('slap');
     UI.buzz(25);
+    var self = this;
+    this.send('react', {}, function (res) { if (!res.ok && res.code === 'offline') self.slapped = null; });
   };
 
   DonkeyTable.prototype.challenge = function (pid) {
-    var res = this.session.act(this.me, 'challenge', { target: pid });
-    if (!res.ok) UI.toast(UI.esc(res.message));
+    this.send('challenge', { target: pid }, function (res) {
+      if (!res.ok) UI.toast(UI.esc(res.message));
+    });
   };
 
   DonkeyTable.prototype.call = function (call) {
-    var res = this.session.act(this.me, 'call', { call: call });
-    if (!res.ok) UI.toast(UI.esc(res.message));
+    this.send('call', { call: call }, function (res) {
+      if (!res.ok) UI.toast(UI.esc(res.message));
+    });
   };
 
   /* ---------- sounds and notices ---------- */

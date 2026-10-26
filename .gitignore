@@ -2,3 +2,5 @@ node_modules/
 dist/
 test/shots/
 .DS_Store
+.wrangler/
+server/deploy.log

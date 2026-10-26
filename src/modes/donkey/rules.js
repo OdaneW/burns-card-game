@@ -263,7 +263,13 @@
     return false;
   }
 
-  function actReact(state, p, now) {
+  /* Online, a player's tap reaches the table a moment after they made it, so
+     their device reports how long they took from the moment the race showed
+     on their screen. The claim is believed, but never faster than a person
+     can react, and never slower than what the table saw. */
+  var MIN_REACT_MS = 100;
+
+  function actReact(state, p, now, claimedMs) {
     var race = state.race;
     if (state.declare && state.declare.player === p.id) return CT.fail('safe', 'You put the four down, so you’re safe this round.');
     if (state.phase === 'declared') return CT.fail('early', 'Not yet!', { retryInMs: Math.max(0, state.phaseEndsAt - now) });
@@ -271,10 +277,14 @@
     if (race.racers.indexOf(p.id) < 0) return CT.fail('safe', 'You’re not in this race.');
     if (reacted(race, p.id)) return CT.fail('done', 'Your cards are already down.');
     var ms = Math.max(0, Math.round(now - race.startAt));
+    if (typeof claimedMs === 'number' && isFinite(claimedMs)) ms = Math.min(ms, Math.max(MIN_REACT_MS, Math.round(claimedMs)));
     race.order.push({ player: p.id, ms: ms });
-    emit(state, now, { type: 'react', player: p.id, ms: ms, place: race.order.length });
+    // fastest first (a reported time can come in after a slower one)
+    race.order.sort(function (a, b) { return a.ms - b.ms; });
+    var place = 1 + race.order.map(function (o) { return o.player; }).indexOf(p.id);
+    emit(state, now, { type: 'react', player: p.id, ms: ms, place: place });
     if (race.order.length === race.racers.length) finishRace(state, now);
-    return CT.ok({ ms: ms, place: race.order.length });
+    return CT.ok({ ms: ms, place: place });
   }
 
   /* The slowest gets the next letter. Anyone who never reacted counts as
@@ -436,7 +446,7 @@
     switch (type) {
       case 'pass': return actPass(state, p, payload.cardId, now);
       case 'declare': return actDeclare(state, p, now, false);
-      case 'react': return actReact(state, p, now);
+      case 'react': return actReact(state, p, now, payload.ms);
       case 'challenge': return actChallenge(state, p, payload.target, now, false);
       case 'call': return actCall(state, p, payload.call, now, false);
     }

@@ -161,6 +161,24 @@ test('the race: the slowest to put their cards down gets the next letter', () =>
   conservation(s);
 });
 
+test('online: a reported reaction time decides the order, within what the table saw', () => {
+  const s = rigged({ hands: [['KD', 'QS', 'JS', 'AS'], ['KS', 'KH', 'KC', 'QD'], ['JC', 'QC', 'AC', 'JD'], ['JH', 'QH', 'AH', 'AD']], starter: 'p0' });
+  act(s, 'p0', 'pass', { cardId: 'KD' }, 10);
+  act(s, 'p1', 'declare', {}, 20);
+  D.tick(s, 120);                                   // the race starts at 120
+  eq(act(s, 'p3', 'react', {}, 520).place, 1);      // a computer player, 400 ms
+  const mine = act(s, 'p0', 'react', { ms: 260 }, 700);   // tapped after 260 ms, arrived later
+  eq([mine.ms, mine.place], [260, 1], 'the reported time counts');
+  eq(act(s, 'p2', 'react', { ms: 5 }, 800).ms, 100, 'nobody is faster than 100 ms');
+  eq(s.result.order.map(o => o.player + ':' + o.ms), ['p2:100', 'p0:260', 'p3:400']);
+  eq(s.result.losers, ['p3'], 'the slowest time gets the letter, not the last to arrive');
+  const t = rigged({ hands: [['KD', 'QS', 'JS', 'AS'], ['KS', 'KH', 'KC', 'QD'], ['JC', 'QC', 'AC', 'JD'], ['JH', 'QH', 'AH', 'AD']], starter: 'p0' });
+  act(t, 'p0', 'pass', { cardId: 'KD' }, 10);
+  act(t, 'p1', 'declare', {}, 20);
+  D.tick(t, 120);
+  eq(act(t, 'p0', 'react', { ms: 900 }, 420).ms, 300, 'never slower than the table saw');
+});
+
 test('race timer: anyone who never reacts counts as last (each of them gets a letter)', () => {
   const s = rigged({ hands: [['JS', 'QS', 'KS', 'QH'], ['JH', 'KH', 'JC', 'QC'], ['AS', 'AH', 'AC', 'AD'], ['KC', 'JD', 'QD', 'KD']], starter: 'p0' });
   act(s, 'p2', 'declare', {}, 0);

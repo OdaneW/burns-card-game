@@ -868,7 +868,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
+CT.BUILD = {"version":"0.6.1","id":"a25b4d3","target":"app"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -2227,7 +2227,13 @@ CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
     return false;
   }
 
-  function actReact(state, p, now) {
+  /* Online, a player's tap reaches the table a moment after they made it, so
+     their device reports how long they took from the moment the race showed
+     on their screen. The claim is believed, but never faster than a person
+     can react, and never slower than what the table saw. */
+  var MIN_REACT_MS = 100;
+
+  function actReact(state, p, now, claimedMs) {
     var race = state.race;
     if (state.declare && state.declare.player === p.id) return CT.fail('safe', 'You put the four down, so you’re safe this round.');
     if (state.phase === 'declared') return CT.fail('early', 'Not yet!', { retryInMs: Math.max(0, state.phaseEndsAt - now) });
@@ -2235,10 +2241,14 @@ CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
     if (race.racers.indexOf(p.id) < 0) return CT.fail('safe', 'You’re not in this race.');
     if (reacted(race, p.id)) return CT.fail('done', 'Your cards are already down.');
     var ms = Math.max(0, Math.round(now - race.startAt));
+    if (typeof claimedMs === 'number' && isFinite(claimedMs)) ms = Math.min(ms, Math.max(MIN_REACT_MS, Math.round(claimedMs)));
     race.order.push({ player: p.id, ms: ms });
-    emit(state, now, { type: 'react', player: p.id, ms: ms, place: race.order.length });
+    // fastest first (a reported time can come in after a slower one)
+    race.order.sort(function (a, b) { return a.ms - b.ms; });
+    var place = 1 + race.order.map(function (o) { return o.player; }).indexOf(p.id);
+    emit(state, now, { type: 'react', player: p.id, ms: ms, place: place });
     if (race.order.length === race.racers.length) finishRace(state, now);
-    return CT.ok({ ms: ms, place: race.order.length });
+    return CT.ok({ ms: ms, place: place });
   }
 
   /* The slowest gets the next letter. Anyone who never reacted counts as
@@ -2400,7 +2410,7 @@ CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
     switch (type) {
       case 'pass': return actPass(state, p, payload.cardId, now);
       case 'declare': return actDeclare(state, p, now, false);
-      case 'react': return actReact(state, p, now);
+      case 'react': return actReact(state, p, now, payload.ms);
       case 'challenge': return actChallenge(state, p, payload.target, now, false);
       case 'call': return actCall(state, p, payload.call, now, false);
     }
@@ -4520,13 +4530,25 @@ CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
     el.classList.add('shake');
   };
 
+  /* A move. At this table the answer is immediate; at an online table it
+     comes back from the server a moment later, and further taps wait for it. */
+  BurnsTable.prototype.send = function (type, payload, then) {
+    if (this.sending) return;
+    var self = this;
+    this.sending = true;
+    var finish = function (res) { self.sending = false; then(res); };
+    var res = this.session.act(this.me, type, payload, finish);
+    if (!res || !res.pending) finish(res);
+  };
+
   BurnsTable.prototype.play = function (id) {
-    var v = this.v;
-    var res = this.session.act(this.me, v.canLead ? 'lead' : 'follow', { cardId: id });
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
-    this.selected = null;
-    UI.Sound.play('play');
-    UI.buzz(10);
+    var v = this.v, self = this;
+    this.send(v.canLead ? 'lead' : 'follow', { cardId: id }, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+      self.selected = null;
+      UI.Sound.play('play');
+      UI.buzz(10);
+    });
   };
 
   BurnsTable.prototype.tapDeck = function () {
@@ -4539,34 +4561,37 @@ CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
       else if (v.canLead) UI.toast('The leader doesn’t draw. Lead any card.');
       return;
     }
-    var res = this.session.act(this.me, 'draw');
-    if (res.ok) {
-      var cd = v.timing.drawCooldownMs;
-      deck.classList.remove('cooling');
-      void deck.offsetWidth;
-      deck.style.setProperty('--cool', cd + 'ms');
-      deck.classList.add('cooling');
-      clearTimeout(this.coolTimer);
-      this.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
-      UI.Sound.play('draw');
-      UI.buzz(8);
-      if (res.matched) UI.toast('Found ' + UI.cardText(res.card) + '. Play it, or keep drawing.', 2400);
-    } else if (res.code === 'cooldown') {
-      deck.classList.remove('wiggle');
-      void deck.offsetWidth;
-      deck.classList.add('wiggle');
-    } else {
-      UI.toast(UI.esc(res.message));
-    }
+    var self = this;
+    this.send('draw', {}, function (res) {
+      if (res.ok) {
+        var cd = v.timing.drawCooldownMs;
+        deck.classList.remove('cooling');
+        void deck.offsetWidth;
+        deck.style.setProperty('--cool', cd + 'ms');
+        deck.classList.add('cooling');
+        clearTimeout(self.coolTimer);
+        self.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
+        UI.Sound.play('draw');
+        UI.buzz(8);
+        if (res.matched) UI.toast('Found ' + UI.cardText(res.card) + '. Play it, or keep drawing.', 2400);
+      } else if (res.code === 'cooldown') {
+        deck.classList.remove('wiggle');
+        void deck.offsetWidth;
+        deck.classList.add('wiggle');
+      } else {
+        UI.toast(UI.esc(res.message));
+      }
+    });
   };
 
   BurnsTable.prototype.take = function (cardId) {
     var v = this.v;
     if (!v || !v.canTake) return;
-    var res = this.session.act(this.me, 'take', { cardId: cardId });
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
-    UI.Sound.play('draw');
-    UI.buzz(10);
+    this.send('take', { cardId: cardId }, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+      UI.Sound.play('draw');
+      UI.buzz(10);
+    });
   };
 
   /* ---------- sounds and notices for things other players did ---------- */
@@ -5670,44 +5695,64 @@ CT.BUILD = {"version":"0.6.1","id":"4ca1895","target":"app"};
     el.classList.add('shake');
   };
 
+  /* A move. At this table the answer is immediate; at an online table it
+     comes back from the server a moment later, and further taps wait for it. */
+  DonkeyTable.prototype.send = function (type, payload, then) {
+    if (this.sending) return;
+    var self = this;
+    this.sending = true;
+    var finish = function (res) { self.sending = false; if (then) then(res); };
+    var res = this.session.act(this.me, type, payload, finish);
+    if (!res || !res.pending) finish(res);
+  };
+
   DonkeyTable.prototype.pass = function (id) {
-    var res = this.session.act(this.me, 'pass', { cardId: id });
-    this.selected = null;
-    if (!res.ok) {
-      // put the card back so it's clear nothing was passed
-      if (this.v) { this.renderHand(this.v); this.renderMe(this.v); }
-      UI.toast(UI.esc(res.message));
-      UI.Sound.play('nope');
-      return;
-    }
-    UI.Sound.play('play');
-    UI.buzz(10);
+    var self = this;
+    this.send('pass', { cardId: id }, function (res) {
+      self.selected = null;
+      if (!res.ok) {
+        // put the card back so it's clear nothing was passed
+        if (self.v) { self.renderHand(self.v); self.renderMe(self.v); }
+        UI.toast(UI.esc(res.message));
+        UI.Sound.play('nope');
+        return;
+      }
+      UI.Sound.play('play');
+      UI.buzz(10);
+    });
   };
 
   DonkeyTable.prototype.declare = function () {
     UI.Sound.unlock();
-    var res = this.session.act(this.me, 'declare');
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
-    UI.buzz(20);
+    this.send('declare', {}, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+      UI.buzz(20);
+    });
   };
 
+  /* In a race every millisecond counts: the slap sounds the moment you tap. */
   DonkeyTable.prototype.slap = function () {
     var v = this.v;
     if (!v || !v.canReact) return;
-    var res = this.session.act(this.me, 'react');
-    if (!res.ok) return;
+    var key = v.round + ':' + (v.race && v.race.startAt);
+    if (this.slapped === key) return;
+    this.slapped = key;
     UI.Sound.play('slap');
     UI.buzz(25);
+    var self = this;
+    this.send('react', {}, function (res) { if (!res.ok && res.code === 'offline') self.slapped = null; });
   };
 
   DonkeyTable.prototype.challenge = function (pid) {
-    var res = this.session.act(this.me, 'challenge', { target: pid });
-    if (!res.ok) UI.toast(UI.esc(res.message));
+    this.send('challenge', { target: pid }, function (res) {
+      if (!res.ok) UI.toast(UI.esc(res.message));
+    });
   };
 
   DonkeyTable.prototype.call = function (call) {
-    var res = this.session.act(this.me, 'call', { call: call });
-    if (!res.ok) UI.toast(UI.esc(res.message));
+    this.send('call', { call: call }, function (res) {
+      if (!res.ok) UI.toast(UI.esc(res.message));
+    });
   };
 
   /* ---------- sounds and notices ---------- */

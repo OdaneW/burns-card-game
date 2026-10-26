@@ -807,13 +807,25 @@
     el.classList.add('shake');
   };
 
+  /* A move. At this table the answer is immediate; at an online table it
+     comes back from the server a moment later, and further taps wait for it. */
+  BurnsTable.prototype.send = function (type, payload, then) {
+    if (this.sending) return;
+    var self = this;
+    this.sending = true;
+    var finish = function (res) { self.sending = false; then(res); };
+    var res = this.session.act(this.me, type, payload, finish);
+    if (!res || !res.pending) finish(res);
+  };
+
   BurnsTable.prototype.play = function (id) {
-    var v = this.v;
-    var res = this.session.act(this.me, v.canLead ? 'lead' : 'follow', { cardId: id });
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
-    this.selected = null;
-    UI.Sound.play('play');
-    UI.buzz(10);
+    var v = this.v, self = this;
+    this.send(v.canLead ? 'lead' : 'follow', { cardId: id }, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+      self.selected = null;
+      UI.Sound.play('play');
+      UI.buzz(10);
+    });
   };
 
   BurnsTable.prototype.tapDeck = function () {
@@ -826,34 +838,37 @@
       else if (v.canLead) UI.toast('The leader doesn’t draw. Lead any card.');
       return;
     }
-    var res = this.session.act(this.me, 'draw');
-    if (res.ok) {
-      var cd = v.timing.drawCooldownMs;
-      deck.classList.remove('cooling');
-      void deck.offsetWidth;
-      deck.style.setProperty('--cool', cd + 'ms');
-      deck.classList.add('cooling');
-      clearTimeout(this.coolTimer);
-      this.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
-      UI.Sound.play('draw');
-      UI.buzz(8);
-      if (res.matched) UI.toast('Found ' + UI.cardText(res.card) + '. Play it, or keep drawing.', 2400);
-    } else if (res.code === 'cooldown') {
-      deck.classList.remove('wiggle');
-      void deck.offsetWidth;
-      deck.classList.add('wiggle');
-    } else {
-      UI.toast(UI.esc(res.message));
-    }
+    var self = this;
+    this.send('draw', {}, function (res) {
+      if (res.ok) {
+        var cd = v.timing.drawCooldownMs;
+        deck.classList.remove('cooling');
+        void deck.offsetWidth;
+        deck.style.setProperty('--cool', cd + 'ms');
+        deck.classList.add('cooling');
+        clearTimeout(self.coolTimer);
+        self.coolTimer = setTimeout(function () { deck.classList.remove('cooling'); }, cd);
+        UI.Sound.play('draw');
+        UI.buzz(8);
+        if (res.matched) UI.toast('Found ' + UI.cardText(res.card) + '. Play it, or keep drawing.', 2400);
+      } else if (res.code === 'cooldown') {
+        deck.classList.remove('wiggle');
+        void deck.offsetWidth;
+        deck.classList.add('wiggle');
+      } else {
+        UI.toast(UI.esc(res.message));
+      }
+    });
   };
 
   BurnsTable.prototype.take = function (cardId) {
     var v = this.v;
     if (!v || !v.canTake) return;
-    var res = this.session.act(this.me, 'take', { cardId: cardId });
-    if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
-    UI.Sound.play('draw');
-    UI.buzz(10);
+    this.send('take', { cardId: cardId }, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); return; }
+      UI.Sound.play('draw');
+      UI.buzz(10);
+    });
   };
 
   /* ---------- sounds and notices for things other players did ---------- */

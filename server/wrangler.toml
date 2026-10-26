@@ -1,0 +1,17 @@
+# The online game server: a Cloudflare Worker with one Durable Object per room.
+# Deployed by .github/workflows/server.yml; run locally with `npm run dev` here.
+name = "burns-card-game"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
