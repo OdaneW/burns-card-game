@@ -807,7 +807,8 @@
     v.canSuit = !!me && penaltyStep(state, 'suit') && pid === state.loser;
     v.canNext = !!me && penaltyStep(state, 'result') && pid === P.shuffler;
 
-    var mine = me && state.phase === 'follow' && pid !== state.leader && !state.committed[pid] && !isTaker(state, pid);
+    // still owes a card this set (Real Burns: players who are out and safe owe nothing)
+    var mine = me && state.phase === 'follow' && pid !== state.leader && !isOut(state, pid) && !state.committed[pid] && !isTaker(state, pid);
     var hasIt = !!mine && CT.hasSuit(hand, state.suit);
     v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
     v.canFollow = hasIt;

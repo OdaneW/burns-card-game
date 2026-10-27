@@ -422,6 +422,21 @@ test('emptying your hand makes you safe, and the rest play on', () => {
   conservation(s);
 });
 
+test('a player who is out is offered nothing while the rest play on, even with cards in the deck', () => {
+  const s = rigged({ hands: [['5H'], ['9H', '2S'], ['3H', '4S', '6C']], starter: 'KH', deck: ['7C', '8D', 'JS', 'QC'], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5H' }); act(s, 'p1', 'follow', { cardId: '9H' }); act(s, 'p2', 'follow', { cardId: '3H' });
+  eq(s.out, ['p0']);
+  Burns.tick(s, 200);
+  act(s, 'p1', 'lead', { cardId: '2S' }, 300);
+  eq(s.phase, 'follow'); assert(s.deck.length > 0, 'cards left to draw');
+  const v = Burns.view(s, 'p0');
+  eq([v.canFollow, v.canDraw, v.mustDraw, v.mayDraw, v.canTake, v.playable.length], [false, false, false, false, false, 0], 'nothing to do');
+  eq(Burns.bot.intent(v), null, 'a computer player that is out waits');
+  assert(Burns.view(s, 'p2').mayDraw, 'a player still in may draw');
+  eq(act(s, 'p0', 'draw', {}, 400).code, 'out');
+});
+
 test('a set winner who goes out passes the lead to the next player still in', () => {
   const s = rigged({ hands: [['AH'], ['2H', '3S'], ['4H', '5S']], starter: 'KH', deck: [], options: REAL });
   Burns.tick(s, 0);

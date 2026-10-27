@@ -590,6 +590,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 }
 .tut-card h3 { font: 800 17px/1.2 var(--font-ui); color: var(--marigold); }
 .tut-card p { margin-top: 3px; font-size: 14px; color: var(--ink); }
+.tut-card .link-btn { margin-top: -6px; padding: 2px 6px; color: var(--ink); }   /* an extra lesson on its own */
 /* the first time a mode is played: offer its tutorial */
 .intro { max-width: 400px; text-align: center; justify-items: center; gap: 10px; padding-top: 10px; }
 .intro .fan { margin-bottom: -4px; }

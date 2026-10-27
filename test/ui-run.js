@@ -1013,6 +1013,139 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (/^real-tutorial/.test(SCENARIO)) {
+      // The extra Real Burns lesson: on its own from How to play (with Previous
+      // at the suit and after the first turn's slaps), then offered at the end of
+      // the main tutorial. On a phone, a small phone, a phone on its side or a desktop.
+      const size = {
+        'real-tutorial': { viewport: { width: 390, height: 844 } },
+        'real-tutorial-small': { viewport: { width: 360, height: 640 } },
+        'real-tutorial-landscape': { viewport: { width: 844, height: 390 } },
+        'real-tutorial-wide': { viewport: { width: 1280, height: 820 }, isMobile: false, deviceScaleFactor: 1 }
+      }[SCENARIO];
+      const suits = { 'real-tutorial': ['H', 'S'], 'real-tutorial-small': ['D', 'C'], 'real-tutorial-landscape': ['C', 'H'], 'real-tutorial-wide': ['S', 'D'] }[SCENARIO];
+      const p = await open(browser, { ctx: size, seed: 6 });
+      await p.tap('[data-rules="burns"]');
+      await sleep(350);
+      await shot(p, '95-rtut-how-to-play');
+      const checks = [];
+      checks.push('How to play: "' + await p.evaluate(() => document.querySelector('.tut-card p').textContent) + '" · shortcut "' +
+        await p.evaluate(() => (document.querySelector('.tut-card [data-lesson]') || {}).textContent) + '"');
+      await p.evaluate(() => {
+        const T = CT.UI.tutorials.burns.prototype;
+        const log = window.__tut = [];
+        const render = T.render, check = T.check;
+        T.render = function () {
+          render.call(this);
+          const s = this.current();
+          log.push({ key: 'L' + (this.index + 1) + '-S' + (this.step + 1), t: performance.now(), reading: this.readingTime(),
+            kind: s.next || s.final ? 'read' : s.watch ? 'watch' : 'act', how: s.next || s.final ? 'next' : 'player' });
+        };
+        T.check = function () {
+          const was = this.advancing;
+          check.call(this);
+          const s = this.current(), last = log[log.length - 1];
+          if (!was && this.advancing && s && s.watch && last) {
+            last.how = !this.holding ? 'auto' : document.querySelector('.coach-actions:not([hidden]) .btn-primary') ? 'next' : 'held-auto';
+          }
+        };
+      });
+      await p.tap('.tut-card [data-lesson]');
+      await sleep(500);
+      const state = () => p.evaluate(() => {
+        const t = CT.App.tutorial; if (!t) return { done: true };
+        const s = t.current(); const v = CT.App.session.view('p0', { events: false });
+        const held = !s.next && !s.final && !!document.querySelector('.coach-actions:not([hidden]) .btn-primary');
+        const P = v.penalty, stop = document.getElementById('pen-stop');
+        return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final, held, act: !s.next && !s.final && !s.watch,
+          label: document.querySelector('.coach-step').textContent, prev: !!document.querySelector('[data-act="prev"]'),
+          extra: (document.querySelector('[data-act="extra"]') || {}).textContent || null,
+          phase: v.phase, canFollow: v.canFollow, canStop: v.canStop && !!stop && !stop.disabled, canSuit: v.canSuit,
+          pen: P ? { turn: P.turn, step: P.step, soft: P.soft, hard: P.hard, drawn: P.drawn.map(c => c.id).join(' '), lucky: P.lucky } : null };
+      });
+      const seen = [], back = {};
+      let guard = 0, suitNo = 0, first = null;
+      while (guard++ < 900) {
+        const st = await state();
+        if (st.done) break;
+        const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
+        if (!first) { first = st; checks.push('Started on its own: "' + st.label + '", Previous shown = ' + st.prev); }
+        if (!seen.includes(key)) { seen.push(key); await sleep(500); await shot(p, '96-rtut-' + key); }
+        if (st.final) break;
+        // Previous: from naming the suit back to Stop, and from the first turn's slaps back to the cards turning over
+        const tryBack = { 'L7-S6': 'suit', 'L7-S8': 'slaps' }[key];
+        if (tryBack && !back[tryBack] && st.prev) {
+          back[tryBack] = true;
+          await p.tap('[data-act="prev"]'); await sleep(700);
+          const w = await state();
+          checks.push('Previous from ' + key + ' → L' + (w.lesson + 1) + '-S' + (w.step + 1) + ' (' + w.phase + ', penalty ' + JSON.stringify(w.pen) + ')');
+          if (tryBack === 'suit') suitNo = 0;
+          continue;
+        }
+        if (st.next || st.held) { await p.tap('.coach-actions [data-act="next"]'); await sleep(300); continue; }
+        if (!st.act) { await sleep(150); continue; }
+        if (st.canFollow) {
+          await p.tap('.hcard[data-id="6D"]', { position: { x: 10, y: 24 } }); await sleep(200);
+          await p.tap('.hcard[data-id="6D"]', { position: { x: 10, y: 24 } }); await sleep(300);
+          continue;
+        }
+        // Stop on its own step (or Dex's turn), the suit on its own step (or Dex's turn)
+        if (st.canStop && (key === 'L7-S5' || key === 'L7-S9')) { await sleep(300); await p.tap('#pen-stop'); await sleep(300); continue; }
+        if (st.canSuit && (key === 'L7-S6' || key === 'L7-S9')) {
+          const suit = suits[st.pen.turn];
+          await sleep(300); await p.tap(`[data-suit="${suit}"]`); await sleep(300);
+          checks.push('Turn ' + (st.pen.turn + 1) + ': named ' + suit);
+          suitNo++;
+          continue;
+        }
+        await sleep(150);
+      }
+      const end = await state();
+      const finalText = await p.evaluate(() => document.querySelector('.coach-title').textContent + ' · ' + document.querySelector('.coach-text').textContent);
+      const results = await p.evaluate(() => CT.App.session.view('p0', { events: false }).penalty.results.map(r => r.by + ': ' + r.cards.map(c => c.id).join(' ') + ' → ' + r.soft + ' soft, ' + r.hard + ' hard' + (r.lucky ? ', lucky' : '')));
+      checks.push('Final: ' + end.label + ' · Previous = ' + end.prev + ' · extra offer = ' + end.extra);
+      checks.push('Turns: ' + results.join(' | '));
+      // then the main tutorial's last lesson, whose last note offers Real Burns
+      await p.tap('[data-act="home"]'); await sleep(400);
+      await p.evaluate(() => CT.App.startTutorial('burns', 5));
+      await sleep(500);
+      guard = 0;
+      while (guard++ < 200) {
+        const st = await state();
+        if (st.done || st.final) break;
+        if (st.next || st.held) { await p.tap('.coach-actions [data-act="next"]'); await sleep(300); continue; }
+        const v = await view(p);
+        if (v.canLead) {
+          const id = v.playable[0];
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(200);
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(300);
+          continue;
+        }
+        await sleep(200);
+      }
+      await sleep(400);
+      let st = await state();
+      checks.push('Main tutorial ends: "' + st.label + '", extra offer = ' + st.extra + ', Previous = ' + st.prev);
+      await shot(p, '97-rtut-main-end');
+      await p.tap('[data-act="extra"]'); await sleep(600);
+      st = await state();
+      checks.push('Learn Real Burns → "' + st.label + '" step ' + (st.step + 1) + ', Previous shown = ' + st.prev);
+      await p.tap('[data-act="prev"]'); await sleep(600);
+      st = await state();
+      checks.push('…Previous → L' + (st.lesson + 1) + '-S' + (st.step + 1) + ' "' + st.label + '", final = ' + st.final);
+      await p.tap('.coach-skip'); await sleep(400);
+      const after = await p.evaluate(() => ({ screen: CT.App.screen, tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1'), stats: localStorage.getItem('cardtable.stats.v1') }));
+      console.log('  steps:', seen.join(' '));
+      checks.forEach(c => console.log('  ' + c));
+      const notes = await p.evaluate(() => window.__tut.map((e, i, a) => Object.assign({}, e, { shown: a[i + 1] ? Math.round(a[i + 1].t - e.t) : null })));
+      notes.filter(n => n.kind === 'watch').forEach(n => console.log('  watch note ' + n.key + ': ' + n.how + ', up ' + n.shown + ' ms, reading time ' + n.reading + ' ms'));
+      const rushed = notes.filter(n => (n.how === 'auto' || n.how === 'held-auto') && n.shown != null && n.shown < n.reading);
+      console.log('  notes that left before their reading time:', rushed.length ? rushed.map(n => n.key + ' (' + n.shown + '/' + n.reading + ' ms)') : 'none');
+      console.log('  final:', finalText);
+      console.log('  after leaving:', JSON.stringify(after));
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (/^tutorial/.test(SCENARIO)) {
       // Follow the tutorial's instructions from How to play to the end
       // (on a phone, a phone on its side, or a desktop).

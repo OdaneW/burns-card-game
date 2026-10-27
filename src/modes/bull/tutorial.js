@@ -233,22 +233,7 @@
   }
 
   /* Several elements as one spotlight: your seat and your hand together. */
-  function around(els) {
-    els = els.filter(Boolean);
-    if (!els.length) return null;
-    return {
-      getBoundingClientRect: function () {
-        var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
-        els.forEach(function (el) {
-          var x = el.getBoundingClientRect();
-          if (!x.width || !x.height) return;
-          l = Math.min(l, x.left); t = Math.min(t, x.top); r = Math.max(r, x.right); b = Math.max(b, x.bottom);
-        });
-        if (l === Infinity) return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-        return { left: l, top: t, right: r, bottom: b, width: r - l, height: b - t };
-      }
-    };
-  }
+  var around = UI.around;
 
   /* ---------- the runner (shared with the other modes' tutorials) ---------- */
 

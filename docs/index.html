@@ -613,6 +613,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 }
 .tut-card h3 { font: 800 17px/1.2 var(--font-ui); color: var(--marigold); }
 .tut-card p { margin-top: 3px; font-size: 14px; color: var(--ink); }
+.tut-card .link-btn { margin-top: -6px; padding: 2px 6px; color: var(--ink); }   /* an extra lesson on its own */
 /* the first time a mode is played: offer its tutorial */
 .intro { max-width: 400px; text-align: center; justify-items: center; gap: 10px; padding-top: 10px; }
 .intro .fan { margin-bottom: -4px; }
@@ -1170,7 +1171,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -2291,7 +2292,8 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     v.canSuit = !!me && penaltyStep(state, 'suit') && pid === state.loser;
     v.canNext = !!me && penaltyStep(state, 'result') && pid === P.shuffler;
 
-    var mine = me && state.phase === 'follow' && pid !== state.leader && !state.committed[pid] && !isTaker(state, pid);
+    // still owes a card this set (Real Burns: players who are out and safe owe nothing)
+    var mine = me && state.phase === 'follow' && pid !== state.leader && !isOut(state, pid) && !state.committed[pid] && !isTaker(state, pid);
     var hasIt = !!mine && CT.hasSuit(hand, state.suit);
     v.canLead = !!me && state.phase === 'lead' && state.leader === pid;
     v.canFollow = hasIt;
@@ -4864,7 +4866,8 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
 
   /* o: { step, title, text (HTML), target: fn → element|null,
           anchor: fn → element|null (optional: the bubble goes beside this
-            instead, e.g. the whole table when the spotlight is on a seat),
+            instead, e.g. the whole table when the spotlight is on a seat;
+            or { el, top: true } to sit beside it at the top of the screen),
           place: 'auto' | 'top' | 'center', dim: true|false,
           actions: [{ id, label, primary, cls, onClick }] } */
   Coach.prototype.show = function (o) {
@@ -4951,6 +4954,8 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     // Told to keep clear of something (the table, on a phone on its side)?
     // Then sit beside it, a little narrower if that's what fits.
     var a = this.getAnchor ? this.getAnchor() : null;
+    var atTop = !!(a && a.el && a.top);
+    if (a && a.el) a = a.el;
     var ar = a && a.getBoundingClientRect ? a.getBoundingClientRect() : null;
     if (ar && ar.width && ar.height && this.where !== 'center') {
       if (this.maxW == null) this.maxW = parseFloat(getComputedStyle(this.bubble).maxWidth) || 380;
@@ -4961,7 +4966,7 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
         var side = this.bubble.style;
         side.left = (roomL > roomR ? ar.left - gap - w : ar.right + gap) + 'px';
         side.right = 'auto'; side.width = w + 'px'; side.marginLeft = side.marginRight = '0';
-        side.top = Math.max(12, Math.min(vh - bh - 12, ar.top + ar.height / 2 - bh / 2)) + 'px';
+        side.top = (atTop ? 12 : Math.max(12, Math.min(vh - bh - 12, ar.top + ar.height / 2 - bh / 2))) + 'px';
         this.arrow.className = 'coach-arrow';
         return;
       }
@@ -5028,6 +5033,11 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
      playLabel             → the last note's button, e.g. 'Play Burns'
    })
 
+   A lesson: { title, steps, …whatever the mode's makeSession needs }. One
+   marked extra: true (an optional rule, say) comes after the main lessons:
+   it isn't counted, and it's offered on the last note (offer: its button)
+   and on How to play, which can start it on its own (start(index)).
+
    A step: { title?, text (string or fn(ctx)), target? (key or fn(ctx)),
      next: true (a note to read) | final: true (the last note) |
      done(ctx) (waits for something to happen at the table), after (ms),
@@ -5045,9 +5055,32 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
 
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
+  /* Several elements as one spotlight (an element's stand-in for the coach). */
+  UI.around = function (els) {
+    els = els.filter(Boolean);
+    if (!els.length) return null;
+    return {
+      getBoundingClientRect: function () {
+        var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+        els.forEach(function (el) {
+          var x = el.getBoundingClientRect();
+          if (!x.width || !x.height) return;
+          l = Math.min(l, x.left); t = Math.min(t, x.top); r = Math.max(r, x.right); b = Math.max(b, x.bottom);
+        });
+        if (l === Infinity) return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+        return { left: l, top: t, right: r, bottom: b, width: r - l, height: b - t };
+      }
+    };
+  };
+
   UI.makeTutorial = function (spec) {
     var LESSONS = spec.lessons;
     var TOP = spec.topTargets || /^(card:|hand)/;
+    var CORE = LESSONS.filter(function (l) { return !l.extra; }).length;
+    var EXTRAS = [];
+    LESSONS.forEach(function (l, i) {
+      if (l.extra) EXTRAS.push({ index: i, title: l.title, offer: l.offer || 'Learn ' + l.title, shortcut: l.shortcut || 'Just the ' + l.title + ' lesson' });
+    });
 
     function targetFn(key) {
       if (!key) return null;
@@ -5065,11 +5098,20 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     }
 
     Tutorial.prototype.lessons = LESSONS;
+    Tutorial.prototype.core = CORE;        // the main lessons, as counted on screen
+    Tutorial.prototype.extras = EXTRAS;    // [{ index, title, offer, shortcut }]
 
-    Tutorial.prototype.start = function () {
+    /* From the first lesson, or straight into one (an extra lesson from How to play). */
+    Tutorial.prototype.start = function (at) {
       var self = this;
       this.coach.onSkip = function () { self.exit(); };
-      this.index = 0;
+      this.index = at > 0 && at < LESSONS.length ? at : 0;
+      this.begin();
+    };
+
+    Tutorial.prototype.goTo = function (index) {
+      clearTimeout(this.timer);
+      this.index = index;
       this.begin();
     };
 
@@ -5103,7 +5145,8 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
       var lesson = LESSONS[this.index];
       if (this.step >= lesson.steps.length) {
         this.index++;
-        if (this.index >= LESSONS.length) { this.exit(); return; }
+        // extra lessons are only ever chosen, never run into
+        if (this.index >= LESSONS.length || LESSONS[this.index].extra) { this.exit(); return; }
         this.begin();
         return;
       }
@@ -5114,17 +5157,23 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
 
     /* Previous: back to the step before, with the table exactly as it was
        when that step began, so it can be read again and played again. */
-    Tutorial.prototype.canGoBack = function () { return this.index > 0 || this.step > 0; };
-
-    Tutorial.prototype.prevStep = function () {
+    /* The step before, if it was played here (a lesson started on its own has nothing before it). */
+    Tutorial.prototype.before = function () {
       var index = this.index, step = this.step - 1;
       if (step < 0) { index--; step = index >= 0 ? LESSONS[index].steps.length - 1 : -1; }
       var snap = index >= 0 ? (this.snaps[index] || [])[step] : null;
-      if (!snap) return;
+      return snap ? { index: index, step: step, snap: snap } : null;
+    };
+
+    Tutorial.prototype.canGoBack = function () { return !!this.before(); };
+
+    Tutorial.prototype.prevStep = function () {
+      var b = this.before();
+      if (!b) return;
       clearTimeout(this.timer);
-      this.index = index;
-      this.step = step;
-      this.use(new CT.Session({ mode: spec.modeFor(LESSONS[index]), state: JSON.parse(snap.state), clock: new CT.Clock(snap.t) }));
+      this.index = b.index;
+      this.step = b.step;
+      this.use(new CT.Session({ mode: spec.modeFor(LESSONS[b.index]), state: JSON.parse(b.snap.state), clock: new CT.Clock(b.snap.t) }));
       this.enter();
     };
 
@@ -5156,12 +5205,16 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
       var next = { id: 'next', label: 'Next', primary: true, onClick: function () { self.nextStep(); } };
       var actions = this.buttons(s.next ? [next] : []);
       if (s.final) {
-        // the two ways out share a row; Previous sits underneath
+        // the two ways out share a row; Previous sits underneath, with any extra lesson on offer
         actions = [
           { id: 'home', label: 'Back to games', onClick: function () { self.exit(); } },
           { id: 'play', label: spec.playLabel || 'Play', primary: true, onClick: function () { self.exit('setup'); } },
-          { br: true }, this.prevButton()
+          { br: true }
         ];
+        if (this.canGoBack()) actions.push(this.prevButton());
+        if (!lesson.extra) EXTRAS.forEach(function (x) {
+          actions.push({ id: 'extra', label: x.offer, cls: 'coach-extra', onClick: function () { self.goTo(x.index); } });
+        });
       }
       var target = typeof s.target === 'function' ? s.target(ctx) : s.target;
       var read = !!(s.next || s.final);
@@ -5169,7 +5222,7 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
       var place = s.place || (!target ? (read ? 'center' : 'top') : (TOP.test(target) ? 'top' : 'auto'));
       this.shownAt = now();
       this.coach.show({
-        step: 'Lesson ' + (this.index + 1) + ' of ' + LESSONS.length + ' · ' + lesson.title,
+        step: (lesson.extra ? 'Extra lesson' : 'Lesson ' + (this.index + 1) + ' of ' + CORE) + ' · ' + lesson.title,
         title: s.title,
         text: typeof s.text === 'function' ? s.text(ctx) : s.text,
         target: targetFn(target),
@@ -6579,8 +6632,10 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
 /* ==========================================================================
    GAME MODE · BURNS — interactive tutorial
    Six short lessons, each a hand-arranged deal played on the real table
-   against scripted computer players. The steps run on the shared lesson
-   runner (src/ui/tutorial.js). Nothing here is saved or counted in stats.
+   against scripted computer players, and an extra one on Real Burns (a rule
+   choice): offered at the end, or taken on its own from How to play. The
+   steps run on the shared lesson runner (src/ui/tutorial.js). Nothing here
+   is saved or counted in stats.
    ========================================================================== */
 (function (CT) {
   'use strict';
@@ -6616,6 +6671,32 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     return mine[0];
   }
   function saw(ctx, type) { return ctx.events.some(function (e) { return e.type === type; }); }
+
+  /* Real Burns: where the penalty round has got to */
+  var PEN_STEPS = ['shuffle', 'suit', 'draw', 'result'];
+  function penAt(ctx, turn, step) {
+    var P = ctx.v.penalty;
+    if (!P) return false;
+    if (P.turn > turn || P.step === 'done') return true;
+    return P.turn === turn && PEN_STEPS.indexOf(P.step) >= PEN_STEPS.indexOf(step);
+  }
+  function penSuit(ctx) { var P = ctx.v.penalty; return P && P.suit ? S(P.suit) + ' ' + UI.suitSingle(P.suit) : 'card of your suit'; }
+  function slapsText(soft, hard) {
+    var parts = [];
+    if (soft) parts.push(soft + ' soft slap' + (soft === 1 ? '' : 's'));
+    if (hard) parts.push(hard + ' hard slap' + (hard === 1 ? '' : 's'));
+    return parts.length ? parts.join(' and ') : 'no slaps';
+  }
+  function penSlaps(ctx) { var P = ctx.v.penalty; return P ? slapsText(P.soft, P.hard) : ''; }
+  function penMatch(ctx) {
+    var P = ctx.v.penalty, last = P && P.drawn[P.drawn.length - 1];
+    return last ? UI.cardText(last) : 'card of your suit';
+  }
+  function penTotal(ctx) {
+    var t = { soft: 0, hard: 0 };
+    (ctx.v.penalty ? ctx.v.penalty.results : []).forEach(function (r) { t.soft += r.soft; t.hard += r.hard; });
+    return slapsText(t.soft, t.hard);
+  }
 
   /* ---------- the lessons ---------- */
 
@@ -6714,7 +6795,39 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
       steps: [
         { target: 'card:AC', title: 'Winning', text: 'You have one card left. Lead it. If nobody else runs out of cards this set, you win the game.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
         { target: 'seats', watch: true, text: 'Mia and Dex play their clubs…', done: function (ctx) { return ctx.v.phase === 'over'; }, after: 1800 },
-        { final: true, title: 'You win!', text: 'You emptied your hand first. That’s Burns: follow the suit, draw when you can’t (or when you want a better card), pick up when the deck runs out, and be the first to empty your hand.' }
+        { final: true, title: 'You win!', text: 'You emptied your hand first. That’s Burns: follow the suit, draw when you can’t (or when you want a better card), pick up when the deck runs out, and be the first to empty your hand. Playing with friends in the same room? There’s one more lesson: Real Burns.' }
+      ]
+    },
+    {
+      // A rule choice, so an extra lesson. You're the one left holding cards,
+      // so you call Stop and name the suits; the penalty plan below decides
+      // what turns up, whichever suit you name.
+      title: 'Real Burns',
+      extra: true,
+      offer: 'Learn Real Burns',
+      options: { real: 'on' },
+      hands: [['6D', '3S'], [], ['10D']],
+      out: ['p1'],                       // Mia emptied her hand last set
+      leader: 'p2', setNo: 6,
+      deck: ['2C', '7H', 'QS', '5C', '9S', 'JD', '4H', '8S', 'KC', '3D', '6H', 'AC'], fillDeck: false,
+      // each winner's turn: the cards before your suit (Mia: soft, hard, soft), then one of it
+      penalty: [['black', 'red', 'black'], []],
+      timing: { lostHoldMs: 1000, flipMs: 900, shuffleMs: 600000, suitMs: 600000, slapMs: 600000 },
+      steps: [
+        { next: true, target: 'seat:p1', title: 'Real Burns', text: 'Real Burns is a rule choice for friends in the same room. Mia has emptied her hand, so she’s safe, but the game isn’t over: the rest play on until one player is left holding cards. They lose.' },
+        { target: 'lead', watch: true, text: 'Dex leads with his last card.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'card:6D', text: 'Dex led the ' + K('10D') + '. Follow with your ' + K('6D') + '.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
+        { target: 'seats', watch: true, text: 'Dex is out of cards too, so he’s safe. You’re the last player still holding cards, so you lose!', done: function (ctx) { return ctx.v.phase === 'lost' || ctx.v.phase === 'penalty'; }, after: 900 },
+        { target: 'act', text: 'Now the penalty round. Each winner takes a turn, starting with Mia. While she shuffles, tap Stop whenever you like.', done: function (ctx) { return penAt(ctx, 0, 'suit'); }, after: 400 },
+        { target: 'act', text: 'Name a suit. Mia turns cards over until one of that suit appears.', done: function (ctx) { return penAt(ctx, 0, 'draw'); }, after: 300 },
+        { target: 'flips', watch: true, text: function (ctx) { return 'Each card she turns over before a ' + penSuit(ctx) + ' is a slap on your hand…'; }, done: function (ctx) { return penAt(ctx, 0, 'result'); }, after: 900 },
+        { next: true, target: 'flips', text: function (ctx) {
+          return 'Black cards are soft slaps and red cards are hard ones, so Mia gives you ' + penSlaps(ctx) + '. The ' + penMatch(ctx) + ' itself doesn’t count. Playing with friends, the slaps are real!';
+        } },
+        { target: 'act', text: 'Now it’s Dex’s turn. Tap Stop again, then name a suit.', done: function (ctx) { return penAt(ctx, 1, 'result'); }, after: 900 },
+        { final: true, target: 'flips', title: 'Lucky!', text: function (ctx) {
+          return 'Dex’s very first card was a ' + penSuit(ctx) + ', so he gives you no slaps. In all, you take ' + penTotal(ctx) + '. That’s Real Burns! Switch it on in the game setup when you play with friends.';
+        } }
       ]
     }
   ];
@@ -6725,13 +6838,20 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     var script = lesson.bots || {};
     return {
       intent: Burns.bot.intent,
-      delay: function (intent, v) {
+      delay: function (intent, v, rnd, now) {
         if (intent.kind === 'lead') return 1300;
         if (intent.kind === 'draw') return v.timing.drawCooldownMs + 350;
         if (intent.kind === 'take') return 1800;
+        // Real Burns: a winner's moment, then Next turn (a computer player that lost calls Stop and names hearts)
+        if (intent.kind === 'next') return 1500;
+        if (intent.kind === 'stop') return Math.max(0, (v.penalty.stopFrom || 0) - (now || 0)) + 1500;
+        if (intent.kind === 'suit') return 1400;
         return 1100;
       },
       decide: function (v) {
+        if (v.canStop) return { type: 'stop', payload: {} };
+        if (v.canSuit) return { type: 'suit', payload: { suit: 'H' } };
+        if (v.canNext) return { type: 'next', payload: {} };
         var mine = script[v.me] || {};
         var byId = function (id) { return v.hand.filter(function (c) { return c.id === id; })[0]; };
         var low = function (cards) { return cards.slice().sort(function (a, b) { return val(a) - val(b); })[0]; };
@@ -6764,6 +6884,7 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     var rest = CT.shuffle(CT.standardDeck().filter(function (c) { return !used[c.id]; }), { rng: 2026 });
     if (lesson.fillDeck === false) { state.deck = top.slice().reverse(); state.discard = rest; }
     else { state.deck = rest.concat(top.slice().reverse()); state.discard = []; }
+    state.out = (lesson.out || []).slice();   // Real Burns: players already out and safe
     state.events = [];
     state.seq = 0;
     if (lesson.starter) {
@@ -6780,13 +6901,45 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     }
   }
 
-  function makeSession(lesson) {
+  /* Real Burns: once you've named a suit, the cards the lesson wants turned
+     over go on top of the deck. Nobody sees the deck, so it plays like any
+     shuffle. Safe to repeat until the first card is turned over. */
+  function stackPenalty(state, lesson) {
+    var P = state.penalty;
+    if (!P || P.step !== 'draw' || P.drawn.length || !P.deck) return;
+    var plan = lesson.penalty[P.turn];
+    if (!plan) return;
+    var blacks = ['S', 'C'].filter(function (s) { return s !== P.suit; });
+    var reds = ['H', 'D'].filter(function (s) { return s !== P.suit; });
+    var nb = 0, nr = 0;
+    var top = plan.map(function (colour, i) {
+      return C(['7', 'J', '4', 'K', '2', 'Q'][i] + (colour === 'red' ? reds[nr++ % reds.length] : blacks[nb++ % blacks.length]));
+    });
+    top.push(C((plan.length ? '9' : 'A') + P.suit));
+    var ids = {};
+    top.forEach(function (c) { ids[c.id] = true; });
+    P.deck = P.deck.filter(function (c) { return !ids[c.id]; }).concat(top.reverse());   // turned over from the end
+  }
+
+  function modeFor(lesson) {
     var mode = Object.assign({}, Burns, { bot: scriptedBot(lesson) });
+    if (lesson.penalty) mode.tick = function (state, now) { stackPenalty(state, lesson); return Burns.tick(state, now); };
+    return mode;
+  }
+
+  function makeSession(lesson) {
+    var mode = modeFor(lesson);
     var timing = Object.assign({ dealHoldMs: 0, revealHoldMs: 2600, takeWindowMs: 60000, turnMs: 0 }, lesson.timing || {});
-    var session = new CT.Session({ mode: mode, players: PLAYERS, options: { flush: 'off', leadCard: 'faceUp', turnTime: '30' }, seed: 7, timing: timing });
+    var options = Object.assign({ flush: 'off', leadCard: 'faceUp', turnTime: '30' }, lesson.options || {});
+    var session = new CT.Session({ mode: mode, players: PLAYERS, options: options, seed: 7, timing: timing });
     rig(session.state, lesson, session.now());
     mode.tick(session.state, session.now());   // start the set right away
     return session;
+  }
+
+  /* The layout where the table and your hand sit side by side (styles.css). */
+  function SIDE_BY_SIDE() {
+    return !!(window.matchMedia && window.matchMedia('(max-height: 560px) and (orientation: landscape) and (min-width: 600px)').matches);
   }
 
   /* ---------- the runner (shared with the other modes' tutorials) ---------- */
@@ -6796,18 +6949,36 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     modeId: 'burns',
     lessons: LESSONS,
     makeSession: makeSession,
-    modeFor: function (lesson) { return Object.assign({}, Burns, { bot: scriptedBot(lesson) }); },
+    modeFor: modeFor,
     target: function (key) {
-      if (key === 'hand') return document.getElementById('t-handwrap');
-      if (key === 'deck') return document.getElementById('t-deck');
-      if (key === 'lead') return document.getElementById('t-lead');
-      if (key === 'seats') return document.getElementById('t-seats');
-      if (key === 'me') return document.getElementById('t-me');
-      if (key.indexOf('slot:') === 0) return document.getElementById('slot-' + key.slice(5));
+      var $ = function (id) { return document.getElementById(id); };
+      if (key === 'hand') return $('t-handwrap');
+      if (key === 'deck') return $('t-deck');
+      if (key === 'lead') return $('t-lead');
+      if (key === 'seats') return $('t-seats');
+      if (key === 'me') return $('t-me');
+      // Real Burns: the cards turned over with their count, and the Stop or suit
+      // buttons (or, while there's nothing to tap, the cards again)
+      var flips = function () { return UI.around([$('pen-suit'), $('pen-row'), $('pen-tally'), $('pen-say')]); };
+      if (key === 'flips') return flips();
+      if (key === 'act') { var act = $('pen-act'); return act && act.children.length ? UI.around([$('pen-say'), act]) : flips(); }
+      if (key.indexOf('seat:') === 0) return document.querySelector('.seat[data-pid="' + key.slice(5) + '"]');
+      if (key.indexOf('slot:') === 0) return $('slot-' + key.slice(5));
       if (key.indexOf('card:') === 0) return document.querySelector('.hcard[data-id="' + key.slice(5) + '"]');
       return null;
     },
     topTargets: /^(card:|hand)/,
+    // A phone on its side: the penalty round is two columns (the cards on the
+    // left, the count and the buttons on the right), so notes about it sit
+    // up in the left column, clear of both.
+    anchor: function (key) {
+      var pen = document.getElementById('t-pen');
+      if (!/^(act|flips)$/.test(key) || !pen || !SIDE_BY_SIDE()) return null;
+      return { top: true, el: { getBoundingClientRect: function () {
+        var r = pen.getBoundingClientRect(), mid = r.left + r.width / 2;
+        return { left: mid, top: r.top, right: r.right, bottom: r.bottom, width: r.right - mid, height: r.height };
+      } } };
+    },
     playLabel: 'Play Burns'
   });
 })(window.CT);
@@ -8908,22 +9079,7 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
   }
 
   /* Several elements as one spotlight: your seat and your hand together. */
-  function around(els) {
-    els = els.filter(Boolean);
-    if (!els.length) return null;
-    return {
-      getBoundingClientRect: function () {
-        var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
-        els.forEach(function (el) {
-          var x = el.getBoundingClientRect();
-          if (!x.width || !x.height) return;
-          l = Math.min(l, x.left); t = Math.min(t, x.top); r = Math.max(r, x.right); b = Math.max(b, x.bottom);
-        });
-        if (l === Infinity) return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-        return { left: l, top: t, right: r, bottom: b, width: r - l, height: b - t };
-      }
-    };
-  }
+  var around = UI.around;
 
   /* ---------- the runner (shared with the other modes' tutorials) ---------- */
 
@@ -9929,7 +10085,7 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
     offerTutorial: function (modeId) {
       var self = this;
       var mode = CT.getMode(modeId);
-      var lessons = UI.tutorials[modeId].prototype.lessons.length;
+      var lessons = UI.tutorials[modeId].prototype.core;
       this.noteTutorial(modeId, 'offered');   // asked once; How to play always has it
       var sheet = this.openSheet('intro',
         fanHtml(mode) +
@@ -9948,14 +10104,15 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
       $('i-rules').addEventListener('click', function () { self.openRules(modeId, self.modeSettings(mode).options); });
     },
 
-    startTutorial: function (modeId) {
+    /* From the first lesson, or (at) straight into one, e.g. an extra lesson from How to play. */
+    startTutorial: function (modeId, at) {
       var Tutorial = UI.tutorials && UI.tutorials[modeId];
       if (!Tutorial) return;
       this.noteTutorial(modeId, 'started');
       if (this.session && !this.tutorial) this.save();   // a game in progress stays resumable
       this.closeSheet(true);
       this.tutorial = new Tutorial(this);
-      this.tutorial.start();
+      this.tutorial.start(at);
     },
 
     attachTutorial: function (session) {
@@ -10086,10 +10243,14 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
       var online = this.online && this.online.inRoom();
       var Tutorial = !this.tutorial && !online && UI.tutorials && UI.tutorials[modeId];
       var inGame = this.session && this.session.state.phase !== 'over';
+      // extra lessons (an optional rule) can also be taken on their own
+      var extras = Tutorial ? Tutorial.prototype.extras : [];
       var tutorial = Tutorial
-        ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.lessons.length +
+        ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.core +
           ' quick lessons, about three minutes.' + (inGame ? ' Your current game is saved, so you can resume it afterwards.' : '') + '</p></div>' +
-          '<button class="btn btn-primary" type="button" id="r-tutorial">Start the tutorial</button></div>' +
+          '<button class="btn btn-primary" type="button" id="r-tutorial">Start the tutorial</button>' +
+          extras.map(function (x) { return '<button class="link-btn" type="button" data-lesson="' + x.index + '">' + UI.esc(x.shortcut) + '</button>'; }).join('') +
+          '</div>' +
           '<p class="eyebrow">Or read the rules</p>'
         : '';
       var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) + tutorial +
@@ -10097,6 +10258,9 @@ CT.BUILD = {"version":"0.9.0","id":"fd4e079","target":"app","server":"wss://burn
         '<button class="btn ' + (Tutorial ? 'btn-ghost' : 'btn-primary') + '" type="button" data-close>Got it</button>', { label: 'How to play' });
       this.wireClose(sheet);
       if (Tutorial) $('r-tutorial').addEventListener('click', function () { self.startTutorial(modeId); });
+      sheet.querySelectorAll('[data-lesson]').forEach(function (b) {
+        b.addEventListener('click', function () { self.startTutorial(modeId, Number(b.dataset.lesson)); });
+      });
     },
 
     openMenu: function () {

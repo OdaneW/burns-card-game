@@ -1,8 +1,10 @@
 /* ==========================================================================
    GAME MODE · BURNS — interactive tutorial
    Six short lessons, each a hand-arranged deal played on the real table
-   against scripted computer players. The steps run on the shared lesson
-   runner (src/ui/tutorial.js). Nothing here is saved or counted in stats.
+   against scripted computer players, and an extra one on Real Burns (a rule
+   choice): offered at the end, or taken on its own from How to play. The
+   steps run on the shared lesson runner (src/ui/tutorial.js). Nothing here
+   is saved or counted in stats.
    ========================================================================== */
 (function (CT) {
   'use strict';
@@ -38,6 +40,32 @@
     return mine[0];
   }
   function saw(ctx, type) { return ctx.events.some(function (e) { return e.type === type; }); }
+
+  /* Real Burns: where the penalty round has got to */
+  var PEN_STEPS = ['shuffle', 'suit', 'draw', 'result'];
+  function penAt(ctx, turn, step) {
+    var P = ctx.v.penalty;
+    if (!P) return false;
+    if (P.turn > turn || P.step === 'done') return true;
+    return P.turn === turn && PEN_STEPS.indexOf(P.step) >= PEN_STEPS.indexOf(step);
+  }
+  function penSuit(ctx) { var P = ctx.v.penalty; return P && P.suit ? S(P.suit) + ' ' + UI.suitSingle(P.suit) : 'card of your suit'; }
+  function slapsText(soft, hard) {
+    var parts = [];
+    if (soft) parts.push(soft + ' soft slap' + (soft === 1 ? '' : 's'));
+    if (hard) parts.push(hard + ' hard slap' + (hard === 1 ? '' : 's'));
+    return parts.length ? parts.join(' and ') : 'no slaps';
+  }
+  function penSlaps(ctx) { var P = ctx.v.penalty; return P ? slapsText(P.soft, P.hard) : ''; }
+  function penMatch(ctx) {
+    var P = ctx.v.penalty, last = P && P.drawn[P.drawn.length - 1];
+    return last ? UI.cardText(last) : 'card of your suit';
+  }
+  function penTotal(ctx) {
+    var t = { soft: 0, hard: 0 };
+    (ctx.v.penalty ? ctx.v.penalty.results : []).forEach(function (r) { t.soft += r.soft; t.hard += r.hard; });
+    return slapsText(t.soft, t.hard);
+  }
 
   /* ---------- the lessons ---------- */
 
@@ -136,7 +164,39 @@
       steps: [
         { target: 'card:AC', title: 'Winning', text: 'You have one card left. Lead it. If nobody else runs out of cards this set, you win the game.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
         { target: 'seats', watch: true, text: 'Mia and Dex play their clubs…', done: function (ctx) { return ctx.v.phase === 'over'; }, after: 1800 },
-        { final: true, title: 'You win!', text: 'You emptied your hand first. That’s Burns: follow the suit, draw when you can’t (or when you want a better card), pick up when the deck runs out, and be the first to empty your hand.' }
+        { final: true, title: 'You win!', text: 'You emptied your hand first. That’s Burns: follow the suit, draw when you can’t (or when you want a better card), pick up when the deck runs out, and be the first to empty your hand. Playing with friends in the same room? There’s one more lesson: Real Burns.' }
+      ]
+    },
+    {
+      // A rule choice, so an extra lesson. You're the one left holding cards,
+      // so you call Stop and name the suits; the penalty plan below decides
+      // what turns up, whichever suit you name.
+      title: 'Real Burns',
+      extra: true,
+      offer: 'Learn Real Burns',
+      options: { real: 'on' },
+      hands: [['6D', '3S'], [], ['10D']],
+      out: ['p1'],                       // Mia emptied her hand last set
+      leader: 'p2', setNo: 6,
+      deck: ['2C', '7H', 'QS', '5C', '9S', 'JD', '4H', '8S', 'KC', '3D', '6H', 'AC'], fillDeck: false,
+      // each winner's turn: the cards before your suit (Mia: soft, hard, soft), then one of it
+      penalty: [['black', 'red', 'black'], []],
+      timing: { lostHoldMs: 1000, flipMs: 900, shuffleMs: 600000, suitMs: 600000, slapMs: 600000 },
+      steps: [
+        { next: true, target: 'seat:p1', title: 'Real Burns', text: 'Real Burns is a rule choice for friends in the same room. Mia has emptied her hand, so she’s safe, but the game isn’t over: the rest play on until one player is left holding cards. They lose.' },
+        { target: 'lead', watch: true, text: 'Dex leads with his last card.', done: function (ctx) { return ctx.v.phase === 'follow'; }, after: 700 },
+        { target: 'card:6D', text: 'Dex led the ' + K('10D') + '. Follow with your ' + K('6D') + '.', done: function (ctx) { return ctx.me.committed; }, after: 400 },
+        { target: 'seats', watch: true, text: 'Dex is out of cards too, so he’s safe. You’re the last player still holding cards, so you lose!', done: function (ctx) { return ctx.v.phase === 'lost' || ctx.v.phase === 'penalty'; }, after: 900 },
+        { target: 'act', text: 'Now the penalty round. Each winner takes a turn, starting with Mia. While she shuffles, tap Stop whenever you like.', done: function (ctx) { return penAt(ctx, 0, 'suit'); }, after: 400 },
+        { target: 'act', text: 'Name a suit. Mia turns cards over until one of that suit appears.', done: function (ctx) { return penAt(ctx, 0, 'draw'); }, after: 300 },
+        { target: 'flips', watch: true, text: function (ctx) { return 'Each card she turns over before a ' + penSuit(ctx) + ' is a slap on your hand…'; }, done: function (ctx) { return penAt(ctx, 0, 'result'); }, after: 900 },
+        { next: true, target: 'flips', text: function (ctx) {
+          return 'Black cards are soft slaps and red cards are hard ones, so Mia gives you ' + penSlaps(ctx) + '. The ' + penMatch(ctx) + ' itself doesn’t count. Playing with friends, the slaps are real!';
+        } },
+        { target: 'act', text: 'Now it’s Dex’s turn. Tap Stop again, then name a suit.', done: function (ctx) { return penAt(ctx, 1, 'result'); }, after: 900 },
+        { final: true, target: 'flips', title: 'Lucky!', text: function (ctx) {
+          return 'Dex’s very first card was a ' + penSuit(ctx) + ', so he gives you no slaps. In all, you take ' + penTotal(ctx) + '. That’s Real Burns! Switch it on in the game setup when you play with friends.';
+        } }
       ]
     }
   ];
@@ -147,13 +207,20 @@
     var script = lesson.bots || {};
     return {
       intent: Burns.bot.intent,
-      delay: function (intent, v) {
+      delay: function (intent, v, rnd, now) {
         if (intent.kind === 'lead') return 1300;
         if (intent.kind === 'draw') return v.timing.drawCooldownMs + 350;
         if (intent.kind === 'take') return 1800;
+        // Real Burns: a winner's moment, then Next turn (a computer player that lost calls Stop and names hearts)
+        if (intent.kind === 'next') return 1500;
+        if (intent.kind === 'stop') return Math.max(0, (v.penalty.stopFrom || 0) - (now || 0)) + 1500;
+        if (intent.kind === 'suit') return 1400;
         return 1100;
       },
       decide: function (v) {
+        if (v.canStop) return { type: 'stop', payload: {} };
+        if (v.canSuit) return { type: 'suit', payload: { suit: 'H' } };
+        if (v.canNext) return { type: 'next', payload: {} };
         var mine = script[v.me] || {};
         var byId = function (id) { return v.hand.filter(function (c) { return c.id === id; })[0]; };
         var low = function (cards) { return cards.slice().sort(function (a, b) { return val(a) - val(b); })[0]; };
@@ -186,6 +253,7 @@
     var rest = CT.shuffle(CT.standardDeck().filter(function (c) { return !used[c.id]; }), { rng: 2026 });
     if (lesson.fillDeck === false) { state.deck = top.slice().reverse(); state.discard = rest; }
     else { state.deck = rest.concat(top.slice().reverse()); state.discard = []; }
+    state.out = (lesson.out || []).slice();   // Real Burns: players already out and safe
     state.events = [];
     state.seq = 0;
     if (lesson.starter) {
@@ -202,13 +270,45 @@
     }
   }
 
-  function makeSession(lesson) {
+  /* Real Burns: once you've named a suit, the cards the lesson wants turned
+     over go on top of the deck. Nobody sees the deck, so it plays like any
+     shuffle. Safe to repeat until the first card is turned over. */
+  function stackPenalty(state, lesson) {
+    var P = state.penalty;
+    if (!P || P.step !== 'draw' || P.drawn.length || !P.deck) return;
+    var plan = lesson.penalty[P.turn];
+    if (!plan) return;
+    var blacks = ['S', 'C'].filter(function (s) { return s !== P.suit; });
+    var reds = ['H', 'D'].filter(function (s) { return s !== P.suit; });
+    var nb = 0, nr = 0;
+    var top = plan.map(function (colour, i) {
+      return C(['7', 'J', '4', 'K', '2', 'Q'][i] + (colour === 'red' ? reds[nr++ % reds.length] : blacks[nb++ % blacks.length]));
+    });
+    top.push(C((plan.length ? '9' : 'A') + P.suit));
+    var ids = {};
+    top.forEach(function (c) { ids[c.id] = true; });
+    P.deck = P.deck.filter(function (c) { return !ids[c.id]; }).concat(top.reverse());   // turned over from the end
+  }
+
+  function modeFor(lesson) {
     var mode = Object.assign({}, Burns, { bot: scriptedBot(lesson) });
+    if (lesson.penalty) mode.tick = function (state, now) { stackPenalty(state, lesson); return Burns.tick(state, now); };
+    return mode;
+  }
+
+  function makeSession(lesson) {
+    var mode = modeFor(lesson);
     var timing = Object.assign({ dealHoldMs: 0, revealHoldMs: 2600, takeWindowMs: 60000, turnMs: 0 }, lesson.timing || {});
-    var session = new CT.Session({ mode: mode, players: PLAYERS, options: { flush: 'off', leadCard: 'faceUp', turnTime: '30' }, seed: 7, timing: timing });
+    var options = Object.assign({ flush: 'off', leadCard: 'faceUp', turnTime: '30' }, lesson.options || {});
+    var session = new CT.Session({ mode: mode, players: PLAYERS, options: options, seed: 7, timing: timing });
     rig(session.state, lesson, session.now());
     mode.tick(session.state, session.now());   // start the set right away
     return session;
+  }
+
+  /* The layout where the table and your hand sit side by side (styles.css). */
+  function SIDE_BY_SIDE() {
+    return !!(window.matchMedia && window.matchMedia('(max-height: 560px) and (orientation: landscape) and (min-width: 600px)').matches);
   }
 
   /* ---------- the runner (shared with the other modes' tutorials) ---------- */
@@ -218,18 +318,36 @@
     modeId: 'burns',
     lessons: LESSONS,
     makeSession: makeSession,
-    modeFor: function (lesson) { return Object.assign({}, Burns, { bot: scriptedBot(lesson) }); },
+    modeFor: modeFor,
     target: function (key) {
-      if (key === 'hand') return document.getElementById('t-handwrap');
-      if (key === 'deck') return document.getElementById('t-deck');
-      if (key === 'lead') return document.getElementById('t-lead');
-      if (key === 'seats') return document.getElementById('t-seats');
-      if (key === 'me') return document.getElementById('t-me');
-      if (key.indexOf('slot:') === 0) return document.getElementById('slot-' + key.slice(5));
+      var $ = function (id) { return document.getElementById(id); };
+      if (key === 'hand') return $('t-handwrap');
+      if (key === 'deck') return $('t-deck');
+      if (key === 'lead') return $('t-lead');
+      if (key === 'seats') return $('t-seats');
+      if (key === 'me') return $('t-me');
+      // Real Burns: the cards turned over with their count, and the Stop or suit
+      // buttons (or, while there's nothing to tap, the cards again)
+      var flips = function () { return UI.around([$('pen-suit'), $('pen-row'), $('pen-tally'), $('pen-say')]); };
+      if (key === 'flips') return flips();
+      if (key === 'act') { var act = $('pen-act'); return act && act.children.length ? UI.around([$('pen-say'), act]) : flips(); }
+      if (key.indexOf('seat:') === 0) return document.querySelector('.seat[data-pid="' + key.slice(5) + '"]');
+      if (key.indexOf('slot:') === 0) return $('slot-' + key.slice(5));
       if (key.indexOf('card:') === 0) return document.querySelector('.hcard[data-id="' + key.slice(5) + '"]');
       return null;
     },
     topTargets: /^(card:|hand)/,
+    // A phone on its side: the penalty round is two columns (the cards on the
+    // left, the count and the buttons on the right), so notes about it sit
+    // up in the left column, clear of both.
+    anchor: function (key) {
+      var pen = document.getElementById('t-pen');
+      if (!/^(act|flips)$/.test(key) || !pen || !SIDE_BY_SIDE()) return null;
+      return { top: true, el: { getBoundingClientRect: function () {
+        var r = pen.getBoundingClientRect(), mid = r.left + r.width / 2;
+        return { left: mid, top: r.top, right: r.right, bottom: r.bottom, width: r.right - mid, height: r.height };
+      } } };
+    },
     playLabel: 'Play Burns'
   });
 })(window.CT);

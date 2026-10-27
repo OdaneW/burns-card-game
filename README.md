@@ -41,7 +41,7 @@ at the bottom of the menu screen.
 | `src/modes/burns/rules.js` | The Burns rules and its rule choices, including Real Burns and its penalty round. Pure logic, no screen code |
 | `src/modes/burns/bot.js` | The Burns computer player. It only sees what a human player would see |
 | `src/modes/burns/ui.js` | The Burns table screen, and the Real Burns penalty round |
-| `src/modes/burns/tutorial.js` | The interactive Burns tutorial: rigged lessons on the real table |
+| `src/modes/burns/tutorial.js` | The interactive Burns tutorial: six rigged lessons on the real table, and an extra one on Real Burns |
 | `src/modes/donkey/rules.js` | The Pass-Roun Donkey rules: passing, four of a kind, the race, letters and the tie-breaker |
 | `src/modes/donkey/bot.js` | The Donkey computer player, with three reflex speeds for the race |
 | `src/modes/donkey/ui.js` | The Donkey table screen: four seats round a table |
@@ -53,7 +53,7 @@ at the bottom of the menu screen.
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |
-| `src/ui/tutorial.js` | The lesson runner every tutorial uses: steps, waiting for the player, notes held until read, Previous |
+| `src/ui/tutorial.js` | The lesson runner every tutorial uses: steps, waiting for the player, notes held until read, Previous, and extra lessons for rule choices |
 | `src/net/online.js` | The link to the game server: reconnecting, keeping the clock in step, and a remote session the table screens use like a local one |
 | `src/ui/online.js` | Play with friends: creating and joining rooms, the lobby, and the online menu and results |
 | `src/ui/app.js` | Menu, setup screen, sheets, saving and the game loop |
@@ -72,6 +72,8 @@ at the bottom of the menu screen.
 2. Add a computer player (`bot.js`) and a table screen (`ui.js`), reusing pieces from Burns where they fit.
 3. Optionally, add an interactive tutorial (`tutorial.js`): lessons for `UI.makeTutorial`, registered in
    `UI.tutorials`. How to play then offers it automatically, and so does Play, once, for someone new to the mode.
+   A lesson marked `extra: true` (for a rule choice, like Real Burns) isn't counted: the last note offers it,
+   and How to play can start it on its own.
 4. Add the new files to `SOURCES` in `build.js`, and the rules and computer player to `server/src/engine.js`
    so online rooms can play it. Phones on an app without the mode are asked to update when they join its room.
 

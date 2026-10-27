@@ -16,6 +16,11 @@
      playLabel             → the last note's button, e.g. 'Play Burns'
    })
 
+   A lesson: { title, steps, …whatever the mode's makeSession needs }. One
+   marked extra: true (an optional rule, say) comes after the main lessons:
+   it isn't counted, and it's offered on the last note (offer: its button)
+   and on How to play, which can start it on its own (start(index)).
+
    A step: { title?, text (string or fn(ctx)), target? (key or fn(ctx)),
      next: true (a note to read) | final: true (the last note) |
      done(ctx) (waits for something to happen at the table), after (ms),
@@ -33,9 +38,32 @@
 
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
+  /* Several elements as one spotlight (an element's stand-in for the coach). */
+  UI.around = function (els) {
+    els = els.filter(Boolean);
+    if (!els.length) return null;
+    return {
+      getBoundingClientRect: function () {
+        var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+        els.forEach(function (el) {
+          var x = el.getBoundingClientRect();
+          if (!x.width || !x.height) return;
+          l = Math.min(l, x.left); t = Math.min(t, x.top); r = Math.max(r, x.right); b = Math.max(b, x.bottom);
+        });
+        if (l === Infinity) return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+        return { left: l, top: t, right: r, bottom: b, width: r - l, height: b - t };
+      }
+    };
+  };
+
   UI.makeTutorial = function (spec) {
     var LESSONS = spec.lessons;
     var TOP = spec.topTargets || /^(card:|hand)/;
+    var CORE = LESSONS.filter(function (l) { return !l.extra; }).length;
+    var EXTRAS = [];
+    LESSONS.forEach(function (l, i) {
+      if (l.extra) EXTRAS.push({ index: i, title: l.title, offer: l.offer || 'Learn ' + l.title, shortcut: l.shortcut || 'Just the ' + l.title + ' lesson' });
+    });
 
     function targetFn(key) {
       if (!key) return null;
@@ -53,11 +81,20 @@
     }
 
     Tutorial.prototype.lessons = LESSONS;
+    Tutorial.prototype.core = CORE;        // the main lessons, as counted on screen
+    Tutorial.prototype.extras = EXTRAS;    // [{ index, title, offer, shortcut }]
 
-    Tutorial.prototype.start = function () {
+    /* From the first lesson, or straight into one (an extra lesson from How to play). */
+    Tutorial.prototype.start = function (at) {
       var self = this;
       this.coach.onSkip = function () { self.exit(); };
-      this.index = 0;
+      this.index = at > 0 && at < LESSONS.length ? at : 0;
+      this.begin();
+    };
+
+    Tutorial.prototype.goTo = function (index) {
+      clearTimeout(this.timer);
+      this.index = index;
       this.begin();
     };
 
@@ -91,7 +128,8 @@
       var lesson = LESSONS[this.index];
       if (this.step >= lesson.steps.length) {
         this.index++;
-        if (this.index >= LESSONS.length) { this.exit(); return; }
+        // extra lessons are only ever chosen, never run into
+        if (this.index >= LESSONS.length || LESSONS[this.index].extra) { this.exit(); return; }
         this.begin();
         return;
       }
@@ -102,17 +140,23 @@
 
     /* Previous: back to the step before, with the table exactly as it was
        when that step began, so it can be read again and played again. */
-    Tutorial.prototype.canGoBack = function () { return this.index > 0 || this.step > 0; };
-
-    Tutorial.prototype.prevStep = function () {
+    /* The step before, if it was played here (a lesson started on its own has nothing before it). */
+    Tutorial.prototype.before = function () {
       var index = this.index, step = this.step - 1;
       if (step < 0) { index--; step = index >= 0 ? LESSONS[index].steps.length - 1 : -1; }
       var snap = index >= 0 ? (this.snaps[index] || [])[step] : null;
-      if (!snap) return;
+      return snap ? { index: index, step: step, snap: snap } : null;
+    };
+
+    Tutorial.prototype.canGoBack = function () { return !!this.before(); };
+
+    Tutorial.prototype.prevStep = function () {
+      var b = this.before();
+      if (!b) return;
       clearTimeout(this.timer);
-      this.index = index;
-      this.step = step;
-      this.use(new CT.Session({ mode: spec.modeFor(LESSONS[index]), state: JSON.parse(snap.state), clock: new CT.Clock(snap.t) }));
+      this.index = b.index;
+      this.step = b.step;
+      this.use(new CT.Session({ mode: spec.modeFor(LESSONS[b.index]), state: JSON.parse(b.snap.state), clock: new CT.Clock(b.snap.t) }));
       this.enter();
     };
 
@@ -144,12 +188,16 @@
       var next = { id: 'next', label: 'Next', primary: true, onClick: function () { self.nextStep(); } };
       var actions = this.buttons(s.next ? [next] : []);
       if (s.final) {
-        // the two ways out share a row; Previous sits underneath
+        // the two ways out share a row; Previous sits underneath, with any extra lesson on offer
         actions = [
           { id: 'home', label: 'Back to games', onClick: function () { self.exit(); } },
           { id: 'play', label: spec.playLabel || 'Play', primary: true, onClick: function () { self.exit('setup'); } },
-          { br: true }, this.prevButton()
+          { br: true }
         ];
+        if (this.canGoBack()) actions.push(this.prevButton());
+        if (!lesson.extra) EXTRAS.forEach(function (x) {
+          actions.push({ id: 'extra', label: x.offer, cls: 'coach-extra', onClick: function () { self.goTo(x.index); } });
+        });
       }
       var target = typeof s.target === 'function' ? s.target(ctx) : s.target;
       var read = !!(s.next || s.final);
@@ -157,7 +205,7 @@
       var place = s.place || (!target ? (read ? 'center' : 'top') : (TOP.test(target) ? 'top' : 'auto'));
       this.shownAt = now();
       this.coach.show({
-        step: 'Lesson ' + (this.index + 1) + ' of ' + LESSONS.length + ' · ' + lesson.title,
+        step: (lesson.extra ? 'Extra lesson' : 'Lesson ' + (this.index + 1) + ' of ' + CORE) + ' · ' + lesson.title,
         title: s.title,
         text: typeof s.text === 'function' ? s.text(ctx) : s.text,
         target: targetFn(target),

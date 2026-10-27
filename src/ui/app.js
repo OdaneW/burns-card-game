@@ -345,7 +345,7 @@
     offerTutorial: function (modeId) {
       var self = this;
       var mode = CT.getMode(modeId);
-      var lessons = UI.tutorials[modeId].prototype.lessons.length;
+      var lessons = UI.tutorials[modeId].prototype.core;
       this.noteTutorial(modeId, 'offered');   // asked once; How to play always has it
       var sheet = this.openSheet('intro',
         fanHtml(mode) +
@@ -364,14 +364,15 @@
       $('i-rules').addEventListener('click', function () { self.openRules(modeId, self.modeSettings(mode).options); });
     },
 
-    startTutorial: function (modeId) {
+    /* From the first lesson, or (at) straight into one, e.g. an extra lesson from How to play. */
+    startTutorial: function (modeId, at) {
       var Tutorial = UI.tutorials && UI.tutorials[modeId];
       if (!Tutorial) return;
       this.noteTutorial(modeId, 'started');
       if (this.session && !this.tutorial) this.save();   // a game in progress stays resumable
       this.closeSheet(true);
       this.tutorial = new Tutorial(this);
-      this.tutorial.start();
+      this.tutorial.start(at);
     },
 
     attachTutorial: function (session) {
@@ -502,10 +503,14 @@
       var online = this.online && this.online.inRoom();
       var Tutorial = !this.tutorial && !online && UI.tutorials && UI.tutorials[modeId];
       var inGame = this.session && this.session.state.phase !== 'over';
+      // extra lessons (an optional rule) can also be taken on their own
+      var extras = Tutorial ? Tutorial.prototype.extras : [];
       var tutorial = Tutorial
-        ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.lessons.length +
+        ? '<div class="tut-card"><div><h3>Learn by playing</h3><p>A short guided game with ' + Tutorial.prototype.core +
           ' quick lessons, about three minutes.' + (inGame ? ' Your current game is saved, so you can resume it afterwards.' : '') + '</p></div>' +
-          '<button class="btn btn-primary" type="button" id="r-tutorial">Start the tutorial</button></div>' +
+          '<button class="btn btn-primary" type="button" id="r-tutorial">Start the tutorial</button>' +
+          extras.map(function (x) { return '<button class="link-btn" type="button" data-lesson="' + x.index + '">' + UI.esc(x.shortcut) + '</button>'; }).join('') +
+          '</div>' +
           '<p class="eyebrow">Or read the rules</p>'
         : '';
       var sheet = this.openSheet('rules', this.sheetHead('How to play ' + UI.esc(mode.name)) + tutorial +
@@ -513,6 +518,9 @@
         '<button class="btn ' + (Tutorial ? 'btn-ghost' : 'btn-primary') + '" type="button" data-close>Got it</button>', { label: 'How to play' });
       this.wireClose(sheet);
       if (Tutorial) $('r-tutorial').addEventListener('click', function () { self.startTutorial(modeId); });
+      sheet.querySelectorAll('[data-lesson]').forEach(function (b) {
+        b.addEventListener('click', function () { self.startTutorial(modeId, Number(b.dataset.lesson)); });
+      });
     },
 
     openMenu: function () {

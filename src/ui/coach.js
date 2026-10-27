@@ -40,7 +40,8 @@
 
   /* o: { step, title, text (HTML), target: fn → element|null,
           anchor: fn → element|null (optional: the bubble goes beside this
-            instead, e.g. the whole table when the spotlight is on a seat),
+            instead, e.g. the whole table when the spotlight is on a seat;
+            or { el, top: true } to sit beside it at the top of the screen),
           place: 'auto' | 'top' | 'center', dim: true|false,
           actions: [{ id, label, primary, cls, onClick }] } */
   Coach.prototype.show = function (o) {
@@ -127,6 +128,8 @@
     // Told to keep clear of something (the table, on a phone on its side)?
     // Then sit beside it, a little narrower if that's what fits.
     var a = this.getAnchor ? this.getAnchor() : null;
+    var atTop = !!(a && a.el && a.top);
+    if (a && a.el) a = a.el;
     var ar = a && a.getBoundingClientRect ? a.getBoundingClientRect() : null;
     if (ar && ar.width && ar.height && this.where !== 'center') {
       if (this.maxW == null) this.maxW = parseFloat(getComputedStyle(this.bubble).maxWidth) || 380;
@@ -137,7 +140,7 @@
         var side = this.bubble.style;
         side.left = (roomL > roomR ? ar.left - gap - w : ar.right + gap) + 'px';
         side.right = 'auto'; side.width = w + 'px'; side.marginLeft = side.marginRight = '0';
-        side.top = Math.max(12, Math.min(vh - bh - 12, ar.top + ar.height / 2 - bh / 2)) + 'px';
+        side.top = (atTop ? 12 : Math.max(12, Math.min(vh - bh - 12, ar.top + ar.height / 2 - bh / 2))) + 'px';
         this.arrow.className = 'coach-arrow';
         return;
       }
