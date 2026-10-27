@@ -1,6 +1,6 @@
 {
   "name": "burns-card-game",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "description": "A phone-first card game with several game modes: Burns, Pass-Roun Donkey and Bull.",
   "server": "wss://burns-card-game.odanew1.workers.dev",

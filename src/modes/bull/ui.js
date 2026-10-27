@@ -103,9 +103,13 @@
       '<div class="bl-table" id="b-table">' +
         '<div class="bl-felt" aria-hidden="true"></div>' +
         '<div class="bl-center" id="b-center">' +
-          '<div class="bl-now" id="b-now"><span class="lbl">Next up</span><b id="b-rank"></b></div>' +
+          // the last play, big: who played, and what they claim it is
+          '<div class="bl-claim" id="b-claim" aria-live="polite" style="visibility:hidden"><span class="who" id="b-claim-who">·</span><b class="what" id="b-claim-what">·</b></div>' +
           '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></div>' +
           '<p class="bl-pilecount" id="b-pilecount"></p>' +
+          // the rank that must be claimed next: the rank alone on a tile, and who has to play it
+          '<div class="bl-now" id="b-now"><b class="bl-rank" id="b-rank"></b>' +
+            '<span class="bl-now-text"><span class="lbl">Next rank</span><span class="bl-turn" id="b-turn"></span></span></div>' +
           '<div class="bl-reveal" id="b-reveal" hidden></div>' +
         '</div>' +
       '</div>' +
@@ -150,7 +154,11 @@
       music: this.root.querySelector('#b-music'),
       sound: this.root.querySelector('#b-sound'),
       center: this.root.querySelector('#b-center'),
+      claim: this.root.querySelector('#b-claim'),
+      claimWho: this.root.querySelector('#b-claim-who'),
+      claimWhat: this.root.querySelector('#b-claim-what'),
       rank: this.root.querySelector('#b-rank'),
+      turn: this.root.querySelector('#b-turn'),
       now: this.root.querySelector('#b-now'),
       pile: this.root.querySelector('#b-pile'),
       pileCount: this.root.querySelector('#b-pilecount'),
@@ -303,7 +311,7 @@
   };
 
   BullTable.prototype.renderSeats = function (v) {
-    var self = this, r = v.phase === 'reveal' ? v.reveal : null, last = v.last;
+    var self = this, r = v.phase === 'reveal' ? v.reveal : null;
     v.players.forEach(function (p) {
       var s = self.seatEls[p.id];
       if (!s) return;
@@ -313,11 +321,10 @@
       s.count.textContent = p.handCount;
       s.seat.classList.toggle('is-out', p.handCount === 0);
       s.seat.setAttribute('aria-label', p.name + ', ' + cardsWord(p.handCount) + (turn ? ', playing' : ''));
-      // what they're saying: their claim, or Bull!
+      // what they're saying: Bull!, or how a call went (their claims show big in the middle)
       var say = '', tone = '';
       if (r && r.challenger === p.id) { say = 'Bull!'; tone = 'hot'; }
       else if (r && r.accused === p.id) { say = r.lie ? 'Caught!' : 'True!'; tone = r.lie ? 'ember' : 'ok'; }
-      else if (last && last.by === p.id) { say = claim(last.rank, last.n); }
       else if (v.phase === 'over' && v.winners && v.winners[0] === p.id) { say = 'Out!'; tone = 'ok'; }
       s.bubble.style.visibility = say ? '' : 'hidden';   // keeps its space, so the seat doesn't jump
       s.bubble.textContent = say || '·';
@@ -330,9 +337,17 @@
     var showReveal = v.phase === 'reveal' && r;
     this.el.center.classList.toggle('revealing', !!showReveal);
     this.el.reveal.hidden = !showReveal;
-    this.el.rank.textContent = plural(v.rank);
-    this.el.now.classList.toggle('mine', v.phase === 'play' && v.turn === this.me);
-    this.el.now.hidden = v.phase === 'dealing' || v.phase === 'over';
+    this.renderClaim(v);
+    // the rank to claim next, on its own ("5", not "5s"), and who has to play it
+    var mine = v.phase === 'play' && v.turn === this.me;
+    var turnText = mine ? 'Your turn: play ' + plural(v.rank)
+      : v.turn ? this.name(v.turn) + ' must play ' + plural(v.rank) : '';
+    this.el.rank.textContent = v.rank;
+    this.el.rank.setAttribute('aria-label', plural(v.rank));
+    if (this.el.turn.innerHTML !== turnText) this.el.turn.innerHTML = turnText;
+    this.el.now.classList.toggle('mine', mine);
+    // keeps its space while hidden, so the pile doesn't jump
+    this.el.now.style.visibility = v.phase === 'play' ? '' : 'hidden';
     // the pile: up to three backs, to suggest its size
     var backs = this.el.pile.children;
     var shown = v.phase === 'dealing' ? 1 : v.pileCount ? Math.min(3, Math.ceil(v.pileCount / 4)) : 0;
@@ -343,7 +358,7 @@
     var key = r.no + ':' + r.challenger;
     if (this.el.reveal.dataset.key === key) return;
     this.el.reveal.dataset.key = key;
-    this.el.reveal.innerHTML = '<p class="bl-reveal-head">' + this.poss(r.accused).replace(/^your/, 'Your') + ' ' + owned(r.rank, r.n) + '</p>' +
+    this.el.reveal.innerHTML = '<p class="bl-reveal-head">' + this.poss(r.accused).replace(/^your/, 'Your') + ' ' + owned(r.rank, r.n) + ':</p>' +
       '<div class="bl-reveal-cards"></div><p class="bl-stamp ' + (r.lie ? 'lie' : 'true') + '">' + (r.lie ? 'Bluff!' : 'True!') + '</p>';
     var row = this.el.reveal.querySelector('.bl-reveal-cards');
     r.cards.forEach(function (c, i) {
@@ -352,6 +367,27 @@
       el.style.setProperty('--i', i);
       row.appendChild(el);
     });
+  };
+
+  /* The last play, big enough to read across the table: "Mia played / two
+     Kings". It pops in with every play, and goes once the pile is picked up. */
+  BullTable.prototype.renderClaim = function (v) {
+    var last = (v.phase === 'play' || v.phase === 'lastcall') ? v.last : null;
+    var el = this.el.claim;
+    el.style.visibility = last ? '' : 'hidden';   // keeps its space, so the pile doesn't jump
+    if (!last) { this.claimKey = null; return; }
+    var key = last.no + ':' + last.by;
+    if (this.claimKey === key) return;
+    this.claimKey = key;
+    var p = this.player(v, last.by);
+    var mine = last.by === this.me;
+    this.el.claimWho.textContent = (mine ? 'You' : (p ? p.name : 'Someone')) + ' played';
+    this.el.claimWho.style.color = mine ? '' : PAINTS[Math.max(0, v.players.indexOf(p)) % PAINTS.length];
+    this.el.claimWhat.textContent = claim(last.rank, last.n);
+    if (this.quiet) return;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
   };
 
   BullTable.prototype.statusFor = function (v) {

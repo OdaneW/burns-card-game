@@ -609,19 +609,23 @@
         : (iWon ? 'YOU WIN' : String(raw[0] || '').toUpperCase() + ' WINS');
       var r = (this.table && this.table.result) ? this.table.result(v) : {};
       var sheet = this.openSheet('result',
-        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
-        '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
-        (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
+        '<div class="result-main">' +
+          '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
+          '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
+          (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
+        '</div>' +
         '<div class="result-actions">' + (online ? this.online.resultActions() :
           '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
           '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
-          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>') +
+          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+          '<button class="btn btn-ghost" type="button" id="r-home">Back to games</button>') +
         '</div>', { cls: 'result', center: true, label: 'Game result' });
       if (r.after) r.after(sheet);
       if (online) { this.online.wireResult(); return; }
       $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
       $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
       $('r-table').addEventListener('click', function () { self.closeSheet(); });
+      $('r-home').addEventListener('click', function () { self.closeSheet(true); self.showHome(); });
     }
   };
 

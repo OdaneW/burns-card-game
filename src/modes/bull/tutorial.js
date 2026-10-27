@@ -60,10 +60,10 @@
       steps: [
         { next: true, title: 'Welcome to Bull', text: 'You’re at the table with Mia, Dex and Rae. The aim is to be the first to get rid of all your cards. In a real game the whole deck is dealt out; here everyone has just a few cards, so the lessons are quick.' },
         { next: true, target: 'table', text: 'Turns go clockwise round the table: after you comes Mia, on your left, then Dex, then Rae.' },
-        { next: true, target: 'now', text: 'Each turn has a rank: Aces first, then 2s, 3s and so on up to Kings, then round to Aces again. The middle of the table shows the rank that’s next.' },
+        { next: true, target: 'now', text: 'Each turn has a rank: Aces first, then 2s, 3s and so on up to Kings, then round to Aces again. The middle of the table shows the rank that’s next, and who has to play it.' },
         { target: 'mine', text: 'You start, so you play Aces. Tap your two Aces, then tap Play. You can play up to four cards in a turn.', done: played('p0'), after: 400 },
-        { next: true, target: 'pile', text: 'Your cards go face down on the pile, and everyone hears what you claimed: two Aces. Nobody else can see whether that’s true.' },
-        { watch: true, target: 'table', text: 'Now Mia plays 2s, then Dex plays 3s and Rae plays 4s. Each claim shows by the player’s name.', done: played('p3'), after: 800 },
+        { next: true, target: 'claim', text: 'Your cards go face down on the pile, and everyone sees what you claimed: two Aces. Nobody else can see whether that’s true.' },
+        { watch: true, target: 'table', text: 'Now Mia plays 2s, then Dex plays 3s and Rae plays 4s. Each claim shows in the middle of the table.', done: played('p3'), after: 800 },
         { next: true, target: 'now', text: 'Round it comes to you again, and you’re on 5s. But you don’t have any 5s…' }
       ]
     },
@@ -264,6 +264,7 @@
       if (key === 'center') return $('b-center');
       if (key === 'now') return $('b-now');
       if (key === 'pile') return $('b-pile');
+      if (key === 'claim') return around([$('b-claim'), $('b-pile')]);
       if (key === 'hand') return $('b-handwrap');
       if (key === 'bull') return $('b-bull');
       if (key === 'me') return $('b-me');
@@ -275,7 +276,7 @@
     topTargets: /^(card:|hand|mine|me)/,
     // A phone on its side: the table fills the left, so notes about it go in the column beside it.
     anchor: function (key) {
-      if (!/^(table|center|now|pile|seat:)/.test(key) || !SIDE_BY_SIDE()) return null;
+      if (!/^(table|center|now|pile|claim|seat:)/.test(key) || !SIDE_BY_SIDE()) return null;
       return document.getElementById('b-table');
     },
     playLabel: 'Play Bull'

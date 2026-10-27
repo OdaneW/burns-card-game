@@ -562,6 +562,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .log .empty { color: var(--ink-soft); border: 0; padding: 0; }
 
 .result { text-align: center; justify-items: center; gap: 12px; }
+.result-main { display: grid; justify-items: center; gap: 12px; width: 100%; }
 .result .wordmark { font-size: 44px; }
 .result-why { font: 600 16px/1.4 var(--font-ui); max-width: 34ch; }
 .result-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
@@ -575,6 +576,15 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .result-actions { display: grid; gap: 8px; width: 100%; grid-template-columns: 1fr 1fr; }
 .result-actions .btn-ghost { padding: 12px 8px; font-size: 15px; }
 .result-actions .btn-primary { grid-column: 1 / -1; }
+.result-actions > .btn:last-child:nth-child(even) { grid-column: 1 / -1; }   /* a last button on its own takes the row */
+/* a phone on its side: who won on the left, the way on to the right, all without scrolling */
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  .sheet.result { max-width: 780px; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); column-gap: 20px; align-items: center; }
+  .result .wordmark { font-size: 34px; }
+  .result-main { gap: 8px; }
+  .result .standings li { padding-top: 4px; padding-bottom: 4px; }
+  .result-actions { grid-template-columns: 1fr; }
+}
 
 .toast {
   position: fixed; left: 50%; z-index: 60;
@@ -828,7 +838,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .bl-count { display: inline-flex; align-items: center; gap: 4px; font: 700 12px/1 var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .bl-count .card { --cw: 12px; border-radius: 2px; box-shadow: none; }
 .bl-bubble {
-  max-width: 100%; box-sizing: border-box;
+  /* hangs under the seat, so seats stay compact and clear of the middle of the table */
+  position: absolute; top: calc(100% - 3px); left: 50%; transform: translateX(-50%);
+  box-sizing: border-box;
   padding: 3px 7px; border-radius: 99px;
   background: var(--card); color: var(--ink-on-paint);
   font: 800 11px/1.15 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -839,14 +851,40 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .bl-bubble.ok { background: #9FE3D6; }
 
 .bl-center {
-  position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -50%);
-  width: 44%; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  /* a little below the middle: the seats crowd the top of the table, and you sit below it */
+  position: absolute; left: 50%; top: 54%; z-index: 1; transform: translate(-50%, -50%);
+  width: 52%; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
 }
-.bl-now { display: grid; justify-items: center; }
+/* the last play, big enough to read across the table */
+.bl-claim { display: grid; justify-items: center; gap: 2px; max-width: 100%; }
+.bl-claim .who { font: 800 11px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+.bl-claim .what { font: 800 25px/1.08 var(--font-ui); letter-spacing: -.01em; color: var(--ink); white-space: nowrap; text-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+.bl-claim.pop .what { animation: claimPop .45s cubic-bezier(.2, .8, .3, 1.35); }
+@keyframes claimPop { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+/* the rank to claim next: the rank alone on a tile (in the cards' own lettering),
+   beside who has to play it; on tall screens the label sits above, the player below */
+.bl-now { display: flex; align-items: center; justify-content: center; gap: 9px; max-width: 100%; text-align: left; }
+.bl-now-text { display: grid; gap: 1px; min-width: 0; }
 .bl-now .lbl { font: 800 10px/1.2 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
-.bl-now b { font: 400 26px/1.05 var(--font-display); color: var(--marigold); letter-spacing: .02em; text-shadow: .05em .05em 0 var(--ember), .1em .1em 0 rgba(0, 0, 0, .35); }
-.bl-now.mine .lbl { color: var(--marigold); }
-.bl-now.mine b { animation: nudge 1.4s ease-in-out infinite; }
+.bl-rank {
+  flex: none; min-width: calc(var(--rail-cw) * .8); height: calc(var(--rail-cw) * .8); padding: 0 7px; box-sizing: border-box;
+  display: grid; place-items: center; border-radius: 12px;
+  background: var(--marigold); color: var(--ink-on-paint);
+  font: 400 calc(var(--rail-cw) * .5)/1 var(--font-card);
+  box-shadow: 0 3px 0 var(--marigold-deep), 0 8px 18px rgba(0, 0, 0, .3);
+}
+.bl-turn { font: 700 13px/1.25 var(--font-ui); color: var(--ink-soft); }
+.bl-now.mine .lbl, .bl-now.mine .bl-turn { color: var(--marigold); }
+.bl-now.mine .bl-rank { animation: nudge 1.4s ease-in-out infinite; }
+@media (min-height: 700px) {
+  .bl-now { flex-direction: column; gap: 4px; text-align: center; }
+  .bl-now-text { display: contents; }
+  .bl-now .lbl { order: -1; }
+}
+@media (max-height: 699px) {
+  .bl-claim .what { font-size: 21px; }
+  .bl-center { gap: 4px; }
+}
 .bl-pile { position: relative; width: calc(var(--rail-cw) + 12px); height: calc(var(--rail-cw) * 1.4 + 6px); }
 .bl-pile .card { --cw: var(--rail-cw); position: absolute; top: 2px; left: 4px; }
 .bl-pile .card:nth-child(1) { transform: rotate(-9deg) translateX(-3px); }
@@ -854,9 +892,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .bl-pile .card:nth-child(3) { transform: rotate(-1deg); }
 .bl-pile.empty { border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .2); }
 .bl-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
-.bl-center.revealing .bl-pile, .bl-center.revealing .bl-pilecount, .bl-center.revealing .bl-now { display: none; }
+.bl-center.revealing .bl-claim, .bl-center.revealing .bl-pile, .bl-center.revealing .bl-pilecount, .bl-center.revealing .bl-now { display: none; }
 .bl-reveal { display: grid; justify-items: center; gap: 6px; }
-.bl-reveal-head { font: 800 10px/1.25 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.bl-reveal-head { font: 800 15px/1.25 var(--font-ui); color: var(--ink); }
 .bl-reveal-cards { display: flex; gap: 4px; perspective: 600px; }
 .bl-reveal-cards .card { --cw: calc(var(--rail-cw) * .9); animation: flipIn .45s ease-out both; animation-delay: calc(var(--i) * 90ms + .15s); }
 .bl-reveal-cards .card.wrong { box-shadow: 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .6); }
@@ -1047,7 +1085,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.8.2","id":"8877da0","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -7302,9 +7340,13 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
       '<div class="bl-table" id="b-table">' +
         '<div class="bl-felt" aria-hidden="true"></div>' +
         '<div class="bl-center" id="b-center">' +
-          '<div class="bl-now" id="b-now"><span class="lbl">Next up</span><b id="b-rank"></b></div>' +
+          // the last play, big: who played, and what they claim it is
+          '<div class="bl-claim" id="b-claim" aria-live="polite" style="visibility:hidden"><span class="who" id="b-claim-who">·</span><b class="what" id="b-claim-what">·</b></div>' +
           '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></div>' +
           '<p class="bl-pilecount" id="b-pilecount"></p>' +
+          // the rank that must be claimed next: the rank alone on a tile, and who has to play it
+          '<div class="bl-now" id="b-now"><b class="bl-rank" id="b-rank"></b>' +
+            '<span class="bl-now-text"><span class="lbl">Next rank</span><span class="bl-turn" id="b-turn"></span></span></div>' +
           '<div class="bl-reveal" id="b-reveal" hidden></div>' +
         '</div>' +
       '</div>' +
@@ -7349,7 +7391,11 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
       music: this.root.querySelector('#b-music'),
       sound: this.root.querySelector('#b-sound'),
       center: this.root.querySelector('#b-center'),
+      claim: this.root.querySelector('#b-claim'),
+      claimWho: this.root.querySelector('#b-claim-who'),
+      claimWhat: this.root.querySelector('#b-claim-what'),
       rank: this.root.querySelector('#b-rank'),
+      turn: this.root.querySelector('#b-turn'),
       now: this.root.querySelector('#b-now'),
       pile: this.root.querySelector('#b-pile'),
       pileCount: this.root.querySelector('#b-pilecount'),
@@ -7502,7 +7548,7 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
   };
 
   BullTable.prototype.renderSeats = function (v) {
-    var self = this, r = v.phase === 'reveal' ? v.reveal : null, last = v.last;
+    var self = this, r = v.phase === 'reveal' ? v.reveal : null;
     v.players.forEach(function (p) {
       var s = self.seatEls[p.id];
       if (!s) return;
@@ -7512,11 +7558,10 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
       s.count.textContent = p.handCount;
       s.seat.classList.toggle('is-out', p.handCount === 0);
       s.seat.setAttribute('aria-label', p.name + ', ' + cardsWord(p.handCount) + (turn ? ', playing' : ''));
-      // what they're saying: their claim, or Bull!
+      // what they're saying: Bull!, or how a call went (their claims show big in the middle)
       var say = '', tone = '';
       if (r && r.challenger === p.id) { say = 'Bull!'; tone = 'hot'; }
       else if (r && r.accused === p.id) { say = r.lie ? 'Caught!' : 'True!'; tone = r.lie ? 'ember' : 'ok'; }
-      else if (last && last.by === p.id) { say = claim(last.rank, last.n); }
       else if (v.phase === 'over' && v.winners && v.winners[0] === p.id) { say = 'Out!'; tone = 'ok'; }
       s.bubble.style.visibility = say ? '' : 'hidden';   // keeps its space, so the seat doesn't jump
       s.bubble.textContent = say || '·';
@@ -7529,9 +7574,17 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
     var showReveal = v.phase === 'reveal' && r;
     this.el.center.classList.toggle('revealing', !!showReveal);
     this.el.reveal.hidden = !showReveal;
-    this.el.rank.textContent = plural(v.rank);
-    this.el.now.classList.toggle('mine', v.phase === 'play' && v.turn === this.me);
-    this.el.now.hidden = v.phase === 'dealing' || v.phase === 'over';
+    this.renderClaim(v);
+    // the rank to claim next, on its own ("5", not "5s"), and who has to play it
+    var mine = v.phase === 'play' && v.turn === this.me;
+    var turnText = mine ? 'Your turn: play ' + plural(v.rank)
+      : v.turn ? this.name(v.turn) + ' must play ' + plural(v.rank) : '';
+    this.el.rank.textContent = v.rank;
+    this.el.rank.setAttribute('aria-label', plural(v.rank));
+    if (this.el.turn.innerHTML !== turnText) this.el.turn.innerHTML = turnText;
+    this.el.now.classList.toggle('mine', mine);
+    // keeps its space while hidden, so the pile doesn't jump
+    this.el.now.style.visibility = v.phase === 'play' ? '' : 'hidden';
     // the pile: up to three backs, to suggest its size
     var backs = this.el.pile.children;
     var shown = v.phase === 'dealing' ? 1 : v.pileCount ? Math.min(3, Math.ceil(v.pileCount / 4)) : 0;
@@ -7542,7 +7595,7 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
     var key = r.no + ':' + r.challenger;
     if (this.el.reveal.dataset.key === key) return;
     this.el.reveal.dataset.key = key;
-    this.el.reveal.innerHTML = '<p class="bl-reveal-head">' + this.poss(r.accused).replace(/^your/, 'Your') + ' ' + owned(r.rank, r.n) + '</p>' +
+    this.el.reveal.innerHTML = '<p class="bl-reveal-head">' + this.poss(r.accused).replace(/^your/, 'Your') + ' ' + owned(r.rank, r.n) + ':</p>' +
       '<div class="bl-reveal-cards"></div><p class="bl-stamp ' + (r.lie ? 'lie' : 'true') + '">' + (r.lie ? 'Bluff!' : 'True!') + '</p>';
     var row = this.el.reveal.querySelector('.bl-reveal-cards');
     r.cards.forEach(function (c, i) {
@@ -7551,6 +7604,27 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
       el.style.setProperty('--i', i);
       row.appendChild(el);
     });
+  };
+
+  /* The last play, big enough to read across the table: "Mia played / two
+     Kings". It pops in with every play, and goes once the pile is picked up. */
+  BullTable.prototype.renderClaim = function (v) {
+    var last = (v.phase === 'play' || v.phase === 'lastcall') ? v.last : null;
+    var el = this.el.claim;
+    el.style.visibility = last ? '' : 'hidden';   // keeps its space, so the pile doesn't jump
+    if (!last) { this.claimKey = null; return; }
+    var key = last.no + ':' + last.by;
+    if (this.claimKey === key) return;
+    this.claimKey = key;
+    var p = this.player(v, last.by);
+    var mine = last.by === this.me;
+    this.el.claimWho.textContent = (mine ? 'You' : (p ? p.name : 'Someone')) + ' played';
+    this.el.claimWho.style.color = mine ? '' : PAINTS[Math.max(0, v.players.indexOf(p)) % PAINTS.length];
+    this.el.claimWhat.textContent = claim(last.rank, last.n);
+    if (this.quiet) return;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
   };
 
   BullTable.prototype.statusFor = function (v) {
@@ -7965,10 +8039,10 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
       steps: [
         { next: true, title: 'Welcome to Bull', text: 'You’re at the table with Mia, Dex and Rae. The aim is to be the first to get rid of all your cards. In a real game the whole deck is dealt out; here everyone has just a few cards, so the lessons are quick.' },
         { next: true, target: 'table', text: 'Turns go clockwise round the table: after you comes Mia, on your left, then Dex, then Rae.' },
-        { next: true, target: 'now', text: 'Each turn has a rank: Aces first, then 2s, 3s and so on up to Kings, then round to Aces again. The middle of the table shows the rank that’s next.' },
+        { next: true, target: 'now', text: 'Each turn has a rank: Aces first, then 2s, 3s and so on up to Kings, then round to Aces again. The middle of the table shows the rank that’s next, and who has to play it.' },
         { target: 'mine', text: 'You start, so you play Aces. Tap your two Aces, then tap Play. You can play up to four cards in a turn.', done: played('p0'), after: 400 },
-        { next: true, target: 'pile', text: 'Your cards go face down on the pile, and everyone hears what you claimed: two Aces. Nobody else can see whether that’s true.' },
-        { watch: true, target: 'table', text: 'Now Mia plays 2s, then Dex plays 3s and Rae plays 4s. Each claim shows by the player’s name.', done: played('p3'), after: 800 },
+        { next: true, target: 'claim', text: 'Your cards go face down on the pile, and everyone sees what you claimed: two Aces. Nobody else can see whether that’s true.' },
+        { watch: true, target: 'table', text: 'Now Mia plays 2s, then Dex plays 3s and Rae plays 4s. Each claim shows in the middle of the table.', done: played('p3'), after: 800 },
         { next: true, target: 'now', text: 'Round it comes to you again, and you’re on 5s. But you don’t have any 5s…' }
       ]
     },
@@ -8169,6 +8243,7 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
       if (key === 'center') return $('b-center');
       if (key === 'now') return $('b-now');
       if (key === 'pile') return $('b-pile');
+      if (key === 'claim') return around([$('b-claim'), $('b-pile')]);
       if (key === 'hand') return $('b-handwrap');
       if (key === 'bull') return $('b-bull');
       if (key === 'me') return $('b-me');
@@ -8180,7 +8255,7 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
     topTargets: /^(card:|hand|mine|me)/,
     // A phone on its side: the table fills the left, so notes about it go in the column beside it.
     anchor: function (key) {
-      if (!/^(table|center|now|pile|seat:)/.test(key) || !SIDE_BY_SIDE()) return null;
+      if (!/^(table|center|now|pile|claim|seat:)/.test(key) || !SIDE_BY_SIDE()) return null;
       return document.getElementById('b-table');
     },
     playLabel: 'Play Bull'
@@ -9422,19 +9497,23 @@ CT.BUILD = {"version":"0.8.1","id":"ba9b0c4","target":"app","server":"wss://burn
         : (iWon ? 'YOU WIN' : String(raw[0] || '').toUpperCase() + ' WINS');
       var r = (this.table && this.table.result) ? this.table.result(v) : {};
       var sheet = this.openSheet('result',
-        '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
-        '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
-        (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
+        '<div class="result-main">' +
+          '<p class="eyebrow">' + UI.esc(this.session.mode.name) + (r.when ? ' · ' + r.when : '') + '</p>' +
+          '<h2 class="wordmark">' + UI.esc(r.title || title) + '</h2>' +
+          (r.why ? '<p class="result-why">' + r.why + '</p>' : '') + (r.body || '') +
+        '</div>' +
         '<div class="result-actions">' + (online ? this.online.resultActions() :
           '<button class="btn btn-primary" type="button" id="r-again">Play again</button>' +
           '<button class="btn btn-ghost" type="button" id="r-setup">Change setup</button>' +
-          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>') +
+          '<button class="btn btn-ghost" type="button" id="r-table">See the table</button>' +
+          '<button class="btn btn-ghost" type="button" id="r-home">Back to games</button>') +
         '</div>', { cls: 'result', center: true, label: 'Game result' });
       if (r.after) r.after(sheet);
       if (online) { this.online.wireResult(); return; }
       $('r-again').addEventListener('click', function () { self.closeSheet(true); self.playAgain(); });
       $('r-setup').addEventListener('click', function () { self.closeSheet(true); self.openSetup(self.session.mode.id); });
       $('r-table').addEventListener('click', function () { self.closeSheet(); });
+      $('r-home').addEventListener('click', function () { self.closeSheet(true); self.showHome(); });
     }
   };
 
