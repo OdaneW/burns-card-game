@@ -56,9 +56,9 @@ const H0 = ['2S', '3S', '4C', '5D'];   // no hearts
 const H1 = ['6H', '7S', '8S', '9D'];   // no clubs
 const H2 = ['10H', 'JS', 'QS', 'AD'];  // no clubs
 
-test('defaults: Flush off, leader’s card face up, 30 seconds to play', () => {
+test('defaults: Real Burns off, Flush off, leader’s card face up, 30 seconds to play', () => {
   const s = Burns.createGame({ players: [{ id: 'p0', name: 'A' }, { id: 'p1', name: 'B' }], seed: 1, now: 0 });
-  eq(s.options, { flush: 'off', leadCard: 'faceUp', turnTime: '30' });
+  eq(s.options, { real: 'off', flush: 'off', leadCard: 'faceUp', turnTime: '30' });
 });
 
 test('Flush rule on: a Flush on the deal wins immediately', () => {
@@ -391,6 +391,151 @@ test('save and restore a session mid-game', () => {
 });
 
 /* ---------------------------------------------------------------------------
+   Real Burns: play on until one is left holding cards, then the penalty round
+   --------------------------------------------------------------------------- */
+console.log('\nReal Burns');
+
+const REAL = { real: 'on' };
+// Rig the penalty deck: cards listed in the order they'll be turned over.
+const penaltyDeck = (s, list) => { s.penalty.deck = list.map(card).reverse(); };
+// Run the clock forward in small steps until a condition holds.
+function until(s, cond, from, limit) {
+  let t = from;
+  while (!cond() && t < from + (limit || 120000)) { t += 50; Burns.tick(s, t); }
+  assert(cond(), 'condition never met');
+  return t;
+}
+
+test('emptying your hand makes you safe, and the rest play on', () => {
+  const s = rigged({ hands: [['5H'], ['9H', '2S'], ['3H', '4S', '6C']], starter: 'KH', deck: [], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5H' }); act(s, 'p1', 'follow', { cardId: '9H' }); act(s, 'p2', 'follow', { cardId: '3H' });
+  eq(s.phase, 'reveal', 'the game goes on'); eq(s.out, ['p0']); eq(s.setResult.player, 'p1');
+  const v = Burns.view(s, 'p0');
+  eq(v.players[0].out, true); eq(v.players[0].place, 1); eq(v.real, true);
+  Burns.tick(s, 200);
+  eq(s.phase, 'lead'); eq(s.leader, 'p1');
+  eq(act(s, 'p0', 'draw', {}, 300).code, 'not-now', 'an out player has nothing to do');
+  act(s, 'p1', 'lead', { cardId: '2S' }, 300);
+  eq(act(s, 'p0', 'follow', { cardId: '5H' }, 300).ok, false);
+  eq(s.phase, 'follow', 'only players still in owe a card');
+  conservation(s);
+});
+
+test('a set winner who goes out passes the lead to the next player still in', () => {
+  const s = rigged({ hands: [['AH'], ['2H', '3S'], ['4H', '5S']], starter: 'KH', deck: [], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: 'AH' }); act(s, 'p1', 'follow', { cardId: '2H' }); act(s, 'p2', 'follow', { cardId: '4H' });
+  eq(s.setResult.player, 'p0'); eq(s.leadFrom, 'p0'); eq(s.nextLeader, 'p1');
+  Burns.tick(s, 200);
+  eq(s.phase, 'lead'); eq(s.leader, 'p1');
+  eq(Burns.view(s, 'p2').leadFrom, 'p0');
+});
+
+test('the last player holding cards loses; then the penalty round, clockwise from the loser', () => {
+  const s = rigged({ hands: [['5H'], ['9H', '2S', '7D'], ['3H', '4S']], starter: 'KH', deck: [], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5H' }); act(s, 'p1', 'follow', { cardId: '9H' }); act(s, 'p2', 'follow', { cardId: '3H' });
+  Burns.tick(s, 200);
+  act(s, 'p1', 'lead', { cardId: '2S' }, 300); act(s, 'p2', 'follow', { cardId: '4S' }, 300);
+  eq(s.out, ['p0', 'p2']); eq(s.loser, 'p1'); eq(s.phase, 'lost');
+  until(s, () => s.phase === 'penalty', 300);
+  eq(s.penalty.order, ['p2', 'p0'], 'winners take turns from the loser’s left');
+  eq(s.penalty.step, 'shuffle'); eq(s.penalty.shuffler, 'p2');
+  const v = Burns.view(s, 'p1');
+  eq(v.canStop, true); eq(Burns.view(s, 'p2').canStop, false);
+  conservation(s);
+});
+
+test('everyone still in goes out on the same set: the lowest card loses', () => {
+  const s = rigged({ hands: [['5H'], ['9H', '2S'], ['3H', '4S']], starter: 'KH', deck: [], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5H' }); act(s, 'p1', 'follow', { cardId: '9H' }); act(s, 'p2', 'follow', { cardId: '3H' });
+  Burns.tick(s, 200);
+  act(s, 'p1', 'lead', { cardId: '2S' }, 300); act(s, 'p2', 'follow', { cardId: '4S' }, 300);
+  eq(s.out, ['p0', 'p2']); eq(s.loser, 'p1', 'the 2 of spades was lowest');
+});
+
+test('the penalty round: Stop, a suit, cards turned over, soft and hard slaps', () => {
+  const s = rigged({ hands: [['5H'], ['9H', '2S', '7D'], ['3H', '4S']], starter: 'KH', deck: [], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5H' }); act(s, 'p1', 'follow', { cardId: '9H' }); act(s, 'p2', 'follow', { cardId: '3H' });
+  Burns.tick(s, 200);
+  act(s, 'p1', 'lead', { cardId: '2S' }, 300); act(s, 'p2', 'follow', { cardId: '4S' }, 300);
+  let t = until(s, () => s.phase === 'penalty', 300);
+  eq(act(s, 'p2', 'stop', {}, t + 2000).code, 'not-loser', 'only the loser calls Stop');
+  eq(act(s, 'p1', 'stop', {}, t + 100).code, 'wait', 'not the instant the shuffle starts');
+  assert(act(s, 'p1', 'stop', {}, t + 2000).ok, 'stop');
+  eq(s.penalty.step, 'suit');
+  eq(act(s, 'p1', 'suit', { suit: 'X' }, t + 2100).code, 'bad-suit');
+  eq(act(s, 'p0', 'suit', { suit: 'H' }, t + 2100).code, 'not-loser');
+  penaltyDeck(s, ['2S', '3D', 'KC', 'QD', '7H', 'AH']);
+  assert(act(s, 'p1', 'suit', { suit: 'H' }, t + 2100).ok, 'suit');
+  const json = JSON.stringify(Burns.view(s, 'p1'));
+  assert(!/"deck":\[\{/.test(json.split('"penalty"')[1] || ''), 'the order still to come stays hidden');
+  t = until(s, () => s.penalty.step === 'result', t + 2100);
+  eq(ids(s.penalty.drawn), ['2S', '3D', 'KC', 'QD', '7H'], 'stops at the first heart');
+  eq([s.penalty.soft, s.penalty.hard, s.penalty.lucky], [2, 2, false], 'black soft, red hard, the heart itself doesn’t count');
+  eq(Burns.view(s, 'p2').canNext, true);
+  eq(act(s, 'p1', 'next', {}, t + 100).code, 'not-yours', 'the winner says when they’re done');
+  assert(act(s, 'p2', 'next', {}, t + 100).ok, 'next');
+  eq(s.penalty.shuffler, 'p0'); eq(s.penalty.step, 'shuffle');
+  // second winner: a lucky first card
+  assert(act(s, 'p1', 'stop', {}, t + 2000).ok);
+  penaltyDeck(s, ['KS', '2H']);
+  assert(act(s, 'p1', 'suit', { suit: 'S' }, t + 2100).ok);
+  t = until(s, () => s.penalty.step === 'result', t + 2100);
+  eq([s.penalty.drawn.length, s.penalty.soft, s.penalty.hard, s.penalty.lucky], [1, 0, 0, true], 'first card matches: no slaps');
+  assert(act(s, 'p0', 'next', {}, t + 100).ok);
+  eq(s.phase, 'over'); eq(s.winReason, 'real'); eq(s.winners, ['p0', 'p2']);
+  const over = s.events.filter(e => e.type === 'gameOver')[0];
+  eq([over.loser, over.soft, over.hard], ['p1', 2, 2]);
+  eq(Burns.view(s, 'p0').penalty.results.map(r => [r.by, r.soft, r.hard, r.lucky]), [['p2', 2, 2, false], ['p0', 0, 0, true]]);
+  conservation(s);
+});
+
+test('penalty time limits: the shuffle stops, a suit is picked, and the round moves on by itself', () => {
+  const s = rigged({ hands: [['5H'], ['9H', '2S', '7D'], ['3H', '4S']], starter: 'KH', deck: [], options: REAL });
+  Burns.tick(s, 0);
+  act(s, 'p0', 'follow', { cardId: '5H' }); act(s, 'p1', 'follow', { cardId: '9H' }); act(s, 'p2', 'follow', { cardId: '3H' });
+  Burns.tick(s, 200);
+  act(s, 'p1', 'lead', { cardId: '2S' }, 300); act(s, 'p2', 'follow', { cardId: '4S' }, 300);
+  const t = until(s, () => s.phase === 'penalty', 300);
+  until(s, () => s.penalty.step === 'suit', t);
+  assert(s.events.some(e => e.type === 'penaltyStop' && e.auto), 'stopped by itself');
+  until(s, () => s.penalty.step !== 'suit', t);
+  assert(s.events.some(e => e.type === 'penaltySuit' && e.auto), 'suit picked by itself');
+  until(s, () => s.phase === 'over', t, 400000);
+  eq(s.penalty.results.length, 2);
+});
+
+test('Real Burns with the Flush rule: a Flush is safe at once; one player left loses straight away', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7S', '8H', '9H']], starter: 'KD', deck: ['QC'], options: { real: 'on', flush: 'on' } });
+  Burns.tick(s, 0);
+  eq(s.out, ['p0']); eq(s.players[0].hand.length, 0, 'the Flush is put aside'); eq(s.loser, 'p1'); eq(s.phase, 'lost');
+  conservation(s);
+  const t = until(s, () => s.phase === 'penalty', 0);
+  eq(s.penalty.order, ['p0']);
+  until(s, () => s.phase === 'over', t, 400000);
+  eq(s.winners, ['p0']);
+});
+
+test('Real Burns with the Flush rule: with two or more left, play goes on without the Flush', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7S', '8H', '9H'], ['10S', 'JS', 'QH', 'KH']], starter: 'AH', deck: ['QC'], options: { real: 'on', flush: 'on' } });
+  Burns.tick(s, 0);
+  eq(s.out, ['p0']); eq(s.phase, 'follow'); eq(s.suit, 'H');
+  eq(Burns.view(s, 'p0').canFollow, false);
+  act(s, 'p1', 'follow', { cardId: '8H' }); act(s, 'p2', 'follow', { cardId: 'KH' });
+  eq(s.phase, 'reveal', 'the set is decided without the Flush player');
+});
+
+test('Real Burns with the Flush rule: everyone holds a Flush, so nobody loses', () => {
+  const s = rigged({ hands: [['2S', '3H', '4C', '5D'], ['6S', '7H', '8C', '9D']], starter: 'AD', deck: [], options: { real: 'on', flush: 'on' } });
+  Burns.tick(s, 0);
+  eq(s.phase, 'over'); eq(s.loser, null); eq(s.winners, ['p0', 'p1']); eq(s.winReason, 'flush');
+});
+
+/* ---------------------------------------------------------------------------
    Simulations: all-bot games, plus games where one player never acts
    --------------------------------------------------------------------------- */
 console.log('\nSimulations');
@@ -430,7 +575,10 @@ function simulate({ seed, nPlayers, options, spam, idle }) {
       });
       if (s.phase === 'over') s.players.forEach(q => q.hand.forEach(c => K.add(c.id)));
       const v = sess.view(p.id, { sinceSeq: 0 });
-      walkCards(v, c => assert(K.has(c.id), p.id + ' can see ' + c.id + ' without knowing it (phase ' + s.phase + ')'));
+      // the penalty round's cards come from a fresh deck of their own, turned over for everyone
+      assert(!v.penalty || !('deck' in v.penalty), 'penalty deck order exposed');
+      const game = Object.assign({}, v, { penalty: null, events: v.events.filter(ev => !/^penalty/.test(ev.type)) });
+      walkCards(game, c => assert(K.has(c.id), p.id + ' can see ' + c.id + ' without knowing it (phase ' + s.phase + ')'));
       v.events.filter(ev => ev.type === 'draw').forEach(ev => assert(ev.matched === undefined, 'draw result made public'));
       if (s.phase === 'follow') {
         v.table.forEach(e => {
@@ -476,7 +624,33 @@ function simulate({ seed, nPlayers, options, spam, idle }) {
   stats.sets = st().setNo;
   stats.flush = st().winReason === 'flush';
   stats.time = clock.now();
+  if (options.real === 'on') realChecks(st(), stats);
   return stats;
+}
+
+/* A finished Real Burns game: everyone but the loser won, each winner had a
+   penalty turn, and every turn's slaps match the cards turned over. */
+function realChecks(s, stats) {
+  if (!s.loser) { assert(s.winReason === 'flush' && s.winners.length === s.players.length, 'no loser only when everyone held a Flush'); return; }
+  eq(s.winReason, 'real');
+  assert(s.winners.indexOf(s.loser) < 0, 'the loser is not a winner');
+  eq(s.winners.slice().sort(), s.players.map(p => p.id).filter(id => id !== s.loser).sort(), 'everyone else wins');
+  const P = s.penalty;
+  eq(P.results.map(r => r.by), P.order, 'every winner had a turn, in order');
+  P.results.forEach(r => {
+    const last = r.cards[r.cards.length - 1];
+    assert(last.suit === r.suit, 'turning over stops at the chosen suit');
+    const before = r.cards.slice(0, -1);
+    assert(before.every(c => c.suit !== r.suit), 'no earlier card of the suit');
+    eq(r.soft, before.filter(c => c.suit === 'S' || c.suit === 'C').length, 'soft slaps for black cards');
+    eq(r.hard, before.filter(c => c.suit === 'H' || c.suit === 'D').length, 'hard slaps for red cards');
+    eq(r.lucky, r.cards.length === 1, 'lucky only on a first-card match');
+    stats.turns = (stats.turns || 0) + 1;
+    stats.soft = (stats.soft || 0) + r.soft;
+    stats.hard = (stats.hard || 0) + r.hard;
+    stats.lucky = (stats.lucky || 0) + (r.lucky ? 1 : 0);
+  });
+  stats.lostWithCards = s.players.filter(p => p.id === s.loser)[0].hand.length > 0;
 }
 
 const configs = [];
@@ -526,6 +700,49 @@ configs.forEach(({ n, options, games, idle }, ci) => {
 if (simFail === 0) { passed++; console.log('  ✓ ' + total + ' simulated games finished with every invariant intact (' + ((Date.now() - t0) / 1000).toFixed(1) + 's)'); }
 else { failed++; console.log('  ✗ ' + simFail + ' simulated games failed'); }
 console.table(summary);
+
+/* Real Burns: all-bot games to the last player, and the penalty round. */
+const realSummary = {};
+let realFail = 0, realTotal = 0;
+const t1 = Date.now();
+[2, 3, 4, 5, 6].forEach((n, ni) => {
+  [{ real: 'on', flush: 'off', leadCard: 'faceUp', turnTime: '30' }, { real: 'on', flush: 'on', leadCard: 'suitOnly', turnTime: '15' }].forEach((options, oi) => {
+    const idle = oi === 1 && n >= 4;   // a person who never acts, in some games
+    const key = n + 'p flush ' + options.flush + (idle ? ' · idle player' : '');
+    const agg = { games: 0, sets: [], minutes: [], turns: 0, soft: 0, hard: 0, lucky: 0, emptyLosers: 0, noLoser: 0 };
+    const games = idle ? 12 : 120;
+    for (let g = 0; g < games; g++) {
+      const seed = 90000 + ni * 1000 + oi * 400 + g;
+      realTotal++;
+      try {
+        const r = simulate({ seed, nPlayers: n, options, spam: g % 5 === 0, idle });
+        agg.games++;
+        agg.sets.push(r.sets); agg.minutes.push(r.time / 60000);
+        agg.turns += r.turns || 0; agg.soft += r.soft || 0; agg.hard += r.hard || 0; agg.lucky += r.lucky || 0;
+        if (r.turns && !r.lostWithCards) agg.emptyLosers++;
+        if (!r.turns) agg.noLoser++;
+      } catch (e) {
+        realFail++;
+        if (realFail < 6) console.log('  ✗ Real Burns ' + key + ' seed ' + seed + ': ' + e.message);
+      }
+    }
+    const avg = a => a.length ? (a.reduce((x, y) => x + y, 0) / a.length) : 0;
+    realSummary[key] = {
+      games: agg.games,
+      avgSets: avg(agg.sets).toFixed(1),
+      avgMinutes: avg(agg.minutes).toFixed(1),
+      slapsPerTurn: agg.turns ? ((agg.soft + agg.hard) / agg.turns).toFixed(2) : '-',
+      softPerTurn: agg.turns ? (agg.soft / agg.turns).toFixed(2) : '-',
+      hardPerTurn: agg.turns ? (agg.hard / agg.turns).toFixed(2) : '-',
+      luckyPct: agg.turns ? Math.round(100 * agg.lucky / agg.turns) : '-',
+      tiedOutLosers: agg.emptyLosers,
+      noLoser: agg.noLoser
+    };
+  });
+});
+if (realFail === 0) { passed++; console.log('  ✓ ' + realTotal + ' Real Burns games played to a loser and through the penalty round (' + ((Date.now() - t1) / 1000).toFixed(1) + 's)'); }
+else { failed++; console.log('  ✗ ' + realFail + ' Real Burns games failed'); }
+console.table(realSummary);
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

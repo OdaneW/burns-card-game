@@ -328,7 +328,7 @@ test('a host who has gone quiet hands the room to someone who’s here', () => {
 
 test('a whole game of Bull with three people and a computer player', () => {
   const { io, core } = setup(13);
-  const all = { burns: 2, donkey: 1, bull: 1 };
+  const all = { burns: 3, donkey: 1, bull: 1 };
   join(core, 'a', T(1), 'Odane', { mode: 'bull', size: 4, engines: all });
   join(core, 'b', T(2), 'Tess', { engines: all });
   join(core, 'c', T(3), 'Ravi', { engines: all });
@@ -340,9 +340,35 @@ test('a whole game of Bull with three people and a computer player', () => {
   eq([st.mode, st.phase, st.me], ['bull', 'over', 'p1']);
 });
 
+test('Real Burns online: played to a loser, then every winner’s penalty turn', () => {
+  const { io, core } = setup(29);
+  const all = { burns: 3, donkey: 1, bull: 1 };
+  join(core, 'a', T(1), 'Odane', { mode: 'burns', size: 4, options: { real: 'on' }, engines: all });
+  join(core, 'b', T(2), 'Tess', { engines: all });
+  join(core, 'c', T(3), 'Ravi', { engines: all });
+  core.message('a', { t: 'start' });
+  eq(core.session.state.options.real, 'on', 'the host’s rule choice reaches the game');
+  let sawPenalty = false;
+  const seen = new Set();
+  for (let i = 0; i < 40 && core.room.phase === 'playing'; i++) {
+    playFor(core, io, ['a', 'b', 'c'], 60000);
+    const s = core.session.state;
+    if (s.phase === 'penalty') sawPenalty = true;
+    if (s.penalty) s.penalty.results.forEach(r => seen.add(r.by));
+  }
+  eq(core.room.phase, 'over');
+  const s = core.session.state;
+  assert(sawPenalty || s.penalty, 'there was a penalty round');
+  eq(s.winReason, 'real');
+  eq(s.penalty.results.map(r => r.by), s.penalty.order, 'every winner had a turn');
+  const v = last(io, 'b', 'state').view;
+  eq([v.mode, v.phase, v.loser, v.penalty.results.length], ['burns', 'over', s.loser, 3]);
+  assert(!('deck' in v.penalty), 'phones never see the order of the penalty deck');
+});
+
 test('apps without a room’s game are asked to update', () => {
   const { io, core } = setup();
-  const all = { burns: 2, donkey: 1, bull: 1 };
+  const all = { burns: 3, donkey: 1, bull: 1 };
   join(core, 'a', T(1), 'Host', { mode: 'donkey', engines: all });
   join(core, 'old', T(2), 'Old app');                         // an app from before Bull: no list of games
   eq(core.active().length, 2, 'an older app can still join a Donkey room');

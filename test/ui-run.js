@@ -362,6 +362,82 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (/^real-burns/.test(SCENARIO)) {
+      // Real Burns through the screen: play to a loser, then the penalty round.
+      // -lose: you're left holding cards (you call Stop and pick the suit);
+      // -win: you go out first and slap a computer player (you tap Next).
+      const lose = /lose/.test(SCENARIO);
+      const size = /small/.test(SCENARIO) ? { viewport: { width: 360, height: 640 } }
+        : /landscape/.test(SCENARIO) ? { viewport: { width: 844, height: 390 } } : { viewport: { width: 390, height: 844 } };
+      const tag = SCENARIO;
+      const p = await open(browser, { ctx: size, seed: lose ? 13 : 17, speed: 2,
+        settings: { format: 2, burns: { opponents: 3, options: { real: 'on' } } } });
+      await p.tap('[data-play="burns"]'); await sleep(300);
+      await shot(p, tag + '-01-setup');
+      await p.tap('#s-deal'); await sleep(250);
+      // lay out the hands so the test knows who loses
+      await p.evaluate(lose => {
+        const s = CT.App.session.state, suit = s.starter.suit;
+        let pool = s.deck.concat(...s.players.map(x => x.hand));
+        const take = (want, n) => { const out = []; pool = pool.filter(c => { if (out.length < n && want(c)) { out.push(c); return false; } return true; }); return out; };
+        s.players.forEach((pl, i) => {
+          pl.hand = lose ? (i === 0 ? take(c => c.suit !== suit, 6) : take(c => c.suit === suit, 1))
+            : (i === 0 ? take(c => c.suit === suit, 1) : take(() => true, 5));
+        });
+        s.deck = pool;
+      }, lose);
+      const st = () => p.evaluate(() => {
+        const s = CT.App.session, v = s.view('p0', { events: false });
+        const P = v.penalty;
+        return { phase: v.phase, canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw, canTake: v.canTake,
+          playable: v.playable, out: v.out, loser: v.loser, canStop: v.canStop, canSuit: v.canSuit, canNext: v.canNext,
+          step: P && P.step, turn: P && P.turn, stopReady: !!(P && P.stopFrom != null && s.now() >= P.stopFrom), drawn: P ? P.drawn.length : 0,
+          sheet: CT.App.sheet, results: P ? P.results.map(r => [r.by, r.soft, r.hard, r.lucky]) : [] };
+      });
+      const seen = {};
+      const once = async (key, name, wait) => { if (seen[key]) return; seen[key] = true; if (wait) await sleep(wait); await shot(p, tag + '-' + name); };
+      let guard = 0, s = await st();
+      while (s.sheet !== 'result' && guard++ < 4000) {
+        if (s.out.length && !seen.out) await once('out', '02-someone-safe', 500);
+        if (s.phase === 'lost') await once('lost', '03-lost', 900);
+        if (s.phase === 'penalty') {
+          const k = s.turn + ':' + s.step;
+          if (s.step === 'shuffle') await once('shuffle' + s.turn, '04-shuffle-t' + s.turn, 700);
+          if (s.step === 'suit') await once('suit' + s.turn, '05-suit-t' + s.turn, 300);
+          if (s.step === 'draw' && s.drawn >= 2) await once('draw' + s.turn, '06-draw-t' + s.turn, 0);
+          if (s.step === 'result') await once('result' + s.turn, '07-result-t' + s.turn, 700);
+          if (s.canStop && s.stopReady) { await sleep(900); await p.tap('#pen-stop'); await sleep(300); }
+          else if (s.canSuit) { await p.tap('[data-suit="H"]'); await sleep(300); }
+          else if (s.canNext) { await sleep(600); await p.tap('#pen-next'); await sleep(300); }
+          else await sleep(150);
+          void k;
+        } else if (s.canLead || s.canFollow) {
+          const id = s.playable[0];
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(150);
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } }); await sleep(250);
+        } else if (s.mustDraw) { await p.tap('#t-deck'); await sleep(560); }
+        else if (s.canTake) { const t = await p.$('[data-take]'); if (t) await t.tap(); await sleep(250); }
+        else await sleep(150);
+        s = await st();
+      }
+      await sleep(400);
+      await shot(p, tag + '-08-result');
+      const end = await p.evaluate(() => {
+        const v = CT.App.session.view('p0', { events: false });
+        return { loser: v.loser, winners: v.winners, reason: v.winReason, title: (document.querySelector('.sheet.result .wordmark') || {}).textContent,
+          why: (document.querySelector('.result-why') || {}).textContent, stats: localStorage.getItem('cardtable.stats.v1'),
+          log: CT.App.table.logItems.slice(-8).map(x => x.html.replace(/<[^>]+>/g, '')) };
+      });
+      console.log('  loser:', end.loser, '· winners:', end.winners, '· reason:', end.reason);
+      console.log('  turns:', JSON.stringify(s.results));
+      console.log('  result sheet:', end.title, '·', end.why);
+      console.log('  stats:', end.stats);
+      console.log('  play-by-play ends:', JSON.stringify(end.log));
+      await p.tap('#r-home'); await sleep(300);
+      console.log('  Back to games →', await p.evaluate(() => CT.App.screen));
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (/^bull-tutorial/.test(SCENARIO)) {
       // Follow the Bull tutorial from How to play to the end, trying a few wrong
       // moves and Previous on the way, on a phone (default), a small phone, a
@@ -570,6 +646,83 @@ async function playGame(p, tag, want) {
       await shot(p, tag + '-13-rules');
       checks.forEach(c => console.log('  ' + c));
       console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (SCENARIO === 'online-real') {
+      // Real Burns through the game server: three phones and a computer player,
+      // the host switches it on in the lobby, then the game and the penalty round.
+      const server = process.env.SERVER || 'ws://127.0.0.1:8787';
+      const storage = { 'cardtable.server': server };
+      const names = ['Odane', 'Tess', 'Ravi'];
+      const pages = [];
+      for (let i = 0; i < names.length; i++) pages.push(await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 51 + i, storage }));
+      const host = pages[0];
+      await host.tap('[data-online="create"]'); await sleep(300);
+      await host.tap('#overlay [data-mode="burns"]');
+      await host.fill('#o-name', names[0]);
+      await host.tap('#o-go');
+      await host.waitForSelector('.room-code', { timeout: 10000 });
+      const code = (await host.textContent('.room-code')).trim();
+      for (let i = 1; i < pages.length; i++) {
+        await pages[i].tap('[data-online="join"]'); await sleep(300);
+        await pages[i].fill('#o-code', code);
+        await pages[i].fill('#o-name', names[i]);
+        await pages[i].tap('#o-go');
+        await pages[i].waitForSelector('.room-code', { timeout: 10000 });
+      }
+      await sleep(500);
+      await host.tap('[data-l-size="4"]'); await sleep(300);
+      await host.tap('[data-l-opt="real"][data-val="on"]'); await sleep(500);
+      await shot(host, 'or-01-lobby-host');
+      await shot(pages[1], 'or-02-lobby-guest');
+      const guestSees = await pages[1].evaluate(() => CT.App.online.room.options.real);
+      await host.tap('#l-start');
+      for (const p of pages) await p.waitForSelector('#screen-table:not([hidden])', { timeout: 10000 });
+      const look = p => p.evaluate(() => {
+        const s = CT.App.session;
+        if (!s || !s.remote) return { none: true, sheet: CT.App.sheet };
+        const v = s.view(s.me, { events: false }), P = v.penalty;
+        return { me: s.me, phase: v.phase, sheet: CT.App.sheet, canLead: v.canLead, canFollow: v.canFollow, mustDraw: v.mustDraw, mayDraw: v.mayDraw,
+          canTake: v.canTake, playable: v.playable, canStop: v.canStop, canSuit: v.canSuit, canNext: v.canNext, loser: v.loser, out: v.out,
+          step: P && P.step, turn: P && P.turn, stopReady: !!(P && P.stopFrom != null && s.now() >= P.stopFrom) };
+      });
+      const busy = new Map(), shots = {};
+      const act = async (p, i, v) => {
+        if (v.none || v.phase === 'over' || v.sheet || busy.get(p) > Date.now()) return;
+        try {
+          if (v.phase === 'penalty') {
+            const k = v.turn + v.step;
+            if (!shots[i + k] && (v.canStop || v.canSuit || v.canNext || (v.step === 'draw' && i === 0))) { shots[i + k] = 1; await shot(p, 'or-p' + i + '-t' + v.turn + '-' + v.step); }
+            if (v.canStop && v.stopReady) { await sleep(400); await p.tap('#pen-stop', { timeout: 1500 }); busy.set(p, Date.now() + 800); }
+            else if (v.canSuit) { await p.tap('[data-suit="S"]', { timeout: 1500 }); busy.set(p, Date.now() + 800); }
+            else if (v.canNext) { await sleep(500); await p.tap('#pen-next', { timeout: 1500 }); busy.set(p, Date.now() + 800); }
+          } else if ((v.canLead || v.canFollow) && v.playable.length) {
+            const id = v.playable[Math.floor(Math.random() * v.playable.length)];
+            await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); await sleep(140);
+            await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 }, timeout: 1500 }); busy.set(p, Date.now() + 500);
+          } else if (v.mustDraw) { await p.tap('#t-deck', { timeout: 1500 }); busy.set(p, Date.now() + 650); }
+          else if (v.canTake) { const t = await p.$('[data-take]'); if (t) await t.tap(); busy.set(p, Date.now() + 500); }
+        } catch (e) { /* the moment passed */ }
+      };
+      const start = Date.now();
+      let guard = 0, vs = [], sawLost = false;
+      while (guard++ < 30000 && Date.now() - start < 9 * 60000) {
+        vs = [];
+        for (const p of pages) vs.push(await look(p));
+        if (vs.every(v => v.none || v.phase === 'over')) break;
+        if (!sawLost && vs[0].phase === 'lost') { sawLost = true; for (let i = 0; i < 3; i++) await shot(pages[i], 'or-lost-p' + i); }
+        for (let i = 0; i < pages.length; i++) await act(pages[i], i, vs[i]);
+        await sleep(40);
+      }
+      await sleep(3200);
+      const ends = await Promise.all(pages.map(p => p.evaluate(() => ({ sheet: CT.App.sheet, title: (document.querySelector('.sheet.result .wordmark') || {}).textContent,
+        why: (document.querySelector('.result-why') || {}).textContent }))));
+      for (let i = 0; i < 3; i++) await shot(pages[i], 'or-end-p' + i);
+      console.log('  guest sees Real Burns on in the lobby:', guestSees);
+      console.log('  game finished in', Math.round((Date.now() - start) / 1000), 's · loser', vs[0].loser, '· out', JSON.stringify(vs[0].out));
+      ends.forEach((e, i) => console.log('  phone ' + i + ': ' + e.sheet + ' · ' + e.title + ' · ' + e.why));
+      const errors = [].concat(...pages.map(p => p.errors));
+      console.log('  errors:', errors.length ? errors : 'none');
     }
 
     if (SCENARIO === 'online' || SCENARIO === 'online-burns' || SCENARIO === 'online-bull') {

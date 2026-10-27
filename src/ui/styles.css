@@ -908,6 +908,75 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 @keyframes stampIn { from { transform: rotate(-6deg) scale(2.2); opacity: 0; } to { transform: rotate(-6deg) scale(1); opacity: 1; } }
 @keyframes bullPulse { from { box-shadow: 0 3px 0 #A63F20, 0 0 0 0 rgba(240, 100, 60, 0); } to { box-shadow: 0 3px 0 #A63F20, 0 0 0 7px rgba(240, 100, 60, .3); } }
 
+/* ---------- Burns: Real Burns (safe players, the loser, the penalty round) ---------- */
+.seat.is-out { opacity: .62; }
+.seat.is-out .avatar { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px rgba(127, 209, 193, .75); }
+.seat.is-loser .avatar { box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--ember); }
+.seat-chip.ok { color: #9FE3D6; font-weight: 800; }
+.standings .loser { box-shadow: inset 0 0 0 1.5px var(--ember); }
+
+.pen { display: none; }
+#screen-table.pen-on .rail-zone, #screen-table.pen-on .me, #screen-table.pen-on .hand-wrap, #screen-table.pen-on .seat .slot { display: none; }
+@media (min-height: 760px) { .pen { --rail-cw: var(--hcw); } }   /* tall phones: bigger cards in the penalty round */
+#screen-table.pen-on .pen {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 10px 4px 14px; text-align: center;
+}
+.pen-head { display: grid; gap: 3px; justify-items: center; }
+.pen-eyebrow { font: 800 11px/1.2 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ember); }
+.pen-title { font: 400 30px/1.05 var(--font-display); color: var(--marigold); text-shadow: .05em .05em 0 var(--ember), .1em .1em 0 rgba(0, 0, 0, .35); }
+.pen-who { font: 700 14px/1.3 var(--font-ui); color: var(--ink-soft); }
+.pen-who .hl { color: var(--marigold); }
+.pen-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.pen-deck { position: relative; flex: none; width: calc(var(--rail-cw) + 40px); height: calc(var(--rail-cw) * 1.4 + 8px); transition: transform .3s; }
+.pen-deck[hidden] { display: none; }
+.pen-deck .card { --cw: var(--rail-cw); position: absolute; left: 20px; top: 4px; }
+.pen-deck .card:nth-child(1) { transform: rotate(-5deg); }
+.pen-deck .card:nth-child(2) { transform: rotate(3deg); }
+.pen-deck.shuffling .card:nth-child(2) { animation: riffleL .5s ease-in-out infinite; }
+.pen-deck.shuffling .card:nth-child(3) { animation: riffleR .5s ease-in-out .25s infinite; }
+.pen-deck.small { transform: scale(.66); margin: calc(var(--rail-cw) * -.24) 0; }
+@keyframes riffleL { 0%, 100% { transform: rotate(3deg); } 50% { transform: translateX(-20px) rotate(-10deg); } }
+@keyframes riffleR { 0%, 100% { transform: none; } 50% { transform: translateX(20px) rotate(10deg); } }
+.pen-suit { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 99px; background: var(--card); color: var(--suit-black); font: 800 13px/1.2 var(--font-ui); box-shadow: 0 4px 10px rgba(0, 0, 0, .25); }
+.pen-suit.red { color: var(--suit-red); }
+.pen-suit[hidden] { display: none; }
+.pen-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; padding: 0 8px; }
+.pen-row[hidden] { display: none; }
+.pen-row .card { --cw: calc(var(--rail-cw) * .86); animation: flipIn .4s ease-out both; }
+.pen-row.many { gap: 6px 0; padding-left: calc(var(--rail-cw) * .4); }
+.pen-row.many .card { margin-left: calc(var(--rail-cw) * -.4); }
+.pen-row .card.match { position: relative; z-index: 1; box-shadow: 0 0 0 3px #9FE3D6, 0 0 22px rgba(127, 209, 193, .65); }
+.pen-tally { display: flex; gap: 10px; justify-content: center; }
+.pen-tally[hidden] { display: none; }
+.pen-count { display: grid; justify-items: center; gap: 3px; min-width: 96px; padding: 8px 14px 9px; border-radius: 14px; background: rgba(6, 30, 29, .5); box-shadow: inset 0 0 0 1px var(--line); }
+.pen-count b { font: 400 32px/1 var(--font-display); color: var(--ink); }
+.pen-count.hard b { color: var(--ember); }
+.pen-count span { font: 800 10px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); }
+.pen-count b.bump { animation: tallyBump .34s cubic-bezier(.2, .8, .3, 1.5); }
+@keyframes tallyBump { from { transform: scale(1.7); } to { transform: none; } }
+.pen-say { font: 600 16px/1.4 var(--font-ui); max-width: 34ch; min-height: 1.4em; text-wrap: pretty; }
+.pen-say b { color: var(--marigold); font-weight: 800; }
+.pen-act { display: flex; justify-content: center; width: 100%; }
+.pen-act:empty { display: none; }
+.pen-stop { padding: 16px 46px; font: 400 27px/1 var(--font-display); background: var(--ember); color: #2A0E05; box-shadow: 0 4px 0 #A63F20, 0 12px 26px rgba(0, 0, 0, .3); animation: bullPulse .7s ease-in-out infinite alternate; }
+.pen-stop:disabled { opacity: .45; animation: none; }
+.pen-stop:active { transform: translateY(2px); }
+.pen-suits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 340px); }
+.pen-suitbtn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 10px; background: var(--card); color: var(--suit-black); font: 800 17px/1 var(--font-ui); box-shadow: 0 3px 0 var(--card-edge), 0 8px 18px rgba(0, 0, 0, .25); }
+.pen-suitbtn.red { color: var(--suit-red); }
+.pen-suitbtn .si { width: 22px; height: 22px; }
+.pen-suitbtn:active { transform: translateY(2px); }
+.pen-next { padding: 13px 32px; font-size: 17px; }
+.pen-wait { color: var(--ink-soft); font-weight: 700; }
+.pen-timer { font: 700 13px/1.2 var(--font-ui); color: #FFB59B; min-height: 1.2em; }
+.pen-timer:empty { display: none; }
+.pen-done { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; width: min(100%, 340px); }
+.pen-done[hidden] { display: none; }
+.pen-done li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 12px; border-radius: 10px; background: rgba(6, 30, 29, .4); font: 600 14px/1.2 var(--font-ui); }
+.pen-res { color: var(--ink-soft); }
+
 /* short screens (landscape phones): smaller cards, and the hand moves beside the table */
 @media (max-height: 560px) {
   :root { --hcw: 50px; --seat-cw: 32px; --me-cw: 40px; --rail-cw: 40px; }
@@ -935,6 +1004,22 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .dk-choices { grid-column: 2; grid-row: 3; }
   .dk-me { grid-column: 2; grid-row: 4; }
   .dk-handwrap { grid-row: 5; align-self: end; }
+  /* the penalty round: seats across the top, the round below in two columns */
+  #screen-table.pen-on .seats { grid-column: 1 / -1; }
+  #screen-table.pen-on .pen {
+    grid-column: 1 / -1; grid-row: 3 / -1;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; row-gap: 8px;
+    align-content: center; align-items: center; padding: 4px 4px 8px;
+  }
+  .pen-head, .pen-stage { grid-column: 1; }
+  .pen-head { grid-row: 1; }
+  .pen-stage { grid-row: 2 / span 4; }
+  .pen-tally, .pen-say, .pen-act, .pen-timer, .pen-done { grid-column: 2; justify-self: center; }
+  .pen-title { font-size: 24px; }
+  .pen-count { min-width: 82px; padding: 6px 12px; }
+  .pen-count b { font-size: 26px; }
+  .pen-suitbtn { padding: 10px 8px; font-size: 15px; }
+  .pen-stop { padding: 12px 38px; font-size: 23px; }
   .bl-table { grid-column: 1; grid-row: 2 / -1; min-height: 0; }
   #screen-table:has(.bl-table) { grid-template-rows: auto auto auto minmax(0, 1fr); }
   #screen-table:has(.bl-table) .status { grid-column: 2; grid-row: 2; }

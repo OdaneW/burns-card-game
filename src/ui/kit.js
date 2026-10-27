@@ -218,6 +218,10 @@
           case 'tick': this.tone(880, 0.06, 0.07, 'sine'); this.noise(0.02, 1200, 0.06); break;
           case 'nope': this.tone(330, 0.1, 0.09, 'triangle'); this.tone(262, 0.15, 0.09, 'triangle', 0.08); break;
           case 'slap': this.tone(140, 0.12, 0.16, 'sine'); this.noise(0.09, 700, 0.32); break;
+          // Real Burns: a soft slap, a hard slap, and cards being shuffled
+          case 'slapSoft': this.noise(0.06, 1400, 0.2); this.tone(220, 0.06, 0.05, 'sine'); break;
+          case 'slapHard': this.tone(110, 0.14, 0.2, 'sine'); this.noise(0.11, 600, 0.42); this.noise(0.05, 1800, 0.12, 0.01); break;
+          case 'riffle': for (var r = 0; r < 7; r++) this.noise(0.025, 2600 + r * 90, 0.07, r * 0.045); break;
           case 'thud': this.tone(120, 0.09, 0.08, 'sine'); this.noise(0.06, 600, 0.14); break;
           case 'bull':   // a short, low call: two notes and a thump
             this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;

@@ -42,8 +42,13 @@
     return null;
   }
 
+  /* Real Burns: once every person is out, the computer players finish quickly. */
+  function quick(v) {
+    return !!(v.out && v.out.length) && !v.players.some(function (p) { return !p.isBot && !p.out; });
+  }
+
   function chooseLead(v, rnd) {
-    var opps = v.players.filter(function (p) { return p.id !== v.me; });
+    var opps = v.players.filter(function (p) { return p.id !== v.me && !p.out; });
     var seen = seenIds(v);
     var deckEmpty = v.deckCount === 0;
     var bySuit = {};
@@ -124,6 +129,10 @@
   var BurnsBot = {
     /* What this bot needs to do right now; the key changes whenever a new decision is due. */
     intent: function (v) {
+      // the penalty round (Real Burns)
+      if (v.canStop) return { kind: 'stop', key: 'S' + v.penalty.turn };
+      if (v.canSuit) return { kind: 'suit', key: 'U' + v.penalty.turn };
+      if (v.canNext) return { kind: 'next', key: 'N' + v.penalty.turn };
       var drew = v.canDraw || v.canFollow ? me(v).drew : 0;
       if (v.canLead) return { kind: 'lead', key: 'L' + v.setNo };
       if (v.mustDraw) return { kind: 'draw', key: 'D' + v.setNo + ':' + drew, first: drew === 0 };
@@ -134,18 +143,29 @@
     },
 
     /* Human-like thinking time, in ms. */
-    delay: function (intent, v, rnd) {
+    delay: function (intent, v, rnd, now) {
+      var fast = quick(v) ? 0.45 : 1;
       switch (intent.kind) {
-        case 'lead': return 900 + rnd() * 1300;
-        case 'follow': return 650 + rnd() * 1500;
-        case 'draw': return intent.first ? 450 + rnd() * 500 : v.timing.drawCooldownMs + 60 + rnd() * 380;
-        case 'drawOrPlay': return intent.first ? 650 + rnd() * 1500 : v.timing.drawCooldownMs + 250 + rnd() * 600;
-        case 'take': return 1400 + rnd() * 4800;
+        case 'stop': {
+          // let the shuffle run a little, then call it
+          var from = v.penalty && v.penalty.stopFrom != null && now != null ? Math.max(0, v.penalty.stopFrom - now) : 0;
+          return from + 700 + rnd() * 3300;
+        }
+        case 'suit': return 1100 + rnd() * 1600;
+        case 'next': return 3800 + rnd() * 1200;   // time for the slaps
+        case 'lead': return (900 + rnd() * 1300) * fast;
+        case 'follow': return (650 + rnd() * 1500) * fast;
+        case 'draw': return intent.first ? (450 + rnd() * 500) * fast : v.timing.drawCooldownMs + 60 + rnd() * 380 * fast;
+        case 'drawOrPlay': return intent.first ? (650 + rnd() * 1500) * fast : v.timing.drawCooldownMs + (250 + rnd() * 600) * fast;
+        case 'take': return (1400 + rnd() * 4800) * fast;
       }
       return 800;
     },
 
     decide: function (v, memory, rnd) {
+      if (v.canStop) return { type: 'stop', payload: {} };
+      if (v.canSuit) return { type: 'suit', payload: { suit: CT.SUITS[Math.floor(rnd() * CT.SUITS.length)] } };
+      if (v.canNext) return { type: 'next', payload: {} };
       if (v.canLead) {
         var lead = chooseLead(v, rnd);
         return lead ? { type: 'lead', payload: { cardId: lead.id } } : null;

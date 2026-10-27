@@ -121,6 +121,24 @@
         '</div>' +
         '<div class="status" id="t-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
       '</div>' +
+      // Real Burns: the penalty round takes over from the table once the loser is known
+      '<section class="pen" id="t-pen" aria-label="Penalty round">' +
+        '<header class="pen-head"><p class="pen-eyebrow">Real Burns · penalty round</p>' +
+          '<h2 class="pen-title" id="pen-title"></h2><p class="pen-who" id="pen-who"></p></header>' +
+        '<div class="pen-stage">' +
+          '<div class="pen-deck" id="pen-deck" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></div>' +
+          '<span class="pen-suit" id="pen-suit" hidden></span>' +
+          '<div class="pen-row" id="pen-row"></div>' +
+        '</div>' +
+        '<div class="pen-tally" id="pen-tally" hidden>' +
+          '<span class="pen-count soft"><b id="pen-soft">0</b><span>soft · black</span></span>' +
+          '<span class="pen-count hard"><b id="pen-hard">0</b><span>hard · red</span></span>' +
+        '</div>' +
+        '<p class="pen-say" id="pen-say" aria-live="polite"></p>' +
+        '<div class="pen-act" id="pen-act"></div>' +
+        '<p class="pen-timer" id="pen-timer"></p>' +
+        '<ol class="pen-done" id="pen-done"></ol>' +
+      '</section>' +
       '<div class="me" id="t-me">' +
         '<div class="me-info"><span class="me-name">You' + UI.icon.flame + '</span><span class="me-count" id="t-mycount"></span></div>' +
         '<div class="slot" id="slot-' + me + '"></div>' +
@@ -177,6 +195,28 @@
       handWrap: this.root.querySelector('#t-handwrap'),
       hand: this.root.querySelector('#t-hand')
     };
+    var $p = function (id) { return self.root.querySelector('#' + id); };
+    this.pen = {
+      root: $p('t-pen'), title: $p('pen-title'), who: $p('pen-who'), deck: $p('pen-deck'), suit: $p('pen-suit'),
+      row: $p('pen-row'), tally: $p('pen-tally'), soft: $p('pen-soft'), hard: $p('pen-hard'),
+      say: $p('pen-say'), act: $p('pen-act'), timer: $p('pen-timer'), done: $p('pen-done')
+    };
+    this.pen.act.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.suit) self.penaltyMove('suit', { suit: b.dataset.suit });
+      else if (b.id === 'pen-next') self.penaltyMove('next', {});
+    });
+    // Stop counts the moment it's pressed
+    this.pen.act.addEventListener('pointerdown', function (e) {
+      var b = e.target.closest('#pen-stop');
+      if (!b || b.disabled) return;
+      e.preventDefault();
+      self.penaltyMove('stop', {});
+    });
+    this.pen.act.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.id === 'pen-stop') { e.preventDefault(); self.penaltyMove('stop', {}); }
+    });
     this.renderAudio();
 
     // input
@@ -222,6 +262,7 @@
     if (!this.quiet) this.react(events, v);
     var self = this;
     events.forEach(function (e) { self.logEvent(e, v); });
+    if (events.some(function (e) { return e.type === 'out'; })) this.renderStatus(v);   // "… is out and safe!"
     if (events.length) this.lastSeq = events[events.length - 1].seq;
     this.first = false;
     this.quiet = false;
@@ -362,11 +403,18 @@
     this.renderStatus(v);
     this.renderMe(v, plan);
     this.renderHand(v);
+    this.renderPenalty(v);
   };
 
   BurnsTable.prototype.renderTop = function (v) {
-    this.el.set.textContent = v.phase === 'dealing' ? 'Dealing' : 'Set ' + v.setNo;
+    this.el.set.textContent = v.phase === 'dealing' ? 'Dealing'
+      : v.phase === 'penalty' || (v.phase === 'over' && v.winReason === 'real') ? 'Penalty round' : 'Set ' + v.setNo;
   };
+
+  function ordinal(n) {
+    var s = ['th', 'st', 'nd', 'rd'], m = n % 100;
+    return n + (s[(m - 20) % 10] || s[m] || s[0]);
+  }
 
   BurnsTable.prototype.entryFor = function (v, pid) {
     for (var i = 0; i < v.table.length; i++) if (v.table[i].owner === pid) return v.table[i];
@@ -381,9 +429,11 @@
       var s = self.seatEls[p.id];
       if (!s) return;
       s.count.textContent = p.handCount;
-      s.seat.setAttribute('aria-label', p.name + ', ' + p.handCount + ' cards');
+      s.seat.setAttribute('aria-label', p.name + ', ' + (p.out ? 'out and safe' : p.handCount + ' cards') + (v.loser === p.id ? ', lost' : ''));
       s.seat.classList.toggle('is-leader', p.isLeader);
       s.seat.classList.toggle('is-active', self.isActive(v, p));
+      s.seat.classList.toggle('is-out', !!p.out);
+      s.seat.classList.toggle('is-loser', v.loser === p.id);
       var chip = self.chipFor(v, p);
       s.chip.textContent = chip.text;
       s.chip.className = 'seat-chip' + (chip.tone ? ' ' + chip.tone : '');
@@ -393,14 +443,26 @@
   };
 
   BurnsTable.prototype.isActive = function (v, p) {
+    if (p.out) return false;
     if (v.phase === 'lead') return p.isLeader;
     if (v.phase === 'follow') return !p.isLeader && !p.committed && !p.isTaker;
     if (v.phase === 'take') return p.isTaker && !p.took;
+    if (v.phase === 'penalty' && v.penalty) {
+      var P = v.penalty;
+      return P.step === 'shuffle' || P.step === 'suit' ? p.id === v.loser : P.step === 'result' && p.id === P.shuffler;
+    }
     return false;
   };
 
   BurnsTable.prototype.chipFor = function (v, p) {
     var won = v.setResult && v.setResult.player === p.id && (v.phase === 'reveal' || v.phase === 'over');
+    // Real Burns: who's safe, who lost, and whose turn it is in the penalty round
+    if (v.loser === p.id && (v.phase === 'lost' || v.phase === 'penalty' || v.phase === 'over')) return { text: 'lost', tone: 'warn' };
+    if (v.phase === 'penalty' && v.penalty && v.penalty.shuffler === p.id) {
+      var step = v.penalty.step;
+      return { text: step === 'shuffle' ? 'shuffling' : step === 'result' ? 'slapping' : 'turning over', tone: 'hot' };
+    }
+    if (p.out) return { text: 'safe · ' + ordinal(p.place), tone: 'ok' };
     switch (v.phase) {
       case 'lead': return p.isLeader ? { text: 'choosing…', tone: 'hot' } : { text: '' };
       case 'follow':
@@ -460,7 +522,7 @@
       }
       st.flip.style.visibility = this.hidden['slot:' + pid] ? 'hidden' : '';
 
-      var won = v.setResult && v.setResult.player === pid && (v.phase === 'reveal' || v.phase === 'over');
+      var won = v.setResult && v.setResult.player === pid && (v.phase === 'reveal' || v.phase === 'over' || v.phase === 'lost');
       slotEl.classList.toggle('winner', !!won);
       slotEl.classList.toggle('gone', !!entry.gone);
       var takeable = v.canTake && card && !entry.takenBy;
@@ -534,6 +596,7 @@
     }
     if (v.phase === 'take') { label.text = 'Deck empty'; label.tone = 'ember'; }
     if (v.phase === 'reveal' && v.setResult) { label.text = v.setResult.player === this.me ? 'You win it' : this.name(v.setResult.player) + ' wins'; label.tone = 'ember'; }
+    if (v.phase === 'lost') { label.text = v.loser === this.me ? 'You lose' : this.name(v.loser) + ' loses'; label.tone = 'ember'; }
 
     if (content.dataset.key !== key) {
       content.dataset.key = key;
@@ -593,15 +656,24 @@
     var P = s ? UI.suit(s) + ' ' + UI.suitPlural(s) : '';
     var one = s ? UI.suitSingle(s) : '';
     var secs = ' <span class="secs"></span>';
-    var waitingOn = v.players.filter(function (p) { return p.id !== v.leader && !p.committed && !p.isTaker && p.id !== me; })
+    var waitingOn = v.players.filter(function (p) { return p.id !== v.leader && !p.committed && !p.isTaker && p.id !== me && !p.out; })
       .map(function (p) { return self.name(p.id); });
+    var leadWhy = v.leadFrom ? this.name(v.leadFrom) + ' went out, so ' + this.name(v.leader, false) + ' leads.' : this.name(v.leader) + ' won the last set.';
+
+    // Real Burns: you're out and safe, watching the rest play on
+    if (v.real && mine && mine.out && (v.phase === 'lead' || v.phase === 'follow' || v.phase === 'take')) {
+      var safe = '<span class="hl">You’re safe</span> · ' + ordinal(mine.place) + ' out.';
+      if (v.phase === 'lead') return { main: safe, sub: this.name(v.leader) + ' is choosing a suit. The rest play on until one is left holding cards.' };
+      if (v.phase === 'follow') return { main: safe, sub: waitingOn.length ? 'Waiting for ' + list(waitingOn) + '.' : 'The rest play on until one is left holding cards.' };
+      return { main: safe, sub: 'The deck is empty, so some pick up from the set.' };
+    }
 
     switch (v.phase) {
       case 'dealing':
-        return { main: 'Dealing…', sub: v.flushRule ? 'Four cards each. A Flush (one of every suit) wins on the spot.' : 'Four cards each. The face-up starter card sets the first suit.' };
+        return { main: 'Dealing…', sub: v.flushRule ? (v.real ? 'Four cards each. A Flush (one of every suit) is safe on the spot.' : 'Four cards each. A Flush (one of every suit) wins on the spot.') : 'Four cards each. The face-up starter card sets the first suit.' };
       case 'lead':
-        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.' + secs, sub: 'Its suit is the one everyone must follow.' };
-        return { main: this.name(v.leader) + ' is choosing a suit…', sub: this.name(v.leader) + ' won the last set.' };
+        if (v.canLead) return { main: '<span class="hl">Your lead.</span> Play any card.' + secs, sub: v.leadFrom ? this.name(v.leadFrom) + ' went out, so you lead. Its suit is the one everyone must follow.' : 'Its suit is the one everyone must follow.' };
+        return { main: this.name(v.leader) + ' is choosing a suit…', sub: leadWhy };
       case 'follow': {
         var led = v.table.filter(function (e) { return e.via === 'lead'; })[0];
         var intro = v.setNo === 1 ? 'The starter card sets the suit.'
@@ -641,18 +713,173 @@
       }
       case 'reveal': {
         var r = v.setResult;
-        if (!r || !r.card) return { main: this.name(r && r.player) + ' keeps the lead.', sub: '' };
-        if (r.player === me) return { main: '<span class="hl">You win the set</span> with ' + UI.cardText(r.card) + '.', sub: 'You lead next.' };
-        return { main: this.name(r.player) + ' wins the set with ' + UI.cardText(r.card) + '.', sub: this.name(r.player) + ' leads next.' };
+        var next = v.nextLeader || (r && r.player);
+        var leadsNext = next === me ? 'You lead next.' : this.name(next) + ' leads next.';
+        // Real Burns: anyone who just went out is safe
+        var gone = this.justOut && this.justOut.set === v.setNo ? this.justOut.players : [];
+        var safeNow = !gone.length ? '' : gone.indexOf(me) >= 0
+          ? (gone.length > 1 ? 'You and ' + list(gone.filter(function (id) { return id !== me; }).map(function (id) { return self.name(id); })) + ' are' : 'You’re') + ' out and safe! '
+          : list(gone.map(function (id) { return self.name(id); })) + (gone.length > 1 ? ' are' : ' is') + ' out and safe! ';
+        if (!r || !r.card) return { main: this.name(next) + ' keeps the lead.', sub: safeNow };
+        if (r.player === me) return { main: '<span class="hl">You win the set</span> with ' + UI.cardText(r.card) + '.', sub: safeNow + leadsNext };
+        return { main: this.name(r.player) + ' wins the set with ' + UI.cardText(r.card) + '.', sub: safeNow + leadsNext };
+      }
+      case 'lost': {
+        var iLost = v.loser === me;
+        var winners = v.players.filter(function (p) { return p.id !== v.loser; }).length;
+        return {
+          main: iLost ? '<span class="em">You’re left holding cards. You lose!</span>' : '<span class="hl">' + this.name(v.loser) + ' is left holding cards and loses!</span>',
+          sub: 'Next, the penalty round: ' + (winners === 1 ? 'one turn of slaps.' : 'every winner takes a turn.')
+        };
       }
       case 'over': {
         var w = (v.winners || []).map(function (id) { return self.name(id); });
         var iWon = (v.winners || []).indexOf(me) >= 0;
+        if (v.winReason === 'real') return { main: v.loser === me ? '<span class="em">You lost.</span>' : this.name(v.loser) + ' lost.', sub: 'Everyone else wins.' };
         if (v.winReason === 'flush') return { main: (iWon ? '<span class="hl">Flush! You win.</span>' : 'Flush! ' + list(w) + (w.length > 1 ? ' win.' : ' wins.')), sub: 'All four suits on the deal.' };
         return { main: iWon ? '<span class="hl">You emptied your hand. You win!</span>' : list(w) + ' emptied their hand and wins.', sub: '' };
       }
     }
     return { main: '', sub: '' };
+  };
+
+  /* ---------- Real Burns: the penalty round ---------- */
+
+  function slapsText(soft, hard) {
+    var parts = [];
+    if (soft) parts.push(soft + ' soft slap' + (soft === 1 ? '' : 's'));
+    if (hard) parts.push(hard + ' hard slap' + (hard === 1 ? '' : 's'));
+    return parts.length ? parts.join(' and ') : 'no slaps';
+  }
+
+  BurnsTable.prototype.renderPenalty = function (v) {
+    var on = !!v.penalty && (v.phase === 'penalty' || (v.phase === 'over' && v.winReason === 'real'));
+    this.root.classList.toggle('pen-on', on);
+    if (!on) return;
+    var P = v.penalty, me = this.me, el = this.pen, self = this;
+    var iLost = v.loser === me, mineTurn = P.shuffler === me;
+    var loser = this.name(v.loser), shuffler = P.shuffler ? this.name(P.shuffler) : '';
+    var step = P.step, n = P.order.length;
+
+    el.title.innerHTML = iLost ? 'You lost' : loser + ' lost';
+    el.who.innerHTML = step === 'done' ? 'Every winner has had a turn.'
+      : 'Turn ' + (P.turn + 1) + ' of ' + n + ' · ' + (mineTurn ? '<span class="hl">your turn</span>' : shuffler + '’s turn');
+
+    // the deck: shuffling until Stop, then waiting for the suit
+    el.deck.hidden = step === 'done';
+    el.deck.classList.toggle('shuffling', step === 'shuffle');
+    el.deck.classList.toggle('small', step === 'draw' || step === 'result');
+    el.suit.hidden = !P.suit || step === 'done';
+    if (P.suit) el.suit.innerHTML = 'Looking for ' + UI.suitSvg(P.suit) + ' ' + UI.suitPlural(P.suit);
+    el.suit.className = 'pen-suit' + (P.suit && UI.isRed(P.suit) ? ' red' : '');
+
+    // the cards turned over this turn
+    var rowKey = P.turn + ':' + (P.suit || '');
+    if (this.penRowKey !== rowKey) { this.penRowKey = rowKey; el.row.innerHTML = ''; }
+    var have = el.row.children.length;
+    P.drawn.forEach(function (c, i) {
+      if (i < have) return;
+      var card = UI.makeCard(c);
+      if (c.suit === P.suit) card.classList.add('match');
+      if (self.quiet) card.style.animation = 'none';
+      el.row.appendChild(card);
+    });
+    el.row.classList.toggle('many', P.drawn.length > 6);
+    el.row.hidden = !P.drawn.length || step === 'done';
+
+    // the count so far
+    el.tally.hidden = !(step === 'draw' || step === 'result');
+    this.bumpCount(el.soft, P.soft);
+    this.bumpCount(el.hard, P.hard);
+
+    // what's happening, and what (if anything) you can do
+    var say = '', actKey = step + ':' + P.turn, act = '';
+    if (step === 'shuffle') {
+      say = iLost ? '<b>Say stop</b> whenever you like.' : (mineTurn ? 'You’re shuffling. ' : shuffler + ' is shuffling. ') + loser + ' says when to stop.';
+      if (v.canStop) { act = '<button class="btn pen-stop" id="pen-stop" type="button">Stop!</button>'; actKey += ':stop'; }
+    } else if (step === 'suit') {
+      say = iLost ? 'Name a suit. Every card turned over before it is a slap: <b>black soft, red hard</b>.' : loser + ' is naming a suit…';
+      if (v.canSuit) {
+        act = '<div class="pen-suits">' + ['H', 'S', 'D', 'C'].map(function (s) {
+          return '<button class="btn pen-suitbtn' + (UI.isRed(s) ? ' red' : '') + '" type="button" data-suit="' + s + '">' + UI.suitSvg(s) + '<span>' + UI.suitPlural(s).charAt(0).toUpperCase() + UI.suitPlural(s).slice(1) + '</span></button>';
+        }).join('') + '</div>';
+        actKey += ':suit';
+      }
+    } else if (step === 'draw') {
+      say = (mineTurn ? 'You turn' : shuffler + ' turns') + ' cards over until a ' + UI.suit(P.suit) + ' ' + UI.suitSingle(P.suit) + ' appears…';
+    } else if (step === 'result') {
+      var giver = mineTurn ? 'you' : shuffler;
+      if (P.lucky) say = '<b>Lucky!</b> The first card was a ' + UI.suit(P.suit) + ' ' + UI.suitSingle(P.suit) + ', so ' + (iLost ? 'no slaps from ' + giver : loser + ' gets no slaps from ' + giver) + '.';
+      else say = '<b>' + (mineTurn ? 'You give ' + loser : shuffler + ' gives ' + (iLost ? 'you' : loser)) + ' ' + slapsText(P.soft, P.hard) + '.</b>';
+      if (v.canNext) { act = '<button class="btn btn-primary pen-next" id="pen-next" type="button">' + (P.turn + 1 < n ? 'Next turn' : 'Finish') + '</button>'; actKey += ':next'; }
+      else if (!this.isBotSeat(v, P.shuffler)) act = '<p class="pen-wait">' + (iLost ? 'Hold out your hand…' : 'Waiting for ' + shuffler + '…') + '</p>';
+      actKey += ':' + act.length;
+    } else if (step === 'done') {
+      var t = { soft: 0, hard: 0 };
+      P.results.forEach(function (r) { t.soft += r.soft; t.hard += r.hard; });
+      say = (iLost ? 'In all, you take ' : 'In all, ' + loser + ' takes ') + slapsText(t.soft, t.hard) + '.';
+    }
+    if (el.say.innerHTML !== say) el.say.innerHTML = say;
+    if (this.penActKey !== actKey) { this.penActKey = actKey; el.act.innerHTML = act; this.penaltyFrame(); }
+
+    // earlier turns
+    var done = P.results.slice(0, step === 'result' ? -1 : P.results.length);
+    var doneKey = done.length + ':' + step;
+    if (this.penDoneKey !== doneKey) {
+      this.penDoneKey = doneKey;
+      el.done.innerHTML = done.map(function (r) {
+        return '<li><span>' + self.name(r.by) + '</span><span class="pen-res">' + (r.lucky ? 'lucky: no slaps' : slapsText(r.soft, r.hard).replace(/ slaps?/g, '')) + '</span></li>';
+      }).join('');
+      el.done.hidden = !done.length;
+    }
+  };
+
+  BurnsTable.prototype.isBotSeat = function (v, pid) {
+    var p = v.players.filter(function (x) { return x.id === pid; })[0];
+    return !!(p && p.isBot);
+  };
+
+  /* A slap count that just went up gives a little jump. */
+  BurnsTable.prototype.bumpCount = function (el, n) {
+    var was = Number(el.textContent);
+    if (was === n) return;
+    el.textContent = String(n);
+    if (n > was && !this.quiet) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  };
+
+  /* ~20×/s: Stop comes alive once the shuffle has had a moment, and the
+     loser sees how long they have before the game decides for them. */
+  BurnsTable.prototype.penaltyFrame = function () {
+    var v = this.v;
+    if (!v || !v.penalty || v.phase !== 'penalty') return;
+    var P = v.penalty, now = this.session.now();
+    var stop = this.pen.act.querySelector('#pen-stop');
+    if (stop) {
+      var ready = P.stopFrom == null || now >= P.stopFrom;
+      if (stop.disabled === ready) stop.disabled = !ready;
+    }
+    var text = '';
+    var left = P.endsAt != null ? Math.max(0, P.endsAt - now) : null;
+    if (left != null && left <= 5000 && v.loser === this.me && (P.step === 'shuffle' || P.step === 'suit')) {
+      var s = Math.ceil(left / 1000);
+      text = P.step === 'shuffle' ? 'The shuffle stops by itself in ' + s + 's' : 'A suit is picked for you in ' + s + 's';
+    }
+    if (this.pen.timer.textContent !== text) this.pen.timer.textContent = text;
+    // the sound of shuffling
+    if (P.step === 'shuffle') {
+      var t = performance.now();
+      if (!this.riffleAt || t - this.riffleAt > 1100) { this.riffleAt = t; UI.Sound.play('riffle'); }
+    }
+  };
+
+  BurnsTable.prototype.penaltyMove = function (type, payload) {
+    var v = this.v;
+    if (!v || !v.penalty) return;
+    UI.Sound.unlock();
+    if (type === 'stop') { UI.Sound.play('tick'); UI.buzz(20); }
+    this.send(type, payload, function (res) {
+      if (!res.ok && res.code !== 'wait') { UI.toast(UI.esc(res.message)); UI.Sound.play('nope'); }
+    });
   };
 
   BurnsTable.prototype.renderStatus = function (v) {
@@ -664,7 +891,7 @@
   BurnsTable.prototype.renderMe = function (v, plan) {
     var mine = this.mine(v);
     this.el.me.classList.toggle('is-leader', !!(mine && mine.isLeader));
-    this.el.myCount.textContent = v.hand.length === 1 ? '1 card' : v.hand.length + ' cards';
+    this.el.myCount.textContent = mine && mine.out ? 'safe · ' + ordinal(mine.place) : v.hand.length === 1 ? '1 card' : v.hand.length + ' cards';
     this.renderSlot(this.el.mySlot, this.me, v, plan, this.revealCount || 0);
     var sel = this.selected && v.playable.indexOf(this.selected) >= 0 ? this.selected : null;
     var card = sel && v.hand.filter(function (c) { return c.id === sel; })[0];
@@ -744,6 +971,7 @@
   BurnsTable.prototype.frame = function () {
     var v = this.v;
     if (!v) return;
+    this.penaltyFrame();
     var c = this.clock(v);
     var lead = this.el.lead;
     // the ring is an <svg>, which has no .hidden property: toggle the attribute
@@ -913,6 +1141,22 @@
           var iWon = e.winners.indexOf(me) >= 0;
           setTimeout(function () { UI.Sound.play(iWon ? 'victory' : 'lose'); }, e.reason === 'flush' ? 1200 : 1500);
           break;
+        // Real Burns
+        case 'out':
+          if (e.players.indexOf(me) >= 0) setTimeout(function () { UI.Sound.play('win'); }, e.flush ? 1200 : 700);
+          break;
+        case 'loser':
+          setTimeout(function () { UI.Sound.play(e.player === me ? 'lose' : 'alert'); }, 600);
+          if (e.player === me) UI.buzz(80);
+          break;
+        case 'penaltyStop':
+          UI.Sound.play('thud');
+          break;
+        case 'penaltyCard':
+          if (e.match) UI.Sound.play(e.n === 1 ? 'victory' : 'flip');
+          else UI.Sound.play(UI.isRed(e.card.suit) ? 'slapHard' : 'slapSoft');
+          if (!e.match && v.loser === me) UI.buzz(UI.isRed(e.card.suit) ? 40 : 15);
+          break;
       }
     });
   };
@@ -991,9 +1235,43 @@
         break;
       case 'gameOver':
         if (e.reason === 'empty') this.pushLog(list(e.winners.map(N)) + (e.winners[0] === me ? ' emptied your hand and won!' : ' emptied their hand and won.'), 'win');
+        if (e.reason === 'real') this.pushLog((e.loser === me ? 'You lost and take ' : N(e.loser) + ' lost and takes ') + slapsText(e.soft, e.hard) + ' in all.', 'win');
+        break;
+      // Real Burns
+      case 'out':
+        this.pushLog(list(e.players.map(function (p, i) { return N(p) + ' (' + ordinal(e.places[i]) + ')'; })) +
+          (e.players.length > 1 ? ' are' : e.players[0] === me ? ' are' : ' is') + ' out and safe' + (e.flush ? ' with a Flush.' : '.'), 'win');
+        break;
+      case 'loser':
+        this.pushLog((e.player === me ? 'You’re' : N(e.player) + ' is') + ' left holding cards and ' + (e.player === me ? 'lose.' : 'loses.'), 'set');
+        break;
+      case 'penaltyStart':
+        this.pushLog('Penalty round: ' + list(e.order.map(N)) + (e.order.length > 1 ? ' each take a turn.' : ' takes a turn.'), 'set');
+        break;
+      case 'penaltyTurn':
+        this.pushLog((e.shuffler === me ? 'You shuffle.' : N(e.shuffler) + ' shuffles.'));
+        break;
+      case 'penaltyStop':
+        this.pushLog(e.auto ? 'The shuffle stopped by itself.' : N(e.player) + (e.player === me ? ' say' : ' says') + ' “Stop!”');
+        break;
+      case 'penaltySuit':
+        this.pushLog((e.auto ? 'A suit was picked for ' + (e.player === me ? 'you' : N(e.player)) + ': ' : (e.player === me ? 'You pick ' : N(e.player) + ' picks ')) + UI.suit(e.suit) + ' ' + UI.suitPlural(e.suit) + '.');
+        this.penLog = this.pushLog('');
+        this.penCards = [];
+        break;
+      case 'penaltyCard':
+        if (this.penLog) {
+          this.penCards.push(e.card);
+          this.penLog.html = (e.shuffler === me ? 'You turned over ' : N(e.shuffler) + ' turned over ') + this.penCards.map(UI.cardText).join(' ') + '.';
+        }
+        break;
+      case 'penaltyResult':
+        this.pushLog(e.lucky ? 'Lucky: the first card was a ' + UI.suitSingle(e.suit) + ', so no slaps from ' + (e.shuffler === me ? 'you' : N(e.shuffler)) + '.'
+          : slapsText(e.soft, e.hard).charAt(0).toUpperCase() + slapsText(e.soft, e.hard).slice(1) + ' from ' + (e.shuffler === me ? 'you' : N(e.shuffler)) + '.', 'win');
         break;
     }
     if (e.type === 'setStart') this.lastSetNo = e.setNo;
+    if (e.type === 'out') this.justOut = { set: v.setNo, players: e.players.slice() };
   };
 
   /* ---------- end of game ---------- */
@@ -1004,6 +1282,7 @@
     var me = this.me;
     var byId = {};
     v.players.forEach(function (p, i) { byId[p.id] = { p: p, i: i }; });
+    if (v.winReason === 'real') return this.realResult(v, byId);
     var winners = v.winners || [];
     var iWon = winners.indexOf(me) >= 0;
     var names = winners.map(function (id) { return id === me ? 'You' : UI.esc(byId[id].p.name); });
@@ -1035,6 +1314,32 @@
           (byId[id].p.hand || []).forEach(function (c) { rows[k].appendChild(UI.makeCard(c)); });
         });
       }
+    };
+  };
+
+  /* Real Burns: one loser, everyone else wins, and the slaps each winner gave. */
+  BurnsTable.prototype.realResult = function (v, byId) {
+    var me = this.me, self = this;
+    var iLost = v.loser === me;
+    var given = {}, t = { soft: 0, hard: 0 };
+    (v.penalty ? v.penalty.results : []).forEach(function (r) { given[r.by] = r; t.soft += r.soft; t.hard += r.hard; });
+    var row = function (pid, right, cls) {
+      var p = byId[pid].p;
+      var paint = pid === me ? 'var(--ink)' : PAINTS[(byId[pid].i - 1 + PAINTS.length) % PAINTS.length];
+      return '<li class="' + (cls || '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc((pid === me ? 'You' : p.name).charAt(0)) + '</span>' +
+        '<span>' + self.name(pid) + '</span><span class="left">' + right + '</span></li>';
+    };
+    var rows = (v.winners || []).map(function (pid) {
+      var r = given[pid];
+      return row(pid, ordinal(byId[pid].p.place || 0) + ' · ' + (!r ? 'safe' : r.lucky ? 'lucky: no slaps' : slapsText(r.soft, r.hard).replace(/ slaps?/g, '')));
+    }).join('') + row(v.loser, 'lost', 'loser');
+    var name = this.name(v.loser);
+    return {
+      when: 'set ' + v.setNo,
+      title: iLost ? 'YOU LOSE' : String(byId[v.loser].p.name).toUpperCase() + ' LOSES',
+      why: iLost ? 'You were left holding cards, so you take ' + slapsText(t.soft, t.hard) + '. Everyone else wins.'
+        : name + ' was left holding cards and takes ' + slapsText(t.soft, t.hard) + '. Everyone else wins.',
+      body: '<div class="standings"><ul>' + rows + '</ul></div>'
     };
   };
 

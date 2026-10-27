@@ -10,18 +10,35 @@
      A set ends with everyone's card revealed; whoever has emptied their hand
      at that point wins. Lead and follow each have a time limit so an idle
      player can't hold up the table.
+
+   Real Burns (a rule choice, for friends in the same room)
+     Emptying your hand makes you safe: you're out, a winner, and the rest
+     play on until one player is left holding cards. They lose: …► lost ─►
+     penalty, where each winner in turn "shuffles" until the loser calls
+     Stop, the loser names a suit, and cards are turned over until that suit
+     appears. Every card before it is a slap on the loser's hand (black
+     soft, red hard); a first-card match means no slaps from that winner.
+     penalty step by step: shuffle ─► suit ─► draw ─► result ─► next winner …
    ========================================================================== */
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 2;
+  var ENGINE_VERSION = 3;
   var HAND_SIZE = 4;
 
   var DEFAULT_TIMING = {
     drawCooldownMs: 500,   // minimum gap between two draws by the same player
     takeWindowMs: 10000,   // time to choose a card from the set when the deck is empty
     dealHoldMs: 1900,      // pause after the deal before play (and the Flush check)
-    revealHoldMs: 2700     // how long a revealed set stays on the table
+    revealHoldMs: 2700,    // how long a revealed set stays on the table
+    quickHoldMs: 1200,     // …once every person is out and only computer players are left
+    lostHoldMs: 4200,      // Real Burns: the last set and the loser, before the penalty round
+    stopFromMs: 1500,      // the loser can call Stop this long after a shuffle starts
+    shuffleMs: 15000,      // a shuffle stops by itself after this long
+    suitMs: 15000,         // a suit is picked for the loser after this long
+    flipMs: 750,           // a card is turned over every so often…
+    fastFlipMs: 420,       // …a little faster after the first few
+    slapMs: 30000          // the winner's moment, until they tap Next
   };
 
   /* Rule choices the user can switch on the setup screen. Add new house
@@ -30,6 +47,15 @@
      by an older version that matches one was never really picked, so the
      current default replaces it. */
   var OPTIONS = [
+    {
+      id: 'real',
+      label: 'Real Burns',
+      default: 'off',
+      choices: [
+        { value: 'off', label: 'Off', help: 'The first player to empty their hand wins.' },
+        { value: 'on', label: 'On', help: 'Play on until one player is left holding cards: they lose. Then each winner turns cards over to count the loser’s slaps on the hand. For friends in the same room.' }
+      ]
+    },
     {
       id: 'flush',
       label: 'Flush',
@@ -68,8 +94,30 @@
     return null;
   }
 
+  /* Real Burns: players who have emptied their hands are out (and safe). */
+  function realOn(state) { return state.options.real === 'on'; }
+  function isOut(state, pid) { return !!state.out && state.out.indexOf(pid) >= 0; }
+  function active(state) { return state.players.filter(function (p) { return !isOut(state, p.id); }); }
+
+  /* The next player still in, clockwise after pid. */
+  function nextActive(state, pid) {
+    var ps = state.players, at = 0;
+    for (var i = 0; i < ps.length; i++) if (ps[i].id === pid) at = i;
+    for (var k = 1; k <= ps.length; k++) {
+      var q = ps[(at + k) % ps.length];
+      if (!isOut(state, q.id)) return q.id;
+    }
+    return null;
+  }
+
+  /* Once every person is out, the computer players finish quickly. */
+  function revealHold(state) {
+    var person = active(state).some(function (p) { return !p.isBot; });
+    return state.out && state.out.length && !person ? Math.min(state.timing.revealHoldMs, state.timing.quickHoldMs) : state.timing.revealHoldMs;
+  }
+
   function followers(state) {
-    return state.players.filter(function (p) { return p.id !== state.leader; });
+    return active(state).filter(function (p) { return p.id !== state.leader; });
   }
 
   function isTaker(state, pid) { return state.takers.indexOf(pid) >= 0; }
@@ -148,6 +196,12 @@
       setResult: null,
       winners: null,
       winReason: null,
+      // Real Burns
+      out: [],          // players who have emptied their hands, in the order they went
+      leadFrom: null,   // the set winner who went out, so the lead passed on
+      nextLeader: null,
+      loser: null,
+      penalty: null,    // the penalty round (see startPenalty)
       seq: 0,
       events: []
     };
@@ -258,16 +312,34 @@
       if (!best || value(e.card) > value(best.card)) best = { player: e.owner, card: e.card };
     });
 
-    var out = state.players.filter(function (p) { return p.hand.length === 0; });
+    var out = active(state).filter(function (p) { return p.hand.length === 0; });
+    // Two players went out on the same set: the higher card they played comes first.
+    var playedValue = function (pid) {
+      for (var i = 0; i < state.table.length; i++) {
+        if (state.table[i].owner === pid) return value(state.table[i].card);
+      }
+      return -1;
+    };
+    out.sort(function (a, b) { return playedValue(b.id) - playedValue(a.id); });
+
+    if (out.length && realOn(state)) {
+      // Real Burns: they're safe, and the rest play on until one is left holding cards.
+      var going = out.map(function (p) { return p.id; });
+      var left = active(state).filter(function (p) { return p.hand.length > 0; });
+      // everyone still in went out together: the lowest card among them loses
+      var loser = left.length === 1 ? left[0].id : !left.length ? going.pop() : null;
+      going.forEach(function (pid) { state.out.push(pid); });
+      if (going.length) emit(state, now, { type: 'out', players: going, places: going.map(function (pid) { return state.out.indexOf(pid) + 1; }) });
+      if (loser) {
+        state.setResult = best;
+        emit(state, now, { type: 'setWon', player: best ? best.player : null, card: best ? best.card : null });
+        lose(state, now, loser);
+        return;
+      }
+      out = [];
+    }
+
     if (out.length) {
-      // Two players went out on the same set: the higher card they played wins.
-      var playedValue = function (pid) {
-        for (var i = 0; i < state.table.length; i++) {
-          if (state.table[i].owner === pid) return value(state.table[i].card);
-        }
-        return -1;
-      };
-      out.sort(function (a, b) { return playedValue(b.id) - playedValue(a.id); });
       state.setResult = best;
       state.phase = 'over';
       state.winners = [out[0].id];
@@ -283,13 +355,112 @@
 
     if (!best) {
       // Nobody holds a card in the set (only possible in freak deck-empty cases).
-      var keep = state.leader || CT.pickRandom(state.players, state).id;
+      var keep = state.leader && !isOut(state, state.leader) ? state.leader : CT.pickRandom(active(state), state).id;
       best = { player: keep, card: null };
     }
     state.setResult = best;
+    // a set winner who went out can't lead: the next player still in does
+    state.leadFrom = isOut(state, best.player) ? best.player : null;
+    state.nextLeader = state.leadFrom ? nextActive(state, best.player) : best.player;
     state.phase = 'reveal';
-    state.phaseEndsAt = now + state.timing.revealHoldMs;
-    emit(state, now, { type: 'setWon', player: best.player, card: best.card });
+    state.phaseEndsAt = now + revealHold(state);
+    emit(state, now, { type: 'setWon', player: best.player, card: best.card, next: state.nextLeader });
+  }
+
+  /* ---------- Real Burns: the loser and the penalty round ----------------- */
+
+  /* One player is left holding cards. The last set stays on the table a
+     moment, then the penalty round begins. */
+  function lose(state, now, pid) {
+    state.loser = pid;
+    state.phase = 'lost';
+    state.turnEndsAt = null;
+    state.phaseEndsAt = now + state.timing.lostHoldMs;
+    emit(state, now, { type: 'loser', player: pid, out: state.out.slice() });
+  }
+
+  /* Every winner takes a turn, clockwise from the loser's left. */
+  function startPenalty(state, now) {
+    var ps = state.players, at = 0, order = [];
+    for (var i = 0; i < ps.length; i++) if (ps[i].id === state.loser) at = i;
+    for (var k = 1; k < ps.length; k++) order.push(ps[(at + k) % ps.length].id);
+    state.phase = 'penalty';
+    state.penalty = {
+      order: order, turn: -1, step: null, shuffler: null,
+      stopFrom: null, endsAt: null, nextAt: null,
+      suit: null, deck: null, drawn: [], soft: 0, hard: 0, lucky: false,
+      results: []
+    };
+    emit(state, now, { type: 'penaltyStart', loser: state.loser, order: order.slice() });
+    nextTurn(state, now);
+  }
+
+  function nextTurn(state, now) {
+    var P = state.penalty;
+    P.turn += 1;
+    if (P.turn >= P.order.length) { finishPenalty(state, now); return; }
+    P.shuffler = P.order[P.turn];
+    P.step = 'shuffle';
+    P.suit = null; P.deck = null; P.drawn = []; P.soft = 0; P.hard = 0; P.lucky = false; P.nextAt = null;
+    P.stopFrom = now + state.timing.stopFromMs;
+    P.endsAt = now + state.timing.shuffleMs;
+    emit(state, now, { type: 'penaltyTurn', shuffler: P.shuffler, turn: P.turn, of: P.order.length });
+  }
+
+  /* "Stop!": the deck is as it lies when the shuffling stops. */
+  function stopShuffle(state, now, auto) {
+    var P = state.penalty;
+    P.deck = CT.shuffle(CT.standardDeck(), state);
+    P.step = 'suit';
+    P.stopFrom = null;
+    P.endsAt = now + state.timing.suitMs;
+    emit(state, now, { type: 'penaltyStop', player: state.loser, shuffler: P.shuffler, auto: !!auto });
+  }
+
+  function pickSuit(state, now, suit, auto) {
+    var P = state.penalty;
+    P.suit = suit;
+    P.step = 'draw';
+    P.endsAt = null;
+    P.nextAt = now + state.timing.flipMs;
+    emit(state, now, { type: 'penaltySuit', player: state.loser, shuffler: P.shuffler, suit: suit, auto: !!auto });
+  }
+
+  /* Turn over the next card. Until the loser's suit turns up, each one is a
+     slap: soft for black, hard for red. The card of the suit doesn't count. */
+  function flipCard(state, now) {
+    var P = state.penalty;
+    var card = P.deck.pop();
+    P.drawn.push(card);
+    var match = card.suit === P.suit;
+    if (!match) { if (CT.SUIT_INFO[card.suit].color === 'red') P.hard++; else P.soft++; }
+    emit(state, now, { type: 'penaltyCard', shuffler: P.shuffler, card: card, n: P.drawn.length, match: match, soft: P.soft, hard: P.hard });
+    if (!match) { P.nextAt = now + (P.drawn.length < 4 ? state.timing.flipMs : state.timing.fastFlipMs); return; }
+    P.lucky = P.drawn.length === 1;
+    P.step = 'result';
+    P.nextAt = null;
+    P.endsAt = now + state.timing.slapMs;
+    P.results.push({ by: P.shuffler, suit: P.suit, cards: P.drawn.slice(), soft: P.soft, hard: P.hard, lucky: P.lucky });
+    emit(state, now, { type: 'penaltyResult', shuffler: P.shuffler, loser: state.loser, suit: P.suit, soft: P.soft, hard: P.hard, lucky: P.lucky, n: P.drawn.length });
+  }
+
+  function slapTotals(state) {
+    var t = { soft: 0, hard: 0 };
+    (state.penalty ? state.penalty.results : []).forEach(function (r) { t.soft += r.soft; t.hard += r.hard; });
+    return t;
+  }
+
+  /* Everyone but the loser wins. */
+  function finishPenalty(state, now) {
+    var P = state.penalty;
+    P.step = 'done';
+    P.shuffler = null;
+    P.endsAt = null;
+    state.phase = 'over';
+    state.winners = state.out.slice();
+    state.winReason = 'real';
+    var t = slapTotals(state);
+    emit(state, now, { type: 'gameOver', reason: 'real', winners: state.winners.slice(), loser: state.loser, soft: t.soft, hard: t.hard, hands: handsOf(state) });
   }
 
   function handsOf(state) {
@@ -350,6 +521,7 @@
     if (state.phase !== 'follow') return CT.fail('not-now', 'Wait for the suit to be set.');
     if (pid === state.leader) return CT.fail('leader', 'You already led this set.');
     if (!player(state, pid)) return CT.fail('no-player', 'You are not in this game.');
+    if (isOut(state, pid)) return CT.fail('out', 'You’re out: you emptied your hand.');
     if (state.committed[pid]) return CT.fail('done', 'Your card for this set is already in.');
     if (isTaker(state, pid)) return CT.fail('stuck', 'The deck is empty. You will take a card from the set once everyone has played.');
     return null;
@@ -402,7 +574,45 @@
     return CT.ok();
   }
 
-  var ACTIONS = { lead: actLead, follow: actFollow, draw: actDraw, take: actTake };
+  /* ---------- Real Burns: the penalty round's moves ---------------------- */
+
+  function penaltyStep(state, step) {
+    return state.phase === 'penalty' && state.penalty && state.penalty.step === step;
+  }
+  function loserName(state) { var p = player(state, state.loser); return p ? p.name : 'The loser'; }
+
+  /* The loser calls Stop while a winner shuffles. */
+  function actStop(state, pid, payload, now) {
+    if (!penaltyStep(state, 'shuffle')) return CT.fail('not-now', 'Nobody is shuffling right now.');
+    if (pid !== state.loser) return CT.fail('not-loser', loserName(state) + ' calls Stop, not you.');
+    var P = state.penalty;
+    if (now < P.stopFrom) return CT.fail('wait', 'Let them shuffle for a moment first.', { retryInMs: Math.ceil(P.stopFrom - now) });
+    stopShuffle(state, now, false);
+    return CT.ok();
+  }
+
+  /* …then names a suit. */
+  function actSuit(state, pid, payload, now) {
+    if (!penaltyStep(state, 'suit')) return CT.fail('not-now', 'It isn’t time to pick a suit.');
+    if (pid !== state.loser) return CT.fail('not-loser', loserName(state) + ' picks the suit, not you.');
+    if (CT.SUITS.indexOf(payload.suit) < 0) return CT.fail('bad-suit', 'Pick Hearts, Spades, Diamonds or Clubs.');
+    pickSuit(state, now, payload.suit, false);
+    return CT.ok();
+  }
+
+  /* The winner has had their moment: on to the next winner. */
+  function actNext(state, pid, payload, now) {
+    if (!penaltyStep(state, 'result')) return CT.fail('not-now', 'Not yet.');
+    var P = state.penalty;
+    if (pid !== P.shuffler) {
+      var s = player(state, P.shuffler);
+      return CT.fail('not-yours', 'Waiting for ' + (s ? s.name : 'the shuffler') + '.');
+    }
+    nextTurn(state, now);
+    return CT.ok();
+  }
+
+  var ACTIONS = { lead: actLead, follow: actFollow, draw: actDraw, take: actTake, stop: actStop, suit: actSuit, next: actNext };
 
   function act(state, pid, type, payload, now) {
     if (state.phase === 'over') return CT.fail('over', 'This game is over.');
@@ -443,7 +653,32 @@
       var flush = !flushOn(state) ? [] : state.players.filter(function (p) {
         return CT.SUITS.every(function (s) { return CT.hasSuit(p.hand, s); });
       });
-      if (flush.length) {
+      if (flush.length && realOn(state)) {
+        // Real Burns: a Flush is safe straight away, and the rest play on.
+        var safe = flush.map(function (p) { return p.id; });
+        var shown = {};   // only the Flush hands are shown: everyone else plays on
+        flush.forEach(function (p) { shown[p.id] = p.hand.slice(); });
+        emit(state, now, { type: 'flush', players: safe, hands: shown });
+        flush.forEach(function (p) {
+          p.hand.forEach(function (c) { state.discard.push(c); });
+          p.hand = [];
+          state.out.push(p.id);
+        });
+        emit(state, now, { type: 'out', players: safe, places: safe.map(function (pid) { return state.out.indexOf(pid) + 1; }), flush: true });
+        var left = active(state);
+        if (left.length >= 2) startSet(state, now, null);
+        else if (left.length === 1) {
+          state.discard.push(state.starter);
+          state.starter = null;
+          lose(state, now, left[0].id);
+        } else {
+          // everyone held a Flush: nobody loses
+          state.phase = 'over';
+          state.winners = safe;
+          state.winReason = 'flush';
+          emit(state, now, { type: 'gameOver', reason: 'flush', winners: safe, hands: handsOf(state) });
+        }
+      } else if (flush.length) {
         state.phase = 'over';
         state.winners = flush.map(function (p) { return p.id; });
         state.winReason = 'flush';
@@ -473,8 +708,21 @@
     }
 
     if (state.phase === 'reveal' && now >= state.phaseEndsAt) {
-      startSet(state, now, state.setResult.player);
+      startSet(state, now, state.nextLeader || state.setResult.player);
       return true;
+    }
+
+    if (state.phase === 'lost' && now >= state.phaseEndsAt) {
+      startPenalty(state, now);
+      return true;
+    }
+
+    if (state.phase === 'penalty') {
+      var P = state.penalty;
+      if (P.step === 'shuffle' && now >= P.endsAt) { stopShuffle(state, now, true); return true; }
+      if (P.step === 'suit' && now >= P.endsAt) { pickSuit(state, now, CT.pickRandom(CT.SUITS, state), true); return true; }
+      if (P.step === 'draw' && now >= P.nextAt) { flipCard(state, now); return true; }
+      if (P.step === 'result' && now >= P.endsAt) { nextTurn(state, now); return true; }
     }
     return false;
   }
@@ -523,6 +771,8 @@
           drew: state.drawn[p.id] || 0,
           isTaker: isTaker(state, p.id),
           took: state.taken[p.id] || null,
+          out: isOut(state, p.id),
+          place: isOut(state, p.id) ? state.out.indexOf(p.id) + 1 : null,
           hand: over ? p.hand.slice() : undefined
         };
       }),
@@ -533,8 +783,29 @@
       winners: state.winners,
       winReason: state.winReason,
       lastDrawAt: state.lastDrawAt[pid] != null ? state.lastDrawAt[pid] : null,
+      real: realOn(state),
+      out: (state.out || []).slice(),
+      leadFrom: state.leadFrom || null,
+      nextLeader: state.phase === 'reveal' ? state.nextLeader || null : null,
+      loser: state.loser || null,
+      penalty: null,
       seq: state.seq
     };
+
+    // the penalty round: everything but the order of the deck still to be turned over
+    var P = state.penalty;
+    if (P) {
+      v.penalty = {
+        order: P.order.slice(), turn: P.turn, step: P.step, shuffler: P.shuffler,
+        stopFrom: P.stopFrom, endsAt: P.endsAt, suit: P.suit,
+        drawn: P.drawn.slice(), soft: P.soft, hard: P.hard, lucky: P.lucky,
+        results: P.results.map(function (r) { return { by: r.by, suit: r.suit, cards: r.cards.slice(), soft: r.soft, hard: r.hard, lucky: r.lucky }; }),
+        timing: { stopFromMs: state.timing.stopFromMs, shuffleMs: state.timing.shuffleMs, suitMs: state.timing.suitMs, slapMs: state.timing.slapMs }
+      };
+    }
+    v.canStop = !!me && penaltyStep(state, 'shuffle') && pid === state.loser;
+    v.canSuit = !!me && penaltyStep(state, 'suit') && pid === state.loser;
+    v.canNext = !!me && penaltyStep(state, 'result') && pid === P.shuffler;
 
     var mine = me && state.phase === 'follow' && pid !== state.leader && !state.committed[pid] && !isTaker(state, pid);
     var hasIt = !!mine && CT.hasSuit(hand, state.suit);
@@ -571,7 +842,12 @@
     var flushText = o.flush === 'on'
       ? 'If your 4 starting cards include all four suits, you have a Flush and win before play begins. If more than one player has a Flush, they share the win.'
       : 'A Flush is 4 starting cards that include all four suits. It only counts when the Flush rule is switched on in the game setup; then it wins before play begins. The rule is off, so play always begins after the deal.';
-    return [
+    var real = o.real === 'on';
+    if (real && o.flush === 'on') flushText = 'If your 4 starting cards include all four suits, you have a Flush: you’re safe before play begins, and the rest play on.';
+    var winText = real
+      ? 'Real Burns is on: everyone who empties their hand is safe, and the rest play on. The last player left holding cards loses. If everyone still playing goes out on the same set, the one who played the lowest card loses.'
+      : 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.';
+    var list = [
       { title: 'The deal', text: 'Everyone gets 4 cards from a standard 52-card deck. One more card is turned face up. Its suit must be followed in the first set.' },
       { title: 'Flush', text: flushText },
       { title: 'Playing a set', text: 'Everyone plays one card of the suit in play. Cards stay hidden until everyone has played, then they are revealed together.' },
@@ -579,15 +855,21 @@
       { title: 'Drawing', text: 'Before you play, you may draw from the deck to look for a better card of the suit, but every card you draw stays in your hand. If you don’t have the suit, you must draw until one turns up; then play it or keep drawing. Everyone draws at the same time, with a short pause between draws. The leader doesn’t draw.' },
       { title: 'Deck empty', text: 'If the deck runs out before you have a card of the suit, take one card from the set into your hand instead and sit out that set. The card still counts for whoever played it. You have 10 seconds to choose, and each card can only be taken once. If you don’t choose in time, a card is picked for you at random.' },
       { title: 'Time limit', text: 'The leader has ' + secs + ' seconds to lead, then everyone has ' + secs + ' seconds to play. When time runs out, a random card of the suit is played for anyone still deciding. If they have none, they draw until one turns up and it is played.' },
-      { title: 'Winning the game', text: 'Be the first to have no cards left. If two players go out on the same set, the one who played the higher card wins.' }
+      { title: 'Winning the game', text: winText }
     ];
+    list.push(real
+      ? { title: 'The penalty round', text: 'Each winner takes a turn, going round the table. While the winner shuffles, the loser calls “Stop!” whenever they like, then names a suit. The winner turns cards over from the top until that suit appears. Every card before it is a slap on the loser’s hand: a soft slap for a black card (spades or clubs), a hard slap for a red one (hearts or diamonds). The card of the chosen suit doesn’t count, and if it’s the very first card, the loser gets no slaps from that winner.' }
+      : { title: 'Real Burns', text: 'A rule choice for friends in the same room: switch it on in the game setup and the game goes on until one player is left holding cards. They lose, and each winner turns cards over to count the loser’s slaps on the hand.' });
+    return list;
   }
 
   /* One line for the "game in progress" card on the home screen. */
   function describe(state, pid) {
     var me = player(state, pid);
-    return (state.setNo ? 'Set ' + state.setNo : 'Just dealt') + ' · you hold ' + (me ? me.hand.length : 0) +
-      ' cards · ' + (state.players.length - 1) + ' opponents';
+    if (state.phase === 'lost' || state.phase === 'penalty') return 'Real Burns · the penalty round';
+    var you = isOut(state, pid) ? 'you’re out and safe' : 'you hold ' + (me ? me.hand.length : 0) + ' cards';
+    return (realOn(state) ? 'Real Burns · ' : '') + (state.setNo ? 'Set ' + state.setNo : 'Just dealt') + ' · ' + you +
+      ' · ' + (state.players.length - 1) + ' opponents';
   }
 
   CT.registerMode({

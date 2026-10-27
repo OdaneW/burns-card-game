@@ -2,7 +2,11 @@
 
 A phone-first card game with several game modes, played against computer players, or online with friends:
 
-- **Burns**: follow the suit, draw when you can't, and be the first to empty your hand.
+- **Burns**: follow the suit, draw when you can't, and be the first to empty your hand. Switch on
+  **Real Burns** for friends in the same room: everyone who empties their hand is safe, play goes on until one
+  player is left holding cards, and then each winner shuffles while the loser calls "Stop!", the loser names a
+  suit, and cards are turned over until it appears. Every card before it is a slap on the loser's hand: soft
+  for black, hard for red.
 - **Pass-Roun Donkey**: pass one card round the circle, collect four of a kind, and never be last
   to put your cards down, or you collect a letter of DONKEY.
 - **Bull**: the whole deck is dealt round a circular table. Play one to four cards face down as the next
@@ -34,9 +38,9 @@ at the bottom of the menu screen.
 | --- | --- |
 | `src/engine/core.js` | Cards, deck, seeded randomness and the game-mode registry |
 | `src/engine/session.js` | Runs one game: clock, actions, timed steps, computer players, save and restore |
-| `src/modes/burns/rules.js` | The Burns rules and its rule choices. Pure logic, no screen code |
+| `src/modes/burns/rules.js` | The Burns rules and its rule choices, including Real Burns and its penalty round. Pure logic, no screen code |
 | `src/modes/burns/bot.js` | The Burns computer player. It only sees what a human player would see |
-| `src/modes/burns/ui.js` | The Burns table screen |
+| `src/modes/burns/ui.js` | The Burns table screen, and the Real Burns penalty round |
 | `src/modes/burns/tutorial.js` | The interactive Burns tutorial: rigged lessons on the real table |
 | `src/modes/donkey/rules.js` | The Pass-Roun Donkey rules: passing, four of a kind, the race, letters and the tie-breaker |
 | `src/modes/donkey/bot.js` | The Donkey computer player, with three reflex speeds for the race |
