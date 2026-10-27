@@ -44,7 +44,7 @@ async function open(browser, opts) {
   // start from clean storage (plus any preset settings), then load again. Unless
   // the scenario is about a first visit, the tutorials count as already offered,
   // so Play goes straight to the setup screen.
-  const preset = Object.assign({}, opts.firstVisit ? {} : { 'cardtable.tutorials.v1': { burns: 'offered', donkey: 'offered' } }, opts.storage || {});
+  const preset = Object.assign({}, opts.firstVisit ? {} : { 'cardtable.tutorials.v1': { burns: 'offered', donkey: 'offered', bull: 'offered' } }, opts.storage || {});
   if (opts.settings) preset['cardtable.settings.v1'] = opts.settings;
   await p.evaluate(preset => {
     localStorage.clear();
@@ -362,7 +362,140 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
-    if (/^bull/.test(SCENARIO)) {
+    if (/^bull-tutorial/.test(SCENARIO)) {
+      // Follow the Bull tutorial from How to play to the end, trying a few wrong
+      // moves and Previous on the way, on a phone (default), a small phone, a
+      // phone on its side, or a desktop.
+      const size = {
+        'bull-tutorial': { viewport: { width: 390, height: 844 } },
+        'bull-tutorial-small': { viewport: { width: 360, height: 640 } },
+        'bull-tutorial-landscape': { viewport: { width: 844, height: 390 } },
+        'bull-tutorial-wide': { viewport: { width: 1280, height: 820 }, isMobile: false, deviceScaleFactor: 1 }
+      }[SCENARIO];
+      const p = await open(browser, { ctx: size, seed: 4 });
+      await p.tap('[data-rules="bull"]');
+      await sleep(350);
+      await shot(p, '90-bull-how-to-play');
+      await p.evaluate(() => {
+        const T = CT.UI.tutorials.bull.prototype;
+        const log = window.__tut = [];
+        const render = T.render, check = T.check;
+        T.render = function () {
+          render.call(this);
+          const s = this.current();
+          log.push({ key: 'L' + (this.index + 1) + '-S' + (this.step + 1), t: performance.now(), reading: this.readingTime(),
+            kind: s.next || s.final ? 'read' : s.watch ? 'watch' : 'act', how: s.next || s.final ? 'next' : 'player' });
+        };
+        T.check = function () {
+          const was = this.advancing;
+          check.call(this);
+          const s = this.current(), last = log[log.length - 1];
+          if (!was && this.advancing && s && s.watch && last) {
+            last.how = !this.holding ? 'auto' : document.querySelector('.coach-actions:not([hidden]) .btn-primary') ? 'next' : 'held-auto';
+          }
+        };
+      });
+      await p.tap('#r-tutorial');
+      await sleep(500);
+      const seen = [], checks = [], back = {}, tried = {};
+      let guard = 0, bullEarly = false;
+      const state = () => p.evaluate(() => {
+        const t = CT.App.tutorial; if (!t) return { done: true };
+        const s = t.current(); const v = CT.App.session.view('p0', { events: false });
+        const held = !s.next && !s.final && !!document.querySelector('.coach-actions:not([hidden]) .btn-primary');
+        return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final, held, phase: v.phase, act: !s.next && !s.final && !s.watch,
+          canPlay: v.canPlay, canBull: v.canBull, rank: v.rank, hand: v.hand.map(c => c.id), selected: CT.App.table.selected.slice(),
+          bullShown: !document.getElementById('b-bull').hidden, counts: v.players.map(x => x.handCount).join(' '), pile: v.pileCount,
+          toast: (document.querySelector('#toast.show') || {}).textContent || '' };
+      });
+      // tap cards until exactly these are picked
+      const pick = async ids => {
+        const st = await state();
+        for (const id of st.selected.filter(x => !ids.includes(x)).concat(ids.filter(x => !st.selected.includes(x)))) {
+          await p.tap(`.hcard[data-id="${id}"]`, { position: { x: 10, y: 24 } });
+          await sleep(160);
+        }
+      };
+      const play = async () => { await p.tap('#b-play'); await sleep(400); };
+      while (guard++ < 900) {
+        const st = await state();
+        if (st.done) break;
+        if (st.lesson < 2 && st.bullShown) bullEarly = true;
+        const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
+        if (!seen.includes(key)) { seen.push(key); await sleep(450); await shot(p, '91-btut-' + key); }
+        if (st.final) break;
+        // Previous: across lessons from the start of Bluffing, and from Tap Bull! (Dex plays again)
+        const tryBack = { 'L2-S1': 'a', 'L3-S3': 'b' }[key];
+        if (tryBack && !back[tryBack] && (st.canPlay || st.canBull)) {
+          back[tryBack] = true;
+          await p.tap('[data-act="prev"]'); await sleep(600);
+          const w = await state();
+          checks.push('Previous from ' + key + ' → L' + (w.lesson + 1) + '-S' + (w.step + 1) + ' (' + w.phase + ', ' + w.rank + 's next, hand ' + w.hand.join(' ') + ', pile ' + w.pile + ')');
+          continue;
+        }
+        if (st.next || st.held) { await p.tap('.coach-actions [data-act="next"]'); await sleep(300); continue; }
+        if (!st.act) { await sleep(200); continue; }
+        if (st.canBull && st.lesson === 2) {
+          await p.tap('#b-bull'); await sleep(300);
+          continue;
+        }
+        if (st.canPlay) {
+          if (st.lesson === 0) {
+            if (!tried.one) {
+              tried.one = true;
+              await pick(['AS']); await play();
+              const a = await state();
+              checks.push('One Ace in lesson 1: still your turn = ' + a.canPlay + ', toast = "' + a.toast + '"');
+              await shot(p, '92-btut-both-aces');
+              continue;
+            }
+            await pick(['AS', 'AH']); await play();
+          } else if (st.lesson === 1) {
+            if (!tried.three) {
+              tried.three = true;
+              await pick(st.hand.slice(0, 3)); await play();
+              const a = await state();
+              checks.push('Three cards as a bluff: still your turn = ' + a.canPlay + ', toast = "' + a.toast + '"');
+              continue;
+            }
+            await pick(['JC']); await play();
+          } else if (st.lesson === 3) {
+            if (!tried.bluff) {
+              tried.bluff = true;
+              await pick(['9C', '4D']); await play();
+              const a = await state();
+              checks.push('A 9 and a 4 in lesson 4: still your turn = ' + a.canPlay + ', toast = "' + a.toast + '"');
+              await shot(p, '93-btut-no-bluffing');
+              continue;
+            }
+            await pick(['9C', '9H']); await play();
+          } else {
+            await pick(st.hand.slice()); await play();
+          }
+          continue;
+        }
+        await sleep(200);
+      }
+      const end = await state();
+      const finalText = await p.evaluate(() => document.querySelector('.coach-title').textContent + ' · ' + document.querySelector('.coach-text').textContent);
+      checks.push('Bull! button shown in lessons 1–2 = ' + bullEarly);
+      checks.push('At the end: ' + end.phase + ', cards ' + end.counts);
+      await p.tap('[data-act="play"]');
+      await sleep(400);
+      const after = await p.evaluate(() => ({ screen: CT.App.screen, setup: (document.querySelector('#screen-setup .wordmark') || {}).textContent,
+        tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1'), stats: localStorage.getItem('cardtable.stats.v1') }));
+      console.log('  steps:', seen.join(' '));
+      checks.forEach(c => console.log('  ' + c));
+      const notes = await p.evaluate(() => window.__tut.map((e, i, a) => Object.assign({}, e, { shown: a[i + 1] ? Math.round(a[i + 1].t - e.t) : null })));
+      notes.filter(n => n.kind === 'watch').forEach(n => console.log('  watch note ' + n.key + ': ' + n.how + ', up ' + n.shown + ' ms, reading time ' + n.reading + ' ms'));
+      const rushed = notes.filter(n => (n.how === 'auto' || n.how === 'held-auto') && n.shown != null && n.shown < n.reading);
+      console.log('  notes that left before their reading time:', rushed.length ? rushed.map(n => n.key + ' (' + n.shown + '/' + n.reading + ' ms)') : 'none');
+      console.log('  final:', finalText);
+      console.log('  Play Bull →', after);
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (/^bull(-small|-landscape|-six)?$/.test(SCENARIO)) {
       // A game of Bull through the screen: playing true cards and bluffs, calling Bull, big hands.
       const size = {
         'bull': { viewport: { width: 390, height: 844 } },
@@ -665,6 +798,15 @@ async function playGame(p, tag, want) {
       await p.tap('[data-play="burns"]'); await sleep(400);
       s = await state(p);
       checks.push('Leave the tutorial, Play Burns again → screen = ' + s.screen + ', sheet = ' + s.sheet);
+      // Bull: offered too
+      await p.tap('#s-back'); await sleep(300);
+      await p.tap('[data-play="bull"]'); await sleep(450);
+      s = await state(p);
+      checks.push('Play Bull, first time → sheet = ' + s.sheet + ' · "' + s.text + '"');
+      await shot(p, '84-first-play-bull');
+      await p.tap('#i-tutorial'); await sleep(800);
+      s = await state(p);
+      checks.push('Start the Bull tutorial → tutorial = ' + s.tutorial + ', screen = ' + s.screen + ', stored ' + s.stored);
       // Someone who has finished a Burns game isn't asked about Burns, only Donkey
       const q = await open(browser, { ctx: phone, seed: 6, firstVisit: true,
         storage: { 'cardtable.stats.v1': { burns: { played: 3, won: 1, flushWins: 0 } } } });

@@ -45,6 +45,7 @@ at the bottom of the menu screen.
 | `src/modes/bull/rules.js` | The Bull rules: dealing the whole deck, the rank sequence, face-down plays, calling Bull and the last-card call |
 | `src/modes/bull/bot.js` | The Bull computer player: when to bluff, and when to call Bull from the cards it has seen |
 | `src/modes/bull/ui.js` | The Bull table screen: three to six seats round an oval table |
+| `src/modes/bull/tutorial.js` | The interactive Bull tutorial: five rigged lessons on the real table, from your first play to calling Bull and winning |
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |

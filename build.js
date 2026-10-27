@@ -30,6 +30,7 @@ const SOURCES = [
   'src/modes/donkey/ui.js',
   'src/modes/donkey/tutorial.js',
   'src/modes/bull/ui.js',
+  'src/modes/bull/tutorial.js',
   'src/ui/online.js',
   'src/ui/app.js'
 ];

@@ -12,6 +12,7 @@
      modeFor(lesson)       → the mode (with scripted computer players) for a rewound session
      target(key)           → the element a step points at, or null
      topTargets            → RegExp of keys near the bottom of the screen; the bubble goes up top
+     anchor(key)           → optional: an element the bubble should sit beside, not on (or null)
      playLabel             → the last note's button, e.g. 'Play Burns'
    })
 
@@ -160,6 +161,7 @@
         title: s.title,
         text: typeof s.text === 'function' ? s.text(ctx) : s.text,
         target: targetFn(target),
+        anchor: spec.anchor && target ? function () { return spec.anchor(target); } : null,
         place: place,
         dim: s.dim != null ? s.dim : (target ? true : read),
         actions: actions
