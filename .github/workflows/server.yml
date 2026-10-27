@@ -51,4 +51,5 @@ jobs:
           echo "::notice title=Game server::$URL"
           for i in 1 2 3 4 5 6; do curl -fsS "$URL/" && break; sleep 5; done
           echo
-          node check.mjs "$URL"
+          # rooms restart as the new version rolls out; one retry rides that out, and a real fault fails twice
+          node check.mjs "$URL" || { echo "Trying once more in 20 s"; sleep 20; node check.mjs "$URL"; }
