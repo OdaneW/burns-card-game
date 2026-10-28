@@ -209,12 +209,75 @@ test('the computer player calls a claim it knows can’t be true', () => {
   assert(v.canBull);
 });
 
+/* ---------- the "lies" rule choice: bluffs nobody calls ---------- */
+
+const SHOWN = { lies: 'shown' };
+
+test('bluffs nobody calls stay secret by default', () => {
+  const s = rigged({ hands: H4 });
+  eq(s.options.lies, 'secret');
+  act(s, 'p0', 'play', { cardIds: ['9S'] }, 0);              // a bluff: claims an Ace
+  act(s, 'p1', 'play', { cardIds: ['2S'] }, 1000);           // too late to call it now
+  eq(s.events.filter(e => e.type === 'lieExposed').length, 0);
+  const v = B.view(s, 'p2', { sinceSeq: 0 });
+  eq([v.exposure, v.exposedCards], [null, []]);
+  eq(JSON.stringify(v).indexOf('9S'), -1, 'nobody else ever sees it');
+});
+
+test('revealed: once the next player plays, an uncalled bluff is turned over for everyone', () => {
+  const s = rigged({ hands: H4, options: SHOWN });
+  act(s, 'p0', 'play', { cardIds: ['AS', '9S'] }, 0);        // two "Aces": one is a 9
+  eq(s.events.filter(e => e.type === 'lieExposed').length, 0, 'still callable: nothing shown yet');
+  act(s, 'p1', 'play', { cardIds: ['2S'] }, 1000);
+  const e = s.events.filter(x => x.type === 'lieExposed')[0];
+  eq([e.player, e.rank, e.n, e.no, e.final, e.cards.map(c => c.id)], ['p0', 'A', 2, 1, false, ['AS', '9S']]);
+  assert(!e.secret, 'everyone sees it');
+  const v = B.view(s, 'p3', { sinceSeq: 0 });
+  eq([v.exposure.by, v.exposure.cards.map(c => c.id), v.exposedCards.map(c => c.id)], ['p0', ['AS', '9S'], ['AS', '9S']]);
+  eq(v.pileCount, 3, 'nobody picks anything up');
+  act(s, 'p2', 'play', { cardIds: ['3S'] }, 2000);           // p1's honest 2 is never shown
+  eq(s.events.filter(x => x.type === 'lieExposed').length, 1);
+  eq(JSON.stringify(B.view(s, 'p3', { events: false }).exposedCards).indexOf('2S'), -1);
+});
+
+test('revealed: a bluff that is called is shown by the call, not again', () => {
+  const s = rigged({ hands: H4, options: SHOWN });
+  act(s, 'p0', 'play', { cardIds: ['9S'] }, 0);
+  act(s, 'p2', 'bull', {}, 300);
+  B.tick(s, 800);
+  act(s, 'p1', 'play', { cardIds: ['2S'] }, 900);
+  eq(s.events.filter(e => e.type === 'lieExposed').length, 0);
+});
+
+test('revealed: winning with a bluff nobody called is shown at the end', () => {
+  const s = rigged({ hands: [['KS'], ['2S', '3C'], ['3S', '4C'], ['4S', '5C']], options: SHOWN });
+  act(s, 'p0', 'play', { cardIds: ['KS'] }, 0);              // their last card, claimed as an Ace
+  B.tick(s, 1500);
+  const types = s.events.slice(-2).map(e => e.type);
+  eq(types, ['lieExposed', 'gameOver']);
+  eq([s.events[s.events.length - 2].final, s.winners], [true, ['p0']], 'they still win: nobody called it');
+  eq(B.view(s, 'p1', { events: false }).exposure.final, true);
+});
+
+test('the computer player counts revealed bluffs it has seen', () => {
+  // p3 holds two Kings and saw a third revealed in a bluff, so "two Kings" can't be true
+  const claimTwoKings = options => {
+    const s = rigged({ hands: [['9S', '7C'], ['KH', '5C', '6D'], ['3S', '4C'], ['KD', 'KC', '6H']], options });
+    s.pile = [{ by: 'p0', rank: 0, cards: [card('KS')], no: 1, exposed: options && options.lies === 'shown' }];
+    s.plays = 1; s.rank = 12; s.turn = 'p1'; s.last = null; s.openAt = 0;
+    act(s, 'p1', 'play', { cardIds: ['KH', '5C'] }, 0);
+    return B.view(s, 'p3', { events: false });
+  };
+  eq(B.bot.lieChance(claimTwoKings(SHOWN)), 1, 'two held + one revealed: at most one King left');
+  assert(B.bot.lieChance(claimTwoKings()) < 1, 'without the reveal it can’t be sure');
+});
+
 /* ---------- simulated games ---------- */
 
-function simulate(n, skill, seed, idle) {
+function simulate(n, skill, seed, idle, options) {
   const ps = players(n).map((p, i) => Object.assign(p, { isBot: !(idle && i === 0) }));
   const clock = new CT.ManualClock(0);
-  const session = new CT.Session({ modeId: 'bull', players: ps, options: { bots: skill, turnTime: '15', bullTime: '2' }, seed, clock });
+  const session = new CT.Session({ modeId: 'bull', players: ps, options: Object.assign({ bots: skill, turnTime: '15', bullTime: '2' }, options), seed, clock });
   const s = session.state;
   let ticks = 0, maxPile = 0;
   while (s.phase !== 'over' && ticks < 200000) {
@@ -231,32 +294,46 @@ function simulate(n, skill, seed, idle) {
         s.players.forEach(q => { if (q.id !== p.id) q.hand.forEach(c => others.add(c.id)); });
         v.hand.forEach(c => { if (others.has(c.id)) throw new Error('a hand leaked'); });
         if (v.reveal) return;
-        // the pile's cards are only known to whoever put them there
-        const seen = JSON.stringify(v);
-        s.pile.forEach(pl => { if (pl.by !== p.id) pl.cards.forEach(c => { if (seen.includes('"' + c.id + '"')) throw new Error('the pile leaked'); }); });
+        // the pile's cards are only known to whoever put them there (or to all, once a bluff is revealed)
+        const seen = JSON.stringify(Object.assign({}, v, { exposure: null }));
+        s.pile.forEach(pl => {
+          if (pl.by === p.id) return;
+          pl.cards.forEach(c => {
+            if (!seen.includes('"' + c.id + '"')) return;
+            if (!pl.exposed || !v.exposedCards.some(x => x.id === c.id)) throw new Error('the pile leaked');
+          });
+          if (pl.exposed && pl.cards.every(c => c.rank === B.ranks[pl.rank])) throw new Error('an honest play was revealed');
+        });
       });
     }
   }
   if (s.phase !== 'over') throw new Error('game ' + seed + ' did not finish');
   const ev = s.events;
+  if (options && options.lies === 'shown') {
+    // every uncalled bluff is revealed: count them against the plays that were lies and never called
+    const exposed = ev.filter(e => e.type === 'lieExposed').length;
+    if (!exposed && s.plays > 30) throw new Error('game ' + seed + ': no bluff was ever revealed');
+  }
   return {
     plays: s.plays, minutes: clock.now() / 60000, calls: ev.filter(e => e.type === 'bull').length,
     caught: ev.filter(e => e.type === 'bull' && e.lie).length, maxPile, winner: s.winners[0],
-    lastCalls: ev.filter(e => e.type === 'lastCall').length
+    lastCalls: ev.filter(e => e.type === 'lastCall').length, revealed: ev.filter(e => e.type === 'lieExposed').length
   };
 }
 
 const table = [];
 [['3 players · normal', 3, 'normal', 60], ['4 players · normal', 4, 'normal', 80], ['5 players · normal', 5, 'normal', 60], ['6 players · normal', 6, 'normal', 60],
- ['4 players · trusting', 4, 'easy', 50], ['4 players · suspicious', 4, 'sharp', 50], ['4 · one idle player', 4, 'normal', 30, true]].forEach(([label, n, skill, games, idle]) => {
+ ['4 players · trusting', 4, 'easy', 50], ['4 players · suspicious', 4, 'sharp', 50], ['4 · one idle player', 4, 'normal', 30, true],
+ ['4 · bluffs revealed', 4, 'normal', 60, false, SHOWN], ['6 · bluffs revealed', 6, 'sharp', 40, false, SHOWN]].forEach(([label, n, skill, games, idle, options]) => {
   test('simulated games: ' + label + ' (' + games + ' games, every 20th tick checked)', () => {
     const rs = [];
-    for (let g = 0; g < games; g++) rs.push(simulate(n, skill, 1000 + g * 7 + n, idle));
+    for (let g = 0; g < games; g++) rs.push(simulate(n, skill, 1000 + g * 7 + n, idle, options));
     const avg = k => rs.reduce((a, r) => a + r[k], 0) / rs.length;
     const idleWins = idle ? rs.filter(r => r.winner === 'p0').length : null;
     table.push({ table: label, games, plays: avg('plays').toFixed(0), minutes: avg('minutes').toFixed(1), calls: avg('calls').toFixed(1),
       'lies caught': (100 * rs.reduce((a, r) => a + r.caught, 0) / Math.max(1, rs.reduce((a, r) => a + r.calls, 0))).toFixed(0) + '%',
-      'biggest pile': Math.max(...rs.map(r => r.maxPile)), 'last calls': avg('lastCalls').toFixed(1), 'idle wins': idleWins == null ? '' : idleWins });
+      'biggest pile': Math.max(...rs.map(r => r.maxPile)), 'last calls': avg('lastCalls').toFixed(1), 'idle wins': idleWins == null ? '' : idleWins,
+      revealed: options ? avg('revealed').toFixed(1) : '' });
   });
 });
 

@@ -413,7 +413,7 @@
       for (var n = mode.players.min; n <= mode.players.max; n++) segs += '<button type="button" data-l-size="' + n + '" aria-pressed="' + (n === size) + '">' + n + '</button>';
       sizeField = '<section class="field"><h3 id="lbl-l-size">Seats at the table</h3><div class="seg" role="group" aria-labelledby="lbl-l-size">' + segs + '</div></section>';
     }
-    var opts = (mode.options || []).map(function (o) {
+    var opts = (mode.options || []).filter(function (o) { return CT.optionShown(o, r.options); }).map(function (o) {
       var current = r.options[o.id];
       if (host && lobby) {
         var segs = o.choices.map(function (c) {

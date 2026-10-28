@@ -11,7 +11,7 @@ A phone-first card game with several game modes, played against computer players
   to put your cards down, or you collect a letter of DONKEY.
 - **Bull**: the whole deck is dealt round a circular table. Play one to four cards face down as the next
   rank (Aces, then 2s, up to Kings and round again), bluff when you have to, and call "Bull!" on anyone
-  you think is lying. Whoever is wrong picks up the pile.
+  you think is lying. Whoever is wrong picks up the pile. A rule choice turns over the bluffs nobody called.
 
 **Play:** https://odanew.github.io/burns-card-game/
 

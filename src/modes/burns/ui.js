@@ -11,6 +11,7 @@
   var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
   var RING = 295.3;          // circumference of the countdown ring
   var SHOW_SECS_AT = 10000;  // show the seconds when this little time is left
+  var SUIT_ARM_MS = 800;     // Real Burns: after Stop, the suit buttons wake up this much later
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -800,8 +801,8 @@
     } else if (step === 'suit') {
       say = iLost ? 'Name a suit. Every card turned over before it is a slap: <b>black soft, red hard</b>.' : loser + ' is naming a suit…';
       if (v.canSuit) {
-        act = '<div class="pen-suits">' + ['H', 'S', 'D', 'C'].map(function (s) {
-          return '<button class="btn pen-suitbtn' + (UI.isRed(s) ? ' red' : '') + '" type="button" data-suit="' + s + '">' + UI.suitSvg(s) + '<span>' + UI.suitPlural(s).charAt(0).toUpperCase() + UI.suitPlural(s).slice(1) + '</span></button>';
+        act = '<div class="pen-suits arming">' + ['H', 'S', 'D', 'C'].map(function (s) {
+          return '<button class="btn pen-suitbtn' + (UI.isRed(s) ? ' red' : '') + '" type="button" data-suit="' + s + '" disabled>' + UI.suitSvg(s) + '<span>' + UI.suitPlural(s).charAt(0).toUpperCase() + UI.suitPlural(s).slice(1) + '</span></button>';
         }).join('') + '</div>';
         actKey += ':suit';
       }
@@ -820,7 +821,13 @@
       say = (iLost ? 'In all, you take ' : 'In all, ' + loser + ' takes ') + slapsText(t.soft, t.hard) + '.';
     }
     if (el.say.innerHTML !== say) el.say.innerHTML = say;
-    if (this.penActKey !== actKey) { this.penActKey = actKey; el.act.innerHTML = act; this.penaltyFrame(); }
+    if (this.penActKey !== actKey) {
+      this.penActKey = actKey;
+      el.act.innerHTML = act;
+      // the suits appear where Stop was: the press that stopped the shuffle mustn't pick one too
+      this.suitsFrom = /:suit$/.test(actKey) ? performance.now() + SUIT_ARM_MS : 0;
+      this.penaltyFrame();
+    }
 
     // earlier turns
     var done = P.results.slice(0, step === 'result' ? -1 : P.results.length);
@@ -857,6 +864,14 @@
     if (stop) {
       var ready = P.stopFrom == null || now >= P.stopFrom;
       if (stop.disabled === ready) stop.disabled = !ready;
+    }
+    var suits = this.pen.act.querySelector('.pen-suits');
+    if (suits) {
+      var armed = performance.now() >= (this.suitsFrom || 0);
+      if (suits.classList.contains('arming') === armed) {
+        suits.classList.toggle('arming', !armed);
+        suits.querySelectorAll('button').forEach(function (b) { b.disabled = !armed; });
+      }
     }
     var text = '';
     var left = P.endsAt != null ? Math.max(0, P.endsAt - now) : null;

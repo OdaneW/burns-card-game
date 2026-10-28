@@ -241,6 +241,7 @@
           $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });
           var choice = o.choices.filter(function (x) { return x.value === c.options[o.id]; })[0];
           $('help-' + o.id).textContent = choice ? choice.help : '';
+          $('help-' + o.id).parentNode.hidden = !CT.optionShown(o, c.options);   // only when it applies
         });
       };
       var store = function (patch) {
@@ -495,7 +496,7 @@
       var sections = mode.rules(options).map(function (r) {
         return '<section><h3>' + UI.esc(r.title) + '</h3><p>' + UI.esc(r.text) + '</p></section>';
       }).join('');
-      var chosen = (mode.options || []).map(function (o) {
+      var chosen = (mode.options || []).filter(function (o) { return CT.optionShown(o, options); }).map(function (o) {
         var c = o.choices.filter(function (x) { return x.value === options[o.id]; })[0];
         return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
       }).join(' · ');

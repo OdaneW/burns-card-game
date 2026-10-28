@@ -238,7 +238,8 @@
       if (key.indexOf('card:') === 0) return document.querySelector('.hcard[data-id="' + key.slice(5) + '"]');
       return null;
     },
-    topTargets: /^(card:|hand|declare|slap|choices|me|seat:p0)/,
+    // (Put down! pops up somewhere on the table, so its note goes wherever there's room)
+    topTargets: /^(card:|hand|declare|choices|me|seat:p0)/,
     playLabel: 'Play Donkey'
   });
 })(window.CT);

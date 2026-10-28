@@ -15,6 +15,20 @@
   var RANKS = { J: 'Jacks', Q: 'Queens', K: 'Kings', A: 'Aces' };
   var PLACES = ['1st', '2nd', '3rd', '4th'];
   var RING = 113.1;   // circumference of the avatar timer ring (r = 18)
+  // Put down! pops up somewhere on the table (the same spot on everyone's screen), and a
+  // press quicker than anyone could have seen it sends it somewhere else: no pre-tapping.
+  var TOO_QUICK_MS = 160;
+
+  /* Two steady numbers in [0, 1) from a string: where the button goes for this race. */
+  function spotFor(key) {
+    var h = 2166136261;
+    for (var i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+    var mix = function (x) {   // spreads every bit of the key over the result
+      x = Math.imul(x ^ (x >>> 16), 2246822507); x = Math.imul(x ^ (x >>> 13), 3266489909);
+      return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
+    };
+    return { x: mix(h), y: mix(h ^ 0x9E3779B9) };
+  }
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -116,6 +130,7 @@
           '<p class="dk-caption" id="d-caption"></p>' +
           '<div class="dk-duel" id="d-duel" hidden></div>' +
         '</div>' +
+        '<button class="dk-slap" id="d-slap" type="button" hidden><span>Put down!</span></button>' +
       '</div>' +
       '<div class="status" id="d-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
       '<div class="dk-choices" id="d-choices" hidden></div>' +
@@ -126,9 +141,7 @@
           '<button class="btn btn-primary btn-play" id="d-pass" type="button" hidden></button>' +
         '</div>' +
       '</div>' +
-      '<div class="hand-wrap dk-handwrap" id="d-handwrap"><div class="hand" id="d-hand"></div>' +
-        '<button class="dk-slap" id="d-slap" type="button" hidden><span>Put down!</span></button>' +
-      '</div>';
+      '<div class="hand-wrap dk-handwrap" id="d-handwrap"><div class="hand" id="d-hand"></div></div>';
 
     var table = this.root.querySelector('#d-table');
     v.players.forEach(function (p, i) {
@@ -178,6 +191,7 @@
       pass: this.root.querySelector('#d-pass'),
       handWrap: this.root.querySelector('#d-handwrap'),
       hand: this.root.querySelector('#d-hand'),
+      table: this.root.querySelector('#d-table'),
       slap: this.root.querySelector('#d-slap')
     };
     this.renderAudio();
@@ -194,7 +208,7 @@
     // the race is won on the press, not the release
     this.el.slap.addEventListener('pointerdown', function (e) { e.preventDefault(); self.slap(); });
     this.el.slap.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self.slap(); }
+      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); self.slap(); }
     });
     this.el.choices.addEventListener('click', function (e) {
       var b = e.target.closest('button');
@@ -580,6 +594,10 @@
       this.el.pass.hidden = true;
     }
     this.el.slap.hidden = !v.canReact;
+    if (v.canReact) {
+      var key = v.round + ':' + (v.race && v.race.startAt);
+      if (this.slapKey !== key) { this.slapKey = key; this.slapHops = 0; this.placeSlap(); }
+    }
     this.el.handWrap.classList.toggle('is-down', !!this.raceEntry(v, this.me) && (v.phase === 'race' || v.phase === 'roundEnd'));
   };
 
@@ -725,12 +743,33 @@
     });
   };
 
+  /* Put down! somewhere on the table: the same spot for everyone in this race,
+     and a new one each time it has to hop. */
+  DonkeyTable.prototype.placeSlap = function () {
+    var b = this.el.slap, t = this.el.table;
+    var at = spotFor(this.slapKey + ':' + this.slapHops);
+    var m = 8, W = t.clientWidth, H = t.clientHeight, bw = b.offsetWidth || 132, bh = b.offsetHeight || 60;
+    b.style.left = Math.round(m + at.x * Math.max(0, W - bw - 2 * m)) + 'px';
+    b.style.top = Math.round(m + at.y * Math.max(0, H - bh - 2 * m)) + 'px';
+    b.classList.remove('hop');
+    void b.offsetWidth;
+    b.classList.add('hop');
+    this.slapShownAt = performance.now();
+  };
+
   /* In a race every millisecond counts: the slap sounds the moment you tap. */
   DonkeyTable.prototype.slap = function () {
     var v = this.v;
     if (!v || !v.canReact) return;
     var key = v.round + ':' + (v.race && v.race.startAt);
     if (this.slapped === key) return;
+    // quicker than anyone could have seen it: a tap that was already on its way. It hops.
+    if (performance.now() - (this.slapShownAt || 0) < TOO_QUICK_MS) {
+      this.slapHops = (this.slapHops || 0) + 1;
+      this.placeSlap();
+      UI.Sound.play('nope');
+      return;
+    }
     this.slapped = key;
     UI.Sound.play('slap');
     UI.buzz(25);

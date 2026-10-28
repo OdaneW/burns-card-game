@@ -16,6 +16,7 @@
   var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
   var NUM = ['no', 'one', 'two', 'three', 'four'];
   var RING = 113.1;   // circumference of the avatar timer ring (r = 18)
+  var EXPOSE_MS = 3600;   // a bluff nobody called stays turned over on the pile this long
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -105,7 +106,9 @@
         '<div class="bl-center" id="b-center">' +
           // the last play, big: who played, and what they claim it is
           '<div class="bl-claim" id="b-claim" aria-live="polite" style="visibility:hidden"><span class="who" id="b-claim-who">·</span><b class="what" id="b-claim-what">·</b></div>' +
-          '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></div>' +
+          '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span>' +
+            // a bluff nobody called, turned over on the pile for a moment (a rule choice)
+            '<div class="bl-exposed" id="b-exposed" hidden></div></div>' +
           '<p class="bl-pilecount" id="b-pilecount"></p>' +
           // the rank that must be claimed next: the rank alone on a tile, and who has to play it
           '<div class="bl-now" id="b-now"><b class="bl-rank" id="b-rank"></b>' +
@@ -161,6 +164,7 @@
       turn: this.root.querySelector('#b-turn'),
       now: this.root.querySelector('#b-now'),
       pile: this.root.querySelector('#b-pile'),
+      exposed: this.root.querySelector('#b-exposed'),
       pileCount: this.root.querySelector('#b-pilecount'),
       reveal: this.root.querySelector('#b-reveal'),
       statusMain: this.root.querySelector('#b-status .status-main'),
@@ -266,7 +270,7 @@
   };
 
   BullTable.prototype.target = function (key) {
-    if (key === 'pile') return this.el.pile.lastElementChild;
+    if (key === 'pile') { var backs = this.el.pile.querySelectorAll(':scope > .card'); return backs[backs.length - 1]; }
     if (key.indexOf('h:') === 0) return this.handEls[key.slice(2)] || null;
     if (key.indexOf('seat:') === 0) {
       var pid = key.slice(5);
@@ -310,8 +314,15 @@
     this.renderHand(v);
   };
 
+  /* A bluff nobody called is showing on the pile (for a few seconds after it was turned over). */
+  BullTable.prototype.exposureLive = function (v) {
+    var x = v.exposure;
+    return !!x && v.phase !== 'reveal' && this.session.now() < x.at + EXPOSE_MS;
+  };
+
   BullTable.prototype.renderSeats = function (v) {
     var self = this, r = v.phase === 'reveal' ? v.reveal : null;
+    var x = this.exposureLive(v) ? v.exposure : null;
     v.players.forEach(function (p) {
       var s = self.seatEls[p.id];
       if (!s) return;
@@ -325,6 +336,7 @@
       var say = '', tone = '';
       if (r && r.challenger === p.id) { say = 'Bull!'; tone = 'hot'; }
       else if (r && r.accused === p.id) { say = r.lie ? 'Caught!' : 'True!'; tone = r.lie ? 'ember' : 'ok'; }
+      else if (x && x.by === p.id) { say = 'Bluffed!'; tone = 'ember'; }
       else if (v.phase === 'over' && v.winners && v.winners[0] === p.id) { say = 'Out!'; tone = 'ok'; }
       s.bubble.style.visibility = say ? '' : 'hidden';   // keeps its space, so the seat doesn't jump
       s.bubble.textContent = say || '·';
@@ -349,11 +361,30 @@
     // keeps its space while hidden, so the pile doesn't jump
     this.el.now.style.visibility = v.phase === 'play' ? '' : 'hidden';
     // the pile: up to three backs, to suggest its size
-    var backs = this.el.pile.children;
+    var backs = this.el.pile.querySelectorAll(':scope > .card');
     var shown = v.phase === 'dealing' ? 1 : v.pileCount ? Math.min(3, Math.ceil(v.pileCount / 4)) : 0;
     for (var i = 0; i < backs.length; i++) backs[i].style.visibility = i < shown ? '' : 'hidden';
     this.el.pile.classList.toggle('empty', !shown);
-    this.el.pileCount.textContent = v.pileCount ? cardsWord(v.pileCount) : (v.phase === 'dealing' ? '' : 'No cards yet');
+    // a bluff nobody called, turned over on the pile for a moment (the "lies" rule choice)
+    var x = this.exposureLive(v) ? v.exposure : null;
+    this.el.exposed.hidden = !x;
+    if (x && this.el.exposed.dataset.key !== String(x.no)) {
+      // labelled with whose claim it was, so it isn't read as the play just above it
+      this.el.exposed.dataset.key = String(x.no);
+      this.el.exposed.innerHTML = '<p class="bl-exposed-head">' + this.poss(x.by).replace(/^your/, 'Your') + ' ' + owned(x.rank, x.n) + '</p><div class="bl-exposed-cards"></div>';
+      var row = this.el.exposed.querySelector('.bl-exposed-cards');
+      x.cards.forEach(function (c, i) {
+        var el = UI.makeCard(c);
+        el.classList.toggle('wrong', c.rank !== x.rank);
+        el.style.setProperty('--i', i);
+        row.appendChild(el);
+      });
+    }
+    if (!x) this.el.exposed.dataset.key = '';
+    this.el.pile.classList.toggle('exposing', !!x);
+    this.el.pileCount.classList.toggle('exposed', !!x);
+    this.el.pileCount.innerHTML = x ? (x.n === 1 ? 'was' : 'were') + ' a bluff nobody called!'
+      : v.pileCount ? cardsWord(v.pileCount) : (v.phase === 'dealing' ? '' : 'No cards yet');
     if (!showReveal) return;
     var key = r.no + ':' + r.challenger;
     if (this.el.reveal.dataset.key === key) return;
@@ -534,6 +565,9 @@
     if (!v) return;
     var now = this.session.now();
     var self = this;
+    // a revealed bluff has had its moment on the pile
+    var live = this.exposureLive(v);
+    if (live !== !!this.exposedShown) { this.exposedShown = live; this.renderCenter(v); this.renderSeats(v); }
     var who = null, endsAt = null, total = 0;
     if (v.phase === 'play' && v.turnEndsAt && (v.openAt == null || now >= v.openAt)) { who = v.turn; endsAt = v.turnEndsAt; total = v.timing.turnMs; }
     if (v.phase === 'lastcall' && v.last) { who = v.last.by; endsAt = v.phaseEndsAt; total = v.timing.lastCallMs; }
@@ -664,6 +698,9 @@
         case 'lastCall':
           UI.Sound.play('alert');
           break;
+        case 'lieExposed':
+          setTimeout(function () { UI.Sound.play('flip'); }, 150);
+          break;
         case 'timeout':
           if (e.player === me) { UI.toast('Time’s up. A card was played for you.'); UI.Sound.play('nope'); }
           break;
@@ -710,6 +747,10 @@
       case 'lastCall':
         this.pushLog((e.player === me ? 'You' : N(e.player)) + ' played ' + (e.player === me ? 'your' : 'their') + ' last cards. Last chance to call Bull!', 'set');
         break;
+      case 'lieExposed':
+        this.pushLog((e.player === me ? 'Your bluff got past everyone: your ' : N(e.player) + ' got away with a bluff: ' + this.poss(e.player) + ' ') +
+          owned(e.rank, e.n) + (e.n === 1 ? ' was ' : ' were ') + e.cards.map(UI.cardText).join(' ') + (e.final ? ', and it won the game.' : '.'), 'set');
+        break;
       case 'gameOver':
         this.pushLog((e.winners[0] === me ? 'You win' : N(e.winners[0]) + ' wins') + ': no cards left.', 'win');
         break;
@@ -729,8 +770,12 @@
       return '<li class="' + (p.id === w ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc(nm.charAt(0)) + '</span>' +
         '<span>' + nm + '</span><span class="left">' + (p.handCount ? cardsWord(p.handCount) + ' left' : 'out') + '</span></li>';
     }).join('');
+    // won with a bluff nobody called, turned over at the end (the "lies" rule choice)
+    var x = v.exposure && v.exposure.final && v.exposure.by === w ? v.exposure : null;
+    var bluff = x ? ', with a bluff nobody called: ' + this.poss(w) + ' ' + owned(x.rank, x.n) + (x.n === 1 ? ' was ' : ' were ') +
+      x.cards.map(UI.cardText).join(' ') + '!' : '.';
     return {
-      why: (w === me ? 'You' : this.name(w)) + ' got rid of every card first.',
+      why: (w === me ? 'You' : this.name(w)) + ' got rid of every card first' + bluff,
       body: '<div class="standings"><ul>' + rows + '</ul></div>'
     };
   };

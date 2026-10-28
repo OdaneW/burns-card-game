@@ -14,13 +14,16 @@
      Someone plays their last cards ─► lastcall ─► over, or reveal if called
    Everyone gets a few seconds after each play to call Bull before the next
    player may play; after that, calls are still open until they do.
+   With the "lies" rule choice set to shown, a bluff nobody called is turned
+   over for everyone once it's safe: when the next player plays, or when the
+   last cards of the game go uncalled.
    Pure rules: every function takes the state and the game time; no timers,
    no DOM. Seats run clockwise in the order of state.players.
    ========================================================================== */
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 1;
+  var ENGINE_VERSION = 2;
   var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   var MAX_PLAY = 4;   // there are only four of each rank
   var NAMES = { A: ['Ace', 'Aces'], J: ['Jack', 'Jacks'], Q: ['Queen', 'Queens'], K: ['King', 'Kings'] };
@@ -58,6 +61,15 @@
         { value: '2', label: '2 sec', help: 'After each play, everyone has 2 seconds to call Bull before the next player can play. Quick games.' },
         { value: '3', label: '3 sec', help: 'After each play, everyone has 3 seconds to call Bull before the next player can play.' },
         { value: '5', label: '5 sec', help: 'After each play, everyone has 5 seconds to call Bull before the next player can play. Time to think.' }
+      ]
+    },
+    {
+      id: 'lies',
+      label: 'Bluffs nobody calls',
+      default: 'secret',
+      choices: [
+        { value: 'secret', label: 'Stay secret', help: 'If nobody calls Bull on a bluff, nobody ever finds out what was really played.' },
+        { value: 'shown', label: 'Revealed', help: 'If a bluff gets past everyone, its cards are turned over for all to see as soon as it’s too late to call Bull.' }
       ]
     },
     {
@@ -108,6 +120,20 @@
     return out;
   }
 
+  function isLie(play) {
+    var want = RANKS[play.rank];
+    return play.cards.some(function (c) { return c.rank !== want; });
+  }
+
+  /* The "lies" rule choice: a bluff that can no longer be called is turned
+     over for everyone. Nobody picks anything up; the cards stay in the pile. */
+  function expose(state, now, play, final) {
+    if (state.options.lies !== 'shown' || !play || play.exposed || !isLie(play)) return;
+    play.exposed = true;
+    state.exposure = { by: play.by, rank: RANKS[play.rank], n: play.cards.length, cards: play.cards.slice(), no: play.no, at: now, final: !!final };
+    emit(state, now, { type: 'lieExposed', player: play.by, rank: RANKS[play.rank], n: play.cards.length, cards: play.cards.slice(), no: play.no, final: !!final });
+  }
+
   function emit(state, now, ev, secret) {
     state.seq += 1;
     ev.seq = state.seq;
@@ -143,10 +169,11 @@
       turnEndsAt: null,   // when time runs out for them
       openAt: null,       // they may play from here (everyone's had a moment to call Bull)
       rank: 0,            // the rank they must claim: an index into RANKS
-      pile: [],           // face-down plays since the pile was last picked up: { by, rank, cards }
+      pile: [],           // face-down plays since the pile was last picked up: { by, rank, cards, no, exposed? }
       last: null,         // the play that can be called: { by, rank, n, at, no }
       plays: 0,
       reveal: null,       // a call being shown: { challenger, accused, rank, n, cards, lie, taker, count, wasLast, no }
+      exposure: null,     // the latest bluff turned over because nobody called it (rule choice)
       winners: null,
       seq: 0,
       events: []
@@ -180,8 +207,10 @@
      the player knows what they really are. */
   function lay(state, p, cards, now, auto) {
     var rank = state.rank;
+    // the play before this one can't be called any more
+    if (state.last) expose(state, now, state.pile[state.pile.length - 1], false);
     state.plays += 1;
-    state.pile.push({ by: p.id, rank: rank, cards: cards });
+    state.pile.push({ by: p.id, rank: rank, cards: cards, no: state.plays });
     state.last = { by: p.id, rank: rank, n: cards.length, at: now, no: state.plays };
     var secret = {};
     secret[p.id] = { cards: cards.slice() };
@@ -311,6 +340,7 @@
         return true;
       case 'lastcall':
         if (now < state.phaseEndsAt) return false;
+        expose(state, now, state.pile[state.pile.length - 1], true);   // out with a bluff?
         finish(state, now, state.last.by);       // nobody called: they're out
         return true;
       case 'reveal':
@@ -353,11 +383,18 @@
         taker: r.taker, count: r.count, wasLast: r.wasLast, no: r.no } : null,
       plays: state.plays,
       winners: state.winners,
+      // the latest bluff turned over because nobody called it (the "lies" rule choice)
+      exposure: state.exposure ? { by: state.exposure.by, rank: state.exposure.rank, n: state.exposure.n, cards: state.exposure.cards.slice(),
+        no: state.exposure.no, at: state.exposure.at, final: state.exposure.final } : null,
       seq: state.seq
     };
-    // the cards you put on the pile yourself: you know what they are
+    // the cards you put on the pile yourself: you know what they are; and bluffs everyone has seen
     v.myPileCards = [];
-    state.pile.forEach(function (pl) { if (pl.by === pid) pl.cards.forEach(function (c) { v.myPileCards.push(c); }); });
+    v.exposedCards = [];
+    state.pile.forEach(function (pl) {
+      if (pl.by === pid) pl.cards.forEach(function (c) { v.myPileCards.push(c); });
+      else if (pl.exposed) pl.cards.forEach(function (c) { v.exposedCards.push(c); });
+    });
     v.canPlay = !!me && state.phase === 'play' && state.turn === pid && me.hand.length > 0;
     v.canBull = !!me && (state.phase === 'play' || state.phase === 'lastcall') && !!last && last.by !== pid;
 
@@ -385,7 +422,10 @@
       { title: 'Bull!', text: 'If you think the last player lied, call Bull! Anyone can call, but only on the last play, and only until the next player has played. After each play everyone has ' + call + ' seconds to call before the next player can go.' },
       { title: 'Who picks up', text: 'The cards that were called are turned over. If any of them isn’t what was claimed, the liar picks up the whole pile. If they told the truth, whoever called Bull picks up the whole pile instead. Then play carries on with the next rank.' },
       { title: 'Winning', text: 'The first player to get rid of all their cards wins. When someone plays their last cards, everyone gets one last chance to call Bull. If they were bluffing, they pick up the pile and play on.' },
-      { title: 'Time limit', text: 'You have ' + turn + ' seconds to play. When time runs out, one card is played for you: a true one if you have it.' }
+      { title: 'Time limit', text: 'You have ' + turn + ' seconds to play. When time runs out, one card is played for you: a true one if you have it.' },
+      o.lies === 'shown'
+        ? { title: 'Bluffs nobody calls', text: 'If a bluff gets past everyone, its cards are turned over for all to see as soon as it’s too late to call Bull: when the next player plays, or at the end, when someone wins with a bluff. Nobody picks anything up; the cards stay in the pile.' }
+        : { title: 'Bluffs nobody calls', text: 'A bluff that nobody calls stays secret. There’s a rule choice in the game setup to turn them over for everyone once it’s too late to call Bull.' }
     ];
   }
 

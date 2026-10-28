@@ -46,7 +46,8 @@
     var known = v.hand.filter(function (c) { return c.rank === last.rank; }).length;
     var mine = v.hand.length;
     if (k.memory) {
-      var pile = v.myPileCards || [];
+      // its own cards on the pile, and any bluff that was turned over for everyone
+      var pile = (v.myPileCards || []).concat(v.exposedCards || []);
       known += pile.filter(function (c) { return c.rank === last.rank; }).length;
       mine += pile.length;
     }

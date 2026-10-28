@@ -11,11 +11,12 @@
   var Donkey = CT.getMode('donkey');
 
   /* Reaction to someone putting four down, in ms after the race starts:
-     base + up to spread, and now and then a slow moment. */
+     base + up to spread, and now and then a slow moment. People have to spot
+     the Put down! button wherever it pops up, which the timings allow for. */
   var REFLEX = {
-    relaxed: { base: 560, spread: 420, slip: 0.12, slipBase: 500, slipSpread: 800 },   // ~0.8 s
-    normal: { base: 380, spread: 260, slip: 0.07, slipBase: 300, slipSpread: 600 },    // ~0.55 s, an alert person
-    sharp: { base: 280, spread: 160, slip: 0.04, slipBase: 250, slipSpread: 400 }      // ~0.4 s
+    relaxed: { base: 680, spread: 420, slip: 0.12, slipBase: 500, slipSpread: 800 },   // ~0.9 s
+    normal: { base: 500, spread: 260, slip: 0.07, slipBase: 300, slipSpread: 600 },    // ~0.65 s, an alert person
+    sharp: { base: 400, spread: 160, slip: 0.04, slipBase: 250, slipSpread: 400 }      // ~0.5 s
   };
 
   function reflex(v, rnd) {

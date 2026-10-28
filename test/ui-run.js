@@ -571,18 +571,21 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
-    if (/^bull(-small|-landscape|-six)?$/.test(SCENARIO)) {
+    if (/^bull(-small|-landscape|-six)?(-lies)?$/.test(SCENARIO)) {
       // A game of Bull through the screen: playing true cards and bluffs, calling Bull, big hands.
+      // -lies: with bluffs nobody calls revealed (a rule choice).
+      const lies = /-lies$/.test(SCENARIO);
+      const base = SCENARIO.replace(/-lies$/, '');
       const size = {
         'bull': { viewport: { width: 390, height: 844 } },
         'bull-small': { viewport: { width: 360, height: 640 } },
         'bull-landscape': { viewport: { width: 844, height: 390 } },
         'bull-six': { viewport: { width: 390, height: 844 } }
-      }[SCENARIO];
-      const players = SCENARIO === 'bull-six' ? 6 : SCENARIO === 'bull-small' ? 3 : 4;
+      }[base];
+      const players = base === 'bull-six' ? 6 : base === 'bull-small' ? 3 : 4;
       const tag = SCENARIO;
       const p = await open(browser, { ctx: size, seed: 41, speed: 2,
-        settings: { format: 2, bull: { opponents: players - 1, options: {} } } });
+        settings: { format: 2, bull: { opponents: players - 1, options: lies ? { lies: 'shown' } : {} } } });
       await shot(p, tag + '-01-home');
       await p.tap('[data-play="bull"]');
       await sleep(300);
@@ -595,7 +598,7 @@ async function playGame(p, tag, want) {
         const v = s.view(me, { events: false });
         return { phase: v.phase, turn: v.turn, me: me, rank: v.rank, canPlay: v.canPlay, canBull: v.canBull, openAt: v.openAt, now: s.now(),
           hand: v.hand.map(c => c.id), handRanks: v.hand.map(c => c.rank), last: v.last, reveal: v.reveal, sheet: CT.App.sheet, pile: v.pileCount,
-          two: document.getElementById('b-handwrap').classList.contains('two') };
+          two: document.getElementById('b-handwrap').classList.contains('two'), exposed: !document.getElementById('b-exposed').hidden };
       });
       const shots = {};
       const once = async (key, name, wait) => { if (shots[key]) return; shots[key] = 1; if (wait) await sleep(wait); await shot(p, tag + '-' + name); };
@@ -606,6 +609,7 @@ async function playGame(p, tag, want) {
         if (v.phase === 'dealing') await once('deal', '03-dealing', 500);
         if (v.phase === 'reveal') await once(v.reveal.lie ? 'lie' : 'true', v.reveal.lie ? '08-reveal-bluff' : '09-reveal-true', 900);
         if (v.phase === 'lastcall') await once('last', '10-last-call', 200);
+        if (v.exposed) await once('exposed', '14-bluff-revealed', 350);
         if (v.canBull && v.last && v.last.n >= 2 && myCalls < 3 && Math.random() < 0.5) {
           await once('bullbtn', '06-bull-button', 0);
           try { await p.tap('#b-bull', { timeout: 1500 }); myCalls++; } catch (e) { /* the moment passed */ }
@@ -631,7 +635,8 @@ async function playGame(p, tag, want) {
       if (!v || v.phase !== 'over') throw new Error('Bull game did not finish');
       const end = await p.evaluate(() => {
         const st = CT.App.session.state;
-        return { plays: st.plays, winner: st.winners[0], calls: st.events.filter(e => e.type === 'bull').length, counts: st.players.map(x => x.hand.length) };
+        return { plays: st.plays, winner: st.winners[0], calls: st.events.filter(e => e.type === 'bull').length, counts: st.players.map(x => x.hand.length),
+          revealed: st.events.filter(e => e.type === 'lieExposed').length, revealedAtEnd: st.events.some(e => e.type === 'lieExposed' && e.final) };
       });
       console.log('  game over:', JSON.stringify(end), '· you played', myPlays, 'times (' + myBluffs + ' with a bluff), called Bull', myCalls, 'times · two-row hand seen:', sawTwoRows);
       await sleep(2800);

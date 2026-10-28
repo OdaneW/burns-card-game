@@ -772,17 +772,21 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .hcard.four { box-shadow: 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .55); }
 .dk-handwrap .hcard { transition: transform .22s cubic-bezier(.3, .7, .3, 1), left .28s cubic-bezier(.3, .7, .3, 1), filter .2s, box-shadow .2s; }
 .dk-handwrap.is-down .hcard { transform: translateY(16px) scale(.94); filter: saturate(.4) brightness(.6); }
+/* Put down!: pops up at a random spot on the table (the same for everyone), smaller than a hand */
+.dk-table { position: relative; }
 .dk-slap {
-  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); top: 6px; bottom: 8px;
-  z-index: 6;
+  position: absolute; left: 0; top: 0;
+  z-index: 8;
   display: grid; place-items: center;
-  border: 0; border-radius: 22px;
+  min-width: 128px; height: 58px; padding: 0 20px;
+  border: 0; border-radius: 999px;
   background: var(--ember); color: #2A0E05;
-  font: 400 30px/1 var(--font-display);
+  font: 400 20px/1 var(--font-display); white-space: nowrap;
   box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45);
   cursor: pointer; touch-action: manipulation;
   animation: slapIn .16s ease-out, slapPulse .6s ease-in-out .16s infinite alternate;
 }
+.dk-slap.hop { animation: slapHop .18s ease-out, slapPulse .6s ease-in-out .18s infinite alternate; }   /* a new spot: pops in again */
 .dk-slap:active { transform: scale(.97); }
 
 .dk-standings li { grid-template-columns: auto auto 1fr auto; }
@@ -794,6 +798,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 @keyframes fourGlow { from { box-shadow: 0 0 0 0 rgba(244, 185, 66, .0), 0 4px 0 var(--marigold-deep); } to { box-shadow: 0 0 0 6px rgba(244, 185, 66, .35), 0 4px 0 var(--marigold-deep); } }
 @keyframes thump { 0% { transform: scale(1.12); } 100% { transform: none; } }
 @keyframes slapIn { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slapHop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes slapPulse { from { box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45); } to { box-shadow: 0 0 0 10px rgba(240, 100, 60, .18), 0 14px 30px rgba(0, 0, 0, .45); } }
 
 /* ---------- Bull: a round table for three to six ---------- */
@@ -864,12 +869,29 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .bl-center { gap: 4px; }
 }
 .bl-pile { position: relative; width: calc(var(--rail-cw) + 12px); height: calc(var(--rail-cw) * 1.4 + 6px); }
-.bl-pile .card { --cw: var(--rail-cw); position: absolute; top: 2px; left: 4px; }
-.bl-pile .card:nth-child(1) { transform: rotate(-9deg) translateX(-3px); }
-.bl-pile .card:nth-child(2) { transform: rotate(5deg) translateX(3px); }
-.bl-pile .card:nth-child(3) { transform: rotate(-1deg); }
+.bl-pile > .card { --cw: var(--rail-cw); position: absolute; top: 2px; left: 4px; }
+.bl-pile > .card:nth-child(1) { transform: rotate(-9deg) translateX(-3px); }
+.bl-pile > .card:nth-child(2) { transform: rotate(5deg) translateX(3px); }
+.bl-pile > .card:nth-child(3) { transform: rotate(-1deg); }
 .bl-pile.empty { border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .2); }
 .bl-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+.bl-pilecount.exposed { color: #FFB59B; font-weight: 800; }
+/* a bluff nobody called, turned over where the pile is (rule choice), labelled with whose claim it was */
+.bl-pile.exposing > .card { visibility: hidden; }
+.bl-exposed {
+  position: absolute; left: 50%; top: 50%; z-index: 2; transform: translate(-50%, -50%);
+  display: grid; justify-items: center; gap: 3px;
+  padding: 5px 9px 7px; border-radius: 12px;
+  background: rgba(6, 30, 29, .82); box-shadow: inset 0 0 0 1.5px rgba(255, 181, 155, .55), 0 8px 20px rgba(0, 0, 0, .35);
+  pointer-events: none; white-space: nowrap;
+  animation: exposeIn .3s cubic-bezier(.2, .8, .3, 1.2) both;
+}
+.bl-exposed[hidden] { display: none; }
+.bl-exposed-head { font: 800 10px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: #FFB59B; }
+.bl-exposed-cards { display: flex; gap: 3px; perspective: 600px; }
+.bl-exposed-cards .card { --cw: calc(var(--rail-cw) * .64); animation: flipIn .4s ease-out both; animation-delay: calc(var(--i) * 80ms + .1s); }
+.bl-exposed-cards .card.wrong { box-shadow: 0 0 0 2px var(--ember), 0 0 10px rgba(240, 100, 60, .55); }
+@keyframes exposeIn { from { opacity: 0; scale: .7; } to { opacity: 1; scale: 1; } }
 .bl-center.revealing .bl-claim, .bl-center.revealing .bl-pile, .bl-center.revealing .bl-pilecount, .bl-center.revealing .bl-now { display: none; }
 .bl-reveal { display: grid; justify-items: center; gap: 6px; }
 .bl-reveal-head { font: 800 15px/1.25 var(--font-ui); color: var(--ink); }
@@ -964,7 +986,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .pen-stop { padding: 16px 46px; font: 400 27px/1 var(--font-display); background: var(--ember); color: #2A0E05; box-shadow: 0 4px 0 #A63F20, 0 12px 26px rgba(0, 0, 0, .3); animation: bullPulse .7s ease-in-out infinite alternate; }
 .pen-stop:disabled { opacity: .45; animation: none; }
 .pen-stop:active { transform: translateY(2px); }
-.pen-suits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 340px); }
+.pen-suits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 340px); transition: opacity .25s, transform .25s; }
+.pen-suits.arming { opacity: .4; transform: scale(.97); }   /* just after Stop: not tappable yet */
+.pen-suits.arming .pen-suitbtn:disabled { opacity: 1; }
 .pen-suitbtn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 10px; background: var(--card); color: var(--suit-black); font: 800 17px/1 var(--font-ui); box-shadow: 0 3px 0 var(--card-edge), 0 8px 18px rgba(0, 0, 0, .25); }
 .pen-suitbtn.red { color: var(--suit-red); }
 .pen-suitbtn .si { width: 22px; height: 22px; }

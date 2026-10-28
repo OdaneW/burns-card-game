@@ -795,17 +795,21 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .hcard.four { box-shadow: 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .55); }
 .dk-handwrap .hcard { transition: transform .22s cubic-bezier(.3, .7, .3, 1), left .28s cubic-bezier(.3, .7, .3, 1), filter .2s, box-shadow .2s; }
 .dk-handwrap.is-down .hcard { transform: translateY(16px) scale(.94); filter: saturate(.4) brightness(.6); }
+/* Put down!: pops up at a random spot on the table (the same for everyone), smaller than a hand */
+.dk-table { position: relative; }
 .dk-slap {
-  position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); top: 6px; bottom: 8px;
-  z-index: 6;
+  position: absolute; left: 0; top: 0;
+  z-index: 8;
   display: grid; place-items: center;
-  border: 0; border-radius: 22px;
+  min-width: 128px; height: 58px; padding: 0 20px;
+  border: 0; border-radius: 999px;
   background: var(--ember); color: #2A0E05;
-  font: 400 30px/1 var(--font-display);
+  font: 400 20px/1 var(--font-display); white-space: nowrap;
   box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45);
   cursor: pointer; touch-action: manipulation;
   animation: slapIn .16s ease-out, slapPulse .6s ease-in-out .16s infinite alternate;
 }
+.dk-slap.hop { animation: slapHop .18s ease-out, slapPulse .6s ease-in-out .18s infinite alternate; }   /* a new spot: pops in again */
 .dk-slap:active { transform: scale(.97); }
 
 .dk-standings li { grid-template-columns: auto auto 1fr auto; }
@@ -817,6 +821,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 @keyframes fourGlow { from { box-shadow: 0 0 0 0 rgba(244, 185, 66, .0), 0 4px 0 var(--marigold-deep); } to { box-shadow: 0 0 0 6px rgba(244, 185, 66, .35), 0 4px 0 var(--marigold-deep); } }
 @keyframes thump { 0% { transform: scale(1.12); } 100% { transform: none; } }
 @keyframes slapIn { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slapHop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes slapPulse { from { box-shadow: 0 0 0 4px rgba(240, 100, 60, .35), 0 14px 30px rgba(0, 0, 0, .45); } to { box-shadow: 0 0 0 10px rgba(240, 100, 60, .18), 0 14px 30px rgba(0, 0, 0, .45); } }
 
 /* ---------- Bull: a round table for three to six ---------- */
@@ -887,12 +892,29 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .bl-center { gap: 4px; }
 }
 .bl-pile { position: relative; width: calc(var(--rail-cw) + 12px); height: calc(var(--rail-cw) * 1.4 + 6px); }
-.bl-pile .card { --cw: var(--rail-cw); position: absolute; top: 2px; left: 4px; }
-.bl-pile .card:nth-child(1) { transform: rotate(-9deg) translateX(-3px); }
-.bl-pile .card:nth-child(2) { transform: rotate(5deg) translateX(3px); }
-.bl-pile .card:nth-child(3) { transform: rotate(-1deg); }
+.bl-pile > .card { --cw: var(--rail-cw); position: absolute; top: 2px; left: 4px; }
+.bl-pile > .card:nth-child(1) { transform: rotate(-9deg) translateX(-3px); }
+.bl-pile > .card:nth-child(2) { transform: rotate(5deg) translateX(3px); }
+.bl-pile > .card:nth-child(3) { transform: rotate(-1deg); }
 .bl-pile.empty { border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .2); }
 .bl-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+.bl-pilecount.exposed { color: #FFB59B; font-weight: 800; }
+/* a bluff nobody called, turned over where the pile is (rule choice), labelled with whose claim it was */
+.bl-pile.exposing > .card { visibility: hidden; }
+.bl-exposed {
+  position: absolute; left: 50%; top: 50%; z-index: 2; transform: translate(-50%, -50%);
+  display: grid; justify-items: center; gap: 3px;
+  padding: 5px 9px 7px; border-radius: 12px;
+  background: rgba(6, 30, 29, .82); box-shadow: inset 0 0 0 1.5px rgba(255, 181, 155, .55), 0 8px 20px rgba(0, 0, 0, .35);
+  pointer-events: none; white-space: nowrap;
+  animation: exposeIn .3s cubic-bezier(.2, .8, .3, 1.2) both;
+}
+.bl-exposed[hidden] { display: none; }
+.bl-exposed-head { font: 800 10px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: #FFB59B; }
+.bl-exposed-cards { display: flex; gap: 3px; perspective: 600px; }
+.bl-exposed-cards .card { --cw: calc(var(--rail-cw) * .64); animation: flipIn .4s ease-out both; animation-delay: calc(var(--i) * 80ms + .1s); }
+.bl-exposed-cards .card.wrong { box-shadow: 0 0 0 2px var(--ember), 0 0 10px rgba(240, 100, 60, .55); }
+@keyframes exposeIn { from { opacity: 0; scale: .7; } to { opacity: 1; scale: 1; } }
 .bl-center.revealing .bl-claim, .bl-center.revealing .bl-pile, .bl-center.revealing .bl-pilecount, .bl-center.revealing .bl-now { display: none; }
 .bl-reveal { display: grid; justify-items: center; gap: 6px; }
 .bl-reveal-head { font: 800 15px/1.25 var(--font-ui); color: var(--ink); }
@@ -987,7 +1009,9 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .pen-stop { padding: 16px 46px; font: 400 27px/1 var(--font-display); background: var(--ember); color: #2A0E05; box-shadow: 0 4px 0 #A63F20, 0 12px 26px rgba(0, 0, 0, .3); animation: bullPulse .7s ease-in-out infinite alternate; }
 .pen-stop:disabled { opacity: .45; animation: none; }
 .pen-stop:active { transform: translateY(2px); }
-.pen-suits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 340px); }
+.pen-suits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 340px); transition: opacity .25s, transform .25s; }
+.pen-suits.arming { opacity: .4; transform: scale(.97); }   /* just after Stop: not tappable yet */
+.pen-suits.arming .pen-suitbtn:disabled { opacity: 1; }
 .pen-suitbtn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 10px; background: var(--card); color: var(--suit-black); font: 800 17px/1 var(--font-ui); box-shadow: 0 3px 0 var(--card-edge), 0 8px 18px rgba(0, 0, 0, .25); }
 .pen-suitbtn.red { color: var(--suit-red); }
 .pen-suitbtn .si { width: 22px; height: 22px; }
@@ -1171,7 +1195,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.9.2","id":"dacba48","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -1309,6 +1333,13 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     return out;
   }
 
+  /* A rule choice that only matters with another one (showIf: { mode: 'strip' })
+     is left off the setup screen otherwise. */
+  function optionShown(opt, values) {
+    if (!opt.showIf) return true;
+    return Object.keys(opt.showIf).every(function (k) { return values && values[k] === opt.showIf[k]; });
+  }
+
   CT.SUITS = SUITS;
   CT.SUIT_INFO = SUIT_INFO;
   CT.RANKS = RANKS;
@@ -1327,6 +1358,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
   CT.getMode = getMode;
   CT.listModes = listModes;
   CT.resolveOptions = resolveOptions;
+  CT.optionShown = optionShown;
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
 
 /* ---- src/engine/session.js ---- */
@@ -3137,7 +3169,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       { title: 'The cards', text: 'Four players sit in a circle. Only the Jacks, Queens, Kings and Aces are used, 16 cards in all, and everyone gets four.' },
       { title: 'Passing', text: 'A random player starts by passing one card, face down, to the next player clockwise. Whoever receives it checks their hand. Without four of a kind, they pass one card on, and so a card keeps travelling round the circle. You have ' + secs + ' seconds to pass; when time runs out, a random card is passed for you.' },
       { title: 'Four of a kind', text: 'Hold four Jacks, four Queens, four Kings or four Aces? Pass on your spare card, if you have one, and put the four down on the table.' },
-      { title: 'React quickly', text: 'The moment someone puts down four of a kind, everyone else must put their cards down as fast as they can. The last one to do it gets a letter. Anyone whose cards aren’t down after 6 seconds counts as last.' },
+      { title: 'React quickly', text: 'The moment someone puts down four of a kind, everyone else must put their cards down as fast as they can: a Put down! button pops up somewhere on the table, so tap it. The last one to do it gets a letter. Anyone whose cards aren’t down after 6 seconds counts as last. Tapping before you could have seen it doesn’t count: the button jumps somewhere else.' },
       { title: 'DONKEY', text: 'Letters come in order: D, O, N, K, E, Y. Whoever spells DONKEY loses, and the game ends right there.' },
       { title: 'Placings', text: 'Everyone else is ranked by letters: the fewer you have, the better you place. The player with the fewest letters wins.' },
       { title: 'Tie-breaker', text: 'Players tied on letters settle it with a full 52-card deck. A random player from the tie is the challenger and picks someone else from the tie. Each draws a card and looks at it secretly, and the challenger calls whether their own card is lower, equal or higher. A right call knocks out the opponent; a wrong one knocks out the challenger. Aces are high and suits don’t matter, so equal ranks only count for a call of equal. The first one out takes the lowest place, and new duels follow, with a fresh deck and a new random challenger, until one player is left.' }
@@ -3189,11 +3221,12 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
   var Donkey = CT.getMode('donkey');
 
   /* Reaction to someone putting four down, in ms after the race starts:
-     base + up to spread, and now and then a slow moment. */
+     base + up to spread, and now and then a slow moment. People have to spot
+     the Put down! button wherever it pops up, which the timings allow for. */
   var REFLEX = {
-    relaxed: { base: 560, spread: 420, slip: 0.12, slipBase: 500, slipSpread: 800 },   // ~0.8 s
-    normal: { base: 380, spread: 260, slip: 0.07, slipBase: 300, slipSpread: 600 },    // ~0.55 s, an alert person
-    sharp: { base: 280, spread: 160, slip: 0.04, slipBase: 250, slipSpread: 400 }      // ~0.4 s
+    relaxed: { base: 680, spread: 420, slip: 0.12, slipBase: 500, slipSpread: 800 },   // ~0.9 s
+    normal: { base: 500, spread: 260, slip: 0.07, slipBase: 300, slipSpread: 600 },    // ~0.65 s, an alert person
+    sharp: { base: 400, spread: 160, slip: 0.04, slipBase: 250, slipSpread: 400 }      // ~0.5 s
   };
 
   function reflex(v, rnd) {
@@ -3284,13 +3317,16 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
      Someone plays their last cards ─► lastcall ─► over, or reveal if called
    Everyone gets a few seconds after each play to call Bull before the next
    player may play; after that, calls are still open until they do.
+   With the "lies" rule choice set to shown, a bluff nobody called is turned
+   over for everyone once it's safe: when the next player plays, or when the
+   last cards of the game go uncalled.
    Pure rules: every function takes the state and the game time; no timers,
    no DOM. Seats run clockwise in the order of state.players.
    ========================================================================== */
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 1;
+  var ENGINE_VERSION = 2;
   var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   var MAX_PLAY = 4;   // there are only four of each rank
   var NAMES = { A: ['Ace', 'Aces'], J: ['Jack', 'Jacks'], Q: ['Queen', 'Queens'], K: ['King', 'Kings'] };
@@ -3328,6 +3364,15 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
         { value: '2', label: '2 sec', help: 'After each play, everyone has 2 seconds to call Bull before the next player can play. Quick games.' },
         { value: '3', label: '3 sec', help: 'After each play, everyone has 3 seconds to call Bull before the next player can play.' },
         { value: '5', label: '5 sec', help: 'After each play, everyone has 5 seconds to call Bull before the next player can play. Time to think.' }
+      ]
+    },
+    {
+      id: 'lies',
+      label: 'Bluffs nobody calls',
+      default: 'secret',
+      choices: [
+        { value: 'secret', label: 'Stay secret', help: 'If nobody calls Bull on a bluff, nobody ever finds out what was really played.' },
+        { value: 'shown', label: 'Revealed', help: 'If a bluff gets past everyone, its cards are turned over for all to see as soon as it’s too late to call Bull.' }
       ]
     },
     {
@@ -3378,6 +3423,20 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     return out;
   }
 
+  function isLie(play) {
+    var want = RANKS[play.rank];
+    return play.cards.some(function (c) { return c.rank !== want; });
+  }
+
+  /* The "lies" rule choice: a bluff that can no longer be called is turned
+     over for everyone. Nobody picks anything up; the cards stay in the pile. */
+  function expose(state, now, play, final) {
+    if (state.options.lies !== 'shown' || !play || play.exposed || !isLie(play)) return;
+    play.exposed = true;
+    state.exposure = { by: play.by, rank: RANKS[play.rank], n: play.cards.length, cards: play.cards.slice(), no: play.no, at: now, final: !!final };
+    emit(state, now, { type: 'lieExposed', player: play.by, rank: RANKS[play.rank], n: play.cards.length, cards: play.cards.slice(), no: play.no, final: !!final });
+  }
+
   function emit(state, now, ev, secret) {
     state.seq += 1;
     ev.seq = state.seq;
@@ -3413,10 +3472,11 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       turnEndsAt: null,   // when time runs out for them
       openAt: null,       // they may play from here (everyone's had a moment to call Bull)
       rank: 0,            // the rank they must claim: an index into RANKS
-      pile: [],           // face-down plays since the pile was last picked up: { by, rank, cards }
+      pile: [],           // face-down plays since the pile was last picked up: { by, rank, cards, no, exposed? }
       last: null,         // the play that can be called: { by, rank, n, at, no }
       plays: 0,
       reveal: null,       // a call being shown: { challenger, accused, rank, n, cards, lie, taker, count, wasLast, no }
+      exposure: null,     // the latest bluff turned over because nobody called it (rule choice)
       winners: null,
       seq: 0,
       events: []
@@ -3450,8 +3510,10 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
      the player knows what they really are. */
   function lay(state, p, cards, now, auto) {
     var rank = state.rank;
+    // the play before this one can't be called any more
+    if (state.last) expose(state, now, state.pile[state.pile.length - 1], false);
     state.plays += 1;
-    state.pile.push({ by: p.id, rank: rank, cards: cards });
+    state.pile.push({ by: p.id, rank: rank, cards: cards, no: state.plays });
     state.last = { by: p.id, rank: rank, n: cards.length, at: now, no: state.plays };
     var secret = {};
     secret[p.id] = { cards: cards.slice() };
@@ -3581,6 +3643,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
         return true;
       case 'lastcall':
         if (now < state.phaseEndsAt) return false;
+        expose(state, now, state.pile[state.pile.length - 1], true);   // out with a bluff?
         finish(state, now, state.last.by);       // nobody called: they're out
         return true;
       case 'reveal':
@@ -3623,11 +3686,18 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
         taker: r.taker, count: r.count, wasLast: r.wasLast, no: r.no } : null,
       plays: state.plays,
       winners: state.winners,
+      // the latest bluff turned over because nobody called it (the "lies" rule choice)
+      exposure: state.exposure ? { by: state.exposure.by, rank: state.exposure.rank, n: state.exposure.n, cards: state.exposure.cards.slice(),
+        no: state.exposure.no, at: state.exposure.at, final: state.exposure.final } : null,
       seq: state.seq
     };
-    // the cards you put on the pile yourself: you know what they are
+    // the cards you put on the pile yourself: you know what they are; and bluffs everyone has seen
     v.myPileCards = [];
-    state.pile.forEach(function (pl) { if (pl.by === pid) pl.cards.forEach(function (c) { v.myPileCards.push(c); }); });
+    v.exposedCards = [];
+    state.pile.forEach(function (pl) {
+      if (pl.by === pid) pl.cards.forEach(function (c) { v.myPileCards.push(c); });
+      else if (pl.exposed) pl.cards.forEach(function (c) { v.exposedCards.push(c); });
+    });
     v.canPlay = !!me && state.phase === 'play' && state.turn === pid && me.hand.length > 0;
     v.canBull = !!me && (state.phase === 'play' || state.phase === 'lastcall') && !!last && last.by !== pid;
 
@@ -3655,7 +3725,10 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       { title: 'Bull!', text: 'If you think the last player lied, call Bull! Anyone can call, but only on the last play, and only until the next player has played. After each play everyone has ' + call + ' seconds to call before the next player can go.' },
       { title: 'Who picks up', text: 'The cards that were called are turned over. If any of them isn’t what was claimed, the liar picks up the whole pile. If they told the truth, whoever called Bull picks up the whole pile instead. Then play carries on with the next rank.' },
       { title: 'Winning', text: 'The first player to get rid of all their cards wins. When someone plays their last cards, everyone gets one last chance to call Bull. If they were bluffing, they pick up the pile and play on.' },
-      { title: 'Time limit', text: 'You have ' + turn + ' seconds to play. When time runs out, one card is played for you: a true one if you have it.' }
+      { title: 'Time limit', text: 'You have ' + turn + ' seconds to play. When time runs out, one card is played for you: a true one if you have it.' },
+      o.lies === 'shown'
+        ? { title: 'Bluffs nobody calls', text: 'If a bluff gets past everyone, its cards are turned over for all to see as soon as it’s too late to call Bull: when the next player plays, or at the end, when someone wins with a bluff. Nobody picks anything up; the cards stay in the pile.' }
+        : { title: 'Bluffs nobody calls', text: 'A bluff that nobody calls stays secret. There’s a rule choice in the game setup to turn them over for everyone once it’s too late to call Bull.' }
     ];
   }
 
@@ -3739,7 +3812,8 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     var known = v.hand.filter(function (c) { return c.rank === last.rank; }).length;
     var mine = v.hand.length;
     if (k.memory) {
-      var pile = v.myPileCards || [];
+      // its own cards on the pile, and any bluff that was turned over for everyone
+      var pile = (v.myPileCards || []).concat(v.exposedCards || []);
       known += pile.filter(function (c) { return c.rank === last.rank; }).length;
       mine += pile.length;
     }
@@ -5292,6 +5366,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
   var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
   var RING = 295.3;          // circumference of the countdown ring
   var SHOW_SECS_AT = 10000;  // show the seconds when this little time is left
+  var SUIT_ARM_MS = 800;     // Real Burns: after Stop, the suit buttons wake up this much later
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -6081,8 +6156,8 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     } else if (step === 'suit') {
       say = iLost ? 'Name a suit. Every card turned over before it is a slap: <b>black soft, red hard</b>.' : loser + ' is naming a suit…';
       if (v.canSuit) {
-        act = '<div class="pen-suits">' + ['H', 'S', 'D', 'C'].map(function (s) {
-          return '<button class="btn pen-suitbtn' + (UI.isRed(s) ? ' red' : '') + '" type="button" data-suit="' + s + '">' + UI.suitSvg(s) + '<span>' + UI.suitPlural(s).charAt(0).toUpperCase() + UI.suitPlural(s).slice(1) + '</span></button>';
+        act = '<div class="pen-suits arming">' + ['H', 'S', 'D', 'C'].map(function (s) {
+          return '<button class="btn pen-suitbtn' + (UI.isRed(s) ? ' red' : '') + '" type="button" data-suit="' + s + '" disabled>' + UI.suitSvg(s) + '<span>' + UI.suitPlural(s).charAt(0).toUpperCase() + UI.suitPlural(s).slice(1) + '</span></button>';
         }).join('') + '</div>';
         actKey += ':suit';
       }
@@ -6101,7 +6176,13 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       say = (iLost ? 'In all, you take ' : 'In all, ' + loser + ' takes ') + slapsText(t.soft, t.hard) + '.';
     }
     if (el.say.innerHTML !== say) el.say.innerHTML = say;
-    if (this.penActKey !== actKey) { this.penActKey = actKey; el.act.innerHTML = act; this.penaltyFrame(); }
+    if (this.penActKey !== actKey) {
+      this.penActKey = actKey;
+      el.act.innerHTML = act;
+      // the suits appear where Stop was: the press that stopped the shuffle mustn't pick one too
+      this.suitsFrom = /:suit$/.test(actKey) ? performance.now() + SUIT_ARM_MS : 0;
+      this.penaltyFrame();
+    }
 
     // earlier turns
     var done = P.results.slice(0, step === 'result' ? -1 : P.results.length);
@@ -6138,6 +6219,14 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     if (stop) {
       var ready = P.stopFrom == null || now >= P.stopFrom;
       if (stop.disabled === ready) stop.disabled = !ready;
+    }
+    var suits = this.pen.act.querySelector('.pen-suits');
+    if (suits) {
+      var armed = performance.now() >= (this.suitsFrom || 0);
+      if (suits.classList.contains('arming') === armed) {
+        suits.classList.toggle('arming', !armed);
+        suits.querySelectorAll('button').forEach(function (b) { b.disabled = !armed; });
+      }
     }
     var text = '';
     var left = P.endsAt != null ? Math.max(0, P.endsAt - now) : null;
@@ -7001,6 +7090,20 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
   var RANKS = { J: 'Jacks', Q: 'Queens', K: 'Kings', A: 'Aces' };
   var PLACES = ['1st', '2nd', '3rd', '4th'];
   var RING = 113.1;   // circumference of the avatar timer ring (r = 18)
+  // Put down! pops up somewhere on the table (the same spot on everyone's screen), and a
+  // press quicker than anyone could have seen it sends it somewhere else: no pre-tapping.
+  var TOO_QUICK_MS = 160;
+
+  /* Two steady numbers in [0, 1) from a string: where the button goes for this race. */
+  function spotFor(key) {
+    var h = 2166136261;
+    for (var i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+    var mix = function (x) {   // spreads every bit of the key over the result
+      x = Math.imul(x ^ (x >>> 16), 2246822507); x = Math.imul(x ^ (x >>> 13), 3266489909);
+      return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
+    };
+    return { x: mix(h), y: mix(h ^ 0x9E3779B9) };
+  }
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -7102,6 +7205,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
           '<p class="dk-caption" id="d-caption"></p>' +
           '<div class="dk-duel" id="d-duel" hidden></div>' +
         '</div>' +
+        '<button class="dk-slap" id="d-slap" type="button" hidden><span>Put down!</span></button>' +
       '</div>' +
       '<div class="status" id="d-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
       '<div class="dk-choices" id="d-choices" hidden></div>' +
@@ -7112,9 +7216,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
           '<button class="btn btn-primary btn-play" id="d-pass" type="button" hidden></button>' +
         '</div>' +
       '</div>' +
-      '<div class="hand-wrap dk-handwrap" id="d-handwrap"><div class="hand" id="d-hand"></div>' +
-        '<button class="dk-slap" id="d-slap" type="button" hidden><span>Put down!</span></button>' +
-      '</div>';
+      '<div class="hand-wrap dk-handwrap" id="d-handwrap"><div class="hand" id="d-hand"></div></div>';
 
     var table = this.root.querySelector('#d-table');
     v.players.forEach(function (p, i) {
@@ -7164,6 +7266,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       pass: this.root.querySelector('#d-pass'),
       handWrap: this.root.querySelector('#d-handwrap'),
       hand: this.root.querySelector('#d-hand'),
+      table: this.root.querySelector('#d-table'),
       slap: this.root.querySelector('#d-slap')
     };
     this.renderAudio();
@@ -7180,7 +7283,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     // the race is won on the press, not the release
     this.el.slap.addEventListener('pointerdown', function (e) { e.preventDefault(); self.slap(); });
     this.el.slap.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self.slap(); }
+      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); self.slap(); }
     });
     this.el.choices.addEventListener('click', function (e) {
       var b = e.target.closest('button');
@@ -7566,6 +7669,10 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       this.el.pass.hidden = true;
     }
     this.el.slap.hidden = !v.canReact;
+    if (v.canReact) {
+      var key = v.round + ':' + (v.race && v.race.startAt);
+      if (this.slapKey !== key) { this.slapKey = key; this.slapHops = 0; this.placeSlap(); }
+    }
     this.el.handWrap.classList.toggle('is-down', !!this.raceEntry(v, this.me) && (v.phase === 'race' || v.phase === 'roundEnd'));
   };
 
@@ -7711,12 +7818,33 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     });
   };
 
+  /* Put down! somewhere on the table: the same spot for everyone in this race,
+     and a new one each time it has to hop. */
+  DonkeyTable.prototype.placeSlap = function () {
+    var b = this.el.slap, t = this.el.table;
+    var at = spotFor(this.slapKey + ':' + this.slapHops);
+    var m = 8, W = t.clientWidth, H = t.clientHeight, bw = b.offsetWidth || 132, bh = b.offsetHeight || 60;
+    b.style.left = Math.round(m + at.x * Math.max(0, W - bw - 2 * m)) + 'px';
+    b.style.top = Math.round(m + at.y * Math.max(0, H - bh - 2 * m)) + 'px';
+    b.classList.remove('hop');
+    void b.offsetWidth;
+    b.classList.add('hop');
+    this.slapShownAt = performance.now();
+  };
+
   /* In a race every millisecond counts: the slap sounds the moment you tap. */
   DonkeyTable.prototype.slap = function () {
     var v = this.v;
     if (!v || !v.canReact) return;
     var key = v.round + ':' + (v.race && v.race.startAt);
     if (this.slapped === key) return;
+    // quicker than anyone could have seen it: a tap that was already on its way. It hops.
+    if (performance.now() - (this.slapShownAt || 0) < TOO_QUICK_MS) {
+      this.slapHops = (this.slapHops || 0) + 1;
+      this.placeSlap();
+      UI.Sound.play('nope');
+      return;
+    }
     this.slapped = key;
     UI.Sound.play('slap');
     UI.buzz(25);
@@ -8096,7 +8224,8 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       if (key.indexOf('card:') === 0) return document.querySelector('.hcard[data-id="' + key.slice(5) + '"]');
       return null;
     },
-    topTargets: /^(card:|hand|declare|slap|choices|me|seat:p0)/,
+    // (Put down! pops up somewhere on the table, so its note goes wherever there's room)
+    topTargets: /^(card:|hand|declare|choices|me|seat:p0)/,
     playLabel: 'Play Donkey'
   });
 })(window.CT);
@@ -8120,6 +8249,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
   var SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
   var NUM = ['no', 'one', 'two', 'three', 'four'];
   var RING = 113.1;   // circumference of the avatar timer ring (r = 18)
+  var EXPOSE_MS = 3600;   // a bluff nobody called stays turned over on the pile this long
 
   function sortHand(hand) {
     return hand.slice().sort(function (a, b) {
@@ -8209,7 +8339,9 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
         '<div class="bl-center" id="b-center">' +
           // the last play, big: who played, and what they claim it is
           '<div class="bl-claim" id="b-claim" aria-live="polite" style="visibility:hidden"><span class="who" id="b-claim-who">·</span><b class="what" id="b-claim-what">·</b></div>' +
-          '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></div>' +
+          '<div class="bl-pile" id="b-pile" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span>' +
+            // a bluff nobody called, turned over on the pile for a moment (a rule choice)
+            '<div class="bl-exposed" id="b-exposed" hidden></div></div>' +
           '<p class="bl-pilecount" id="b-pilecount"></p>' +
           // the rank that must be claimed next: the rank alone on a tile, and who has to play it
           '<div class="bl-now" id="b-now"><b class="bl-rank" id="b-rank"></b>' +
@@ -8265,6 +8397,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       turn: this.root.querySelector('#b-turn'),
       now: this.root.querySelector('#b-now'),
       pile: this.root.querySelector('#b-pile'),
+      exposed: this.root.querySelector('#b-exposed'),
       pileCount: this.root.querySelector('#b-pilecount'),
       reveal: this.root.querySelector('#b-reveal'),
       statusMain: this.root.querySelector('#b-status .status-main'),
@@ -8370,7 +8503,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
   };
 
   BullTable.prototype.target = function (key) {
-    if (key === 'pile') return this.el.pile.lastElementChild;
+    if (key === 'pile') { var backs = this.el.pile.querySelectorAll(':scope > .card'); return backs[backs.length - 1]; }
     if (key.indexOf('h:') === 0) return this.handEls[key.slice(2)] || null;
     if (key.indexOf('seat:') === 0) {
       var pid = key.slice(5);
@@ -8414,8 +8547,15 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     this.renderHand(v);
   };
 
+  /* A bluff nobody called is showing on the pile (for a few seconds after it was turned over). */
+  BullTable.prototype.exposureLive = function (v) {
+    var x = v.exposure;
+    return !!x && v.phase !== 'reveal' && this.session.now() < x.at + EXPOSE_MS;
+  };
+
   BullTable.prototype.renderSeats = function (v) {
     var self = this, r = v.phase === 'reveal' ? v.reveal : null;
+    var x = this.exposureLive(v) ? v.exposure : null;
     v.players.forEach(function (p) {
       var s = self.seatEls[p.id];
       if (!s) return;
@@ -8429,6 +8569,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       var say = '', tone = '';
       if (r && r.challenger === p.id) { say = 'Bull!'; tone = 'hot'; }
       else if (r && r.accused === p.id) { say = r.lie ? 'Caught!' : 'True!'; tone = r.lie ? 'ember' : 'ok'; }
+      else if (x && x.by === p.id) { say = 'Bluffed!'; tone = 'ember'; }
       else if (v.phase === 'over' && v.winners && v.winners[0] === p.id) { say = 'Out!'; tone = 'ok'; }
       s.bubble.style.visibility = say ? '' : 'hidden';   // keeps its space, so the seat doesn't jump
       s.bubble.textContent = say || '·';
@@ -8453,11 +8594,30 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     // keeps its space while hidden, so the pile doesn't jump
     this.el.now.style.visibility = v.phase === 'play' ? '' : 'hidden';
     // the pile: up to three backs, to suggest its size
-    var backs = this.el.pile.children;
+    var backs = this.el.pile.querySelectorAll(':scope > .card');
     var shown = v.phase === 'dealing' ? 1 : v.pileCount ? Math.min(3, Math.ceil(v.pileCount / 4)) : 0;
     for (var i = 0; i < backs.length; i++) backs[i].style.visibility = i < shown ? '' : 'hidden';
     this.el.pile.classList.toggle('empty', !shown);
-    this.el.pileCount.textContent = v.pileCount ? cardsWord(v.pileCount) : (v.phase === 'dealing' ? '' : 'No cards yet');
+    // a bluff nobody called, turned over on the pile for a moment (the "lies" rule choice)
+    var x = this.exposureLive(v) ? v.exposure : null;
+    this.el.exposed.hidden = !x;
+    if (x && this.el.exposed.dataset.key !== String(x.no)) {
+      // labelled with whose claim it was, so it isn't read as the play just above it
+      this.el.exposed.dataset.key = String(x.no);
+      this.el.exposed.innerHTML = '<p class="bl-exposed-head">' + this.poss(x.by).replace(/^your/, 'Your') + ' ' + owned(x.rank, x.n) + '</p><div class="bl-exposed-cards"></div>';
+      var row = this.el.exposed.querySelector('.bl-exposed-cards');
+      x.cards.forEach(function (c, i) {
+        var el = UI.makeCard(c);
+        el.classList.toggle('wrong', c.rank !== x.rank);
+        el.style.setProperty('--i', i);
+        row.appendChild(el);
+      });
+    }
+    if (!x) this.el.exposed.dataset.key = '';
+    this.el.pile.classList.toggle('exposing', !!x);
+    this.el.pileCount.classList.toggle('exposed', !!x);
+    this.el.pileCount.innerHTML = x ? (x.n === 1 ? 'was' : 'were') + ' a bluff nobody called!'
+      : v.pileCount ? cardsWord(v.pileCount) : (v.phase === 'dealing' ? '' : 'No cards yet');
     if (!showReveal) return;
     var key = r.no + ':' + r.challenger;
     if (this.el.reveal.dataset.key === key) return;
@@ -8638,6 +8798,9 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
     if (!v) return;
     var now = this.session.now();
     var self = this;
+    // a revealed bluff has had its moment on the pile
+    var live = this.exposureLive(v);
+    if (live !== !!this.exposedShown) { this.exposedShown = live; this.renderCenter(v); this.renderSeats(v); }
     var who = null, endsAt = null, total = 0;
     if (v.phase === 'play' && v.turnEndsAt && (v.openAt == null || now >= v.openAt)) { who = v.turn; endsAt = v.turnEndsAt; total = v.timing.turnMs; }
     if (v.phase === 'lastcall' && v.last) { who = v.last.by; endsAt = v.phaseEndsAt; total = v.timing.lastCallMs; }
@@ -8768,6 +8931,9 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
         case 'lastCall':
           UI.Sound.play('alert');
           break;
+        case 'lieExposed':
+          setTimeout(function () { UI.Sound.play('flip'); }, 150);
+          break;
         case 'timeout':
           if (e.player === me) { UI.toast('Time’s up. A card was played for you.'); UI.Sound.play('nope'); }
           break;
@@ -8814,6 +8980,10 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       case 'lastCall':
         this.pushLog((e.player === me ? 'You' : N(e.player)) + ' played ' + (e.player === me ? 'your' : 'their') + ' last cards. Last chance to call Bull!', 'set');
         break;
+      case 'lieExposed':
+        this.pushLog((e.player === me ? 'Your bluff got past everyone: your ' : N(e.player) + ' got away with a bluff: ' + this.poss(e.player) + ' ') +
+          owned(e.rank, e.n) + (e.n === 1 ? ' was ' : ' were ') + e.cards.map(UI.cardText).join(' ') + (e.final ? ', and it won the game.' : '.'), 'set');
+        break;
       case 'gameOver':
         this.pushLog((e.winners[0] === me ? 'You win' : N(e.winners[0]) + ' wins') + ': no cards left.', 'win');
         break;
@@ -8833,8 +9003,12 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       return '<li class="' + (p.id === w ? 'champ' : '') + '"><span class="avatar" style="--paint:' + paint + '">' + UI.esc(nm.charAt(0)) + '</span>' +
         '<span>' + nm + '</span><span class="left">' + (p.handCount ? cardsWord(p.handCount) + ' left' : 'out') + '</span></li>';
     }).join('');
+    // won with a bluff nobody called, turned over at the end (the "lies" rule choice)
+    var x = v.exposure && v.exposure.final && v.exposure.by === w ? v.exposure : null;
+    var bluff = x ? ', with a bluff nobody called: ' + this.poss(w) + ' ' + owned(x.rank, x.n) + (x.n === 1 ? ' was ' : ' were ') +
+      x.cards.map(UI.cardText).join(' ') + '!' : '.';
     return {
-      why: (w === me ? 'You' : this.name(w)) + ' got rid of every card first.',
+      why: (w === me ? 'You' : this.name(w)) + ' got rid of every card first' + bluff,
       body: '<div class="standings"><ul>' + rows + '</ul></div>'
     };
   };
@@ -9530,7 +9704,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       for (var n = mode.players.min; n <= mode.players.max; n++) segs += '<button type="button" data-l-size="' + n + '" aria-pressed="' + (n === size) + '">' + n + '</button>';
       sizeField = '<section class="field"><h3 id="lbl-l-size">Seats at the table</h3><div class="seg" role="group" aria-labelledby="lbl-l-size">' + segs + '</div></section>';
     }
-    var opts = (mode.options || []).map(function (o) {
+    var opts = (mode.options || []).filter(function (o) { return CT.optionShown(o, r.options); }).map(function (o) {
       var current = r.options[o.id];
       if (host && lobby) {
         var segs = o.choices.map(function (c) {
@@ -9981,6 +10155,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
           $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });
           var choice = o.choices.filter(function (x) { return x.value === c.options[o.id]; })[0];
           $('help-' + o.id).textContent = choice ? choice.help : '';
+          $('help-' + o.id).parentNode.hidden = !CT.optionShown(o, c.options);   // only when it applies
         });
       };
       var store = function (patch) {
@@ -10235,7 +10410,7 @@ CT.BUILD = {"version":"0.9.1","id":"5e0b336","target":"app","server":"wss://burn
       var sections = mode.rules(options).map(function (r) {
         return '<section><h3>' + UI.esc(r.title) + '</h3><p>' + UI.esc(r.text) + '</p></section>';
       }).join('');
-      var chosen = (mode.options || []).map(function (o) {
+      var chosen = (mode.options || []).filter(function (o) { return CT.optionShown(o, options); }).map(function (o) {
         var c = o.choices.filter(function (x) { return x.value === options[o.id]; })[0];
         return UI.esc(o.label) + ': ' + UI.esc(c ? c.label : '');
       }).join(' · ');

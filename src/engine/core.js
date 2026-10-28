@@ -134,6 +134,13 @@
     return out;
   }
 
+  /* A rule choice that only matters with another one (showIf: { mode: 'strip' })
+     is left off the setup screen otherwise. */
+  function optionShown(opt, values) {
+    if (!opt.showIf) return true;
+    return Object.keys(opt.showIf).every(function (k) { return values && values[k] === opt.showIf[k]; });
+  }
+
   CT.SUITS = SUITS;
   CT.SUIT_INFO = SUIT_INFO;
   CT.RANKS = RANKS;
@@ -152,4 +159,5 @@
   CT.getMode = getMode;
   CT.listModes = listModes;
   CT.resolveOptions = resolveOptions;
+  CT.optionShown = optionShown;
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
