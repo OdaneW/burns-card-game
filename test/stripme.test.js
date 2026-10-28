@@ -45,7 +45,7 @@ test('two players, the deck split 26 and 26 face down', () => {
   const s = S.createGame({ players: PLAYERS, seed: 9, now: 0 });
   eq(s.players.map(p => p.deck.length), [26, 26]);
   conservation(s);
-  eq(s.options, { mode: 'strip', losses: '3' }, 'defaults: Strip Mode, three losses');
+  eq(s.options, { mode: 'strip', losses: '3', timer: 'off' }, 'defaults: Strip Mode, three losses, no round timer');
   eq(s.phase, 'dealing');
   let threw = 0;
   [1, 3].forEach(n => { try { S.createGame({ players: PLAYERS.concat([{ id: 'p2', name: 'X' }]).slice(0, n), seed: 1 }); } catch (e) { threw++; } });
@@ -184,6 +184,75 @@ test('views: card counts only, never the order or contents of a deck', () => {
   eq([v.canPlay, v.canShuffle], [true, true]);
 });
 
+/* ---------- the round timer ---------- */
+
+test('round timer: when time is up, whoever has more cards loses the round', () => {
+  const s = rigged({ decks: [['2S', '3S', '4S'], ['5H', '6H', '7H', '8H', '9H']], options: { timer: '60' } });
+  eq([s.roundEndsAt, s.turnEndsAt], [60000, 3000], 'a minute for the round, three seconds a card');
+  const v = S.view(s, 'p0', { events: false });
+  eq([v.timed, v.roundMs, v.roundEndsAt, v.overtime, v.timing.turnMs], [true, 60000, 60000, false, 3000]);
+  play(s, 'p0', 1000);
+  assert(!S.tick(s, 1500), 'nothing due yet');
+  S.tick(s, 60000);
+  const up = s.events.find(e => e.type === 'timeUp');
+  eq([up.loser, up.counts], ['p1', { p0: 2, p1: 5 }], 'Mia has more cards');
+  eq([s.phase, s.result.winner, s.result.loser, s.result.how, P(s, 'p1').lost], ['roundOver', 'p0', 'p1', 'time', 1]);
+  eq([last(s).type, last(s).how, last(s).counts], ['roundEnd', 'time', { p0: 2, p1: 5 }]);
+  eq([s.roundEndsAt, s.overtime], [null, false], 'the clock stops');
+});
+
+test('round timer: level when time is up, so play on, and whoever takes the pile next loses', () => {
+  // (a long limit a card here, so only the round's clock matters)
+  const s = rigged({ decks: [['QS', '2S', '3S'], ['5H', '6H', '7H']], options: { timer: '60' }, timing: { timedTurnMs: 100000 } });
+  S.tick(s, 60000);
+  eq([s.phase, s.overtime, last(s).type, last(s).level], ['play', true, 'timeUp', true], 'three each: sudden death');
+  assert(!S.tick(s, 60001), 'no second notice');
+  eq(S.view(s, 'p1', { events: false }).overtime, true, 'everyone can see it');
+  play(s, 'p0', 60010);              // a Queen: Mia pays two
+  play(s, 'p1', 60020); play(s, 'p1', 60030);
+  eq(s.phase, 'pickup');
+  S.tick(s, 60030 + 300);
+  eq([s.phase, s.result.loser, s.result.how, s.result.overtime, s.result.counts], ['roundOver', 'p1', 'time', true, { p0: 2, p1: 4 }],
+    'Mia took the pile: more cards, so she loses');
+  // running out of cards in sudden death still wins
+  const t = rigged({ decks: [['2S', '3S'], ['5H', '6H']], options: { timer: '60' }, timing: { timedTurnMs: 100000 } });
+  S.tick(t, 60000);
+  play(t, 'p0', 60010); play(t, 'p1', 60020); play(t, 'p0', 60030);
+  eq([t.phase, t.result.winner, t.result.how], ['roundOver', 'p0', 'out']);
+});
+
+test('round timer: time up while the pile is being taken, so it goes to the taker before counting', () => {
+  const s = rigged({ decks: [['KS', '2S', '3S', '4S'], ['5H', '6H', '7H', '8H', '9H']], options: { timer: '60' } });
+  play(s, 'p0', 59000);              // a King: Mia pays three
+  play(s, 'p1', 59700); play(s, 'p1', 59800); play(s, 'p1', 59900);
+  eq(s.phase, 'pickup');
+  assert(!S.tick(s, 60000), 'time is up, but the pile is still on its way');
+  S.tick(s, 59900 + 300);
+  eq(s.events.slice(-3).map(e => e.type), ['pickup', 'timeUp', 'roundEnd']);
+  eq([s.result.loser, s.result.counts], ['p1', { p0: 3, p1: 6 }], 'two cards plus the four from the pile');
+});
+
+test('round timer: in Quick Play, time up decides the game; with the timer off, a round has no end time', () => {
+  const s = rigged({ decks: [['2S', '3S', '4S', '5S'], ['5H', '6H']], options: { mode: 'quick', timer: '120' } });
+  S.tick(s, 120000);
+  eq([s.phase, s.winners, s.result.how], ['over', ['p1'], 'time'], 'You had more cards');
+  const t = rigged({ decks: [['2S', '3S'], ['5H', '6H']] });
+  eq([t.roundEndsAt, t.turnEndsAt, S.view(t, 'p0', { events: false }).timed], [null, 5000, false]);
+  play(t, 'p0', 10); play(t, 'p1', 20);
+  S.tick(t, 600000);
+  eq(t.events.some(e => e.type === 'timeUp'), false, 'no clock');
+});
+
+test('round timer: every round gets a fresh clock, starting with its first card', () => {
+  const s = rigged({ decks: [['2S'], ['5H', '6H']], options: { timer: '60', losses: '3' } });
+  play(s, 'p0', 10);                 // You empty your deck
+  eq([s.phase, s.roundEndsAt], ['roundOver', null]);
+  S.tick(s, 10 + 500);
+  eq([s.phase, s.round, s.roundEndsAt], ['dealing', 2, null], 'no clock while the cards are dealt');
+  S.tick(s, 600);
+  eq([s.phase, s.roundEndsAt, s.overtime], ['play', 600 + 60000, false]);
+});
+
 /* ---------- simulated games ---------- */
 
 function simulate(seed, options, idle) {
@@ -191,12 +260,12 @@ function simulate(seed, options, idle) {
   const clock = new CT.ManualClock(0);
   const session = new CT.Session({ modeId: 'stripme', players, options, seed, clock, botSeed: seed * 31 + 7 });
   const s = session.state;
-  let ticks = 0, roundCards = [], roundStart = 0;
+  let ticks = 0, roundCards = [], hows = [];
   while (s.phase !== 'over' && ticks < 2000000) {
     clock.advance(50);
     session.tick();
     ticks++;
-    if (s.phase === 'roundOver' && s.result && roundCards.length < s.round) roundCards.push(s.result.plays);
+    if (s.phase === 'roundOver' && s.result && roundCards.length < s.round) { roundCards.push(s.result.plays); hows.push(s.result.how); }
     if (ticks % 25 === 0) {
       if (s.phase !== 'roundOver' && s.phase !== 'over') conservation(s);
       const v = session.view('p0', { events: false });
@@ -207,19 +276,23 @@ function simulate(seed, options, idle) {
     }
   }
   if (s.phase !== 'over') throw new Error('game ' + seed + ' did not finish');
-  if (s.result) roundCards.push(s.result.plays);
+  if (s.result) { roundCards.push(s.result.plays); hows.push(s.result.how); }
   const loser = s.players.find(p => p.id !== s.winners[0]);
   const allowed = options.mode === 'quick' ? 1 : Number(options.losses);
   if (loser.lost !== allowed) throw new Error('the loser lost ' + loser.lost + ' rounds, not ' + allowed);
   if (s.players.find(p => p.id === s.winners[0]).lost >= allowed) throw new Error('the winner lost too many');
-  return { rounds: s.round, cards: roundCards, minutes: clock.now() / 60000, winner: s.winners[0],
+  return { rounds: s.round, cards: roundCards, hows, minutes: clock.now() / 60000, winner: s.winners[0],
     pickups: s.events.filter(e => e.type === 'pickup').length, shuffles: s.events.filter(e => e.type === 'shuffle').length };
 }
 
 const table = [];
 [['Strip Mode · 2 losses', { mode: 'strip', losses: '2' }, 60], ['Strip Mode · 3 losses', { mode: 'strip', losses: '3' }, 60],
  ['Strip Mode · 5 losses', { mode: 'strip', losses: '5' }, 30], ['Quick Play', { mode: 'quick' }, 100],
- ['Quick Play · one idle player', { mode: 'quick' }, 6, true]].forEach(([label, options, games, idle]) => {
+ ['Quick Play · one idle player', { mode: 'quick' }, 6, true],
+ ['Strip Mode · 3 losses · 1-minute rounds', { mode: 'strip', losses: '3', timer: '60' }, 40],
+ ['Strip Mode · 3 losses · 3-minute rounds', { mode: 'strip', losses: '3', timer: '180' }, 30],
+ ['Quick Play · 2-minute round', { mode: 'quick', timer: '120' }, 60],
+ ['Quick Play · 1-minute round · one idle player', { mode: 'quick', timer: '60' }, 6, true]].forEach(([label, options, games, idle]) => {
   test('simulated games: ' + label + ' (' + games + ' games, every 25th tick checked)', () => {
     const rs = [];
     for (let g = 0; g < games; g++) rs.push(simulate(500 + g * 13, options, idle));
@@ -228,6 +301,7 @@ const table = [];
     table.push({ table: label, games, rounds: (rs.reduce((a, r) => a + r.rounds, 0) / rs.length).toFixed(1),
       'cards per round (median)': q(0.5), '90%': q(0.9), longest: cards[cards.length - 1],
       'minutes per game': (rs.reduce((a, r) => a + r.minutes, 0) / rs.length).toFixed(1),
+      'rounds ended by the clock': options.timer ? Math.round(100 * [].concat(...rs.map(r => r.hows)).filter(h => h === 'time').length / cards.length) + '%' : '',
       'p0 wins': rs.filter(r => r.winner === 'p0').length });
   });
 });

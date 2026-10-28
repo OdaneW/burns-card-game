@@ -4,8 +4,9 @@
    player is a cartoon character in fun garments (as many as the losses
    allowed), over a T-shirt and shorts that always stay on. Lose a round and
    a garment flies off while its owner blushes and shivers. Tap your deck to
-   turn its top card over. Everything drawn comes from session.view(me), so
-   nothing hidden can leak onto the screen.
+   turn its top card over. With the round timer on, a clock counts down
+   above the pile. Everything drawn comes from session.view(me), so nothing
+   hidden can leak onto the screen.
    ========================================================================== */
 (function (CT) {
   'use strict';
@@ -122,6 +123,9 @@
 
   function iconSvg(kind) { return '<svg viewBox="0 0 18 18" aria-hidden="true" fill="currentColor">' + GARMENTS[kind].icon + '</svg>'; }
 
+  /* 83 000 ms → "1:23" (rounded up, so it reads 0:01 until the very end) */
+  function clockText(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+
   function StripMeTable(app, session, me, opts) {
     opts = opts || {};
     this.app = app;
@@ -135,7 +139,8 @@
     this.quiet = !!opts.restored;
     this.flying = null;      // a garment on its way off: { pid, kind }
     this.landing = 0;
-    this.auto = !!UI.store.get(AUTO_KEY, false);
+    // Auto as you last left it, except in the tutorial, which starts without it and doesn't change it
+    this.auto = !app.tutorial && !!UI.store.get(AUTO_KEY, false);
     this.root = document.getElementById('screen-table');
     this.build();
     var self = this;
@@ -202,6 +207,7 @@
       '<div class="sm-table" id="s-table">' +
         this.seatHtml(them, false) +
         '<div class="sm-mid" id="s-mid">' +
+          '<div class="sm-clock" id="s-clock" role="timer" hidden>' + UI.icon.stopwatch + '<b class="t" id="s-clock-t"></b><span class="note" id="s-clock-note" hidden></span></div>' +
           '<div class="sm-banner" id="s-banner" style="visibility:hidden"><span class="who" id="s-banner-who">·</span><b class="what" id="s-banner-what">·</b><span class="sm-pips" id="s-pips"></span></div>' +
           '<div class="sm-pile" id="s-pile"></div>' +
           '<p class="sm-pilecount" id="s-pilecount"></p>' +
@@ -221,6 +227,7 @@
     });
     this.el = {
       round: $('#s-round'), music: $('#s-music'), sound: $('#s-sound'), mid: $('#s-mid'),
+      clock: $('#s-clock'), clockT: $('#s-clock-t'), clockNote: $('#s-clock-note'),
       banner: $('#s-banner'), bannerWho: $('#s-banner-who'), bannerWhat: $('#s-banner-what'), pips: $('#s-pips'),
       pile: $('#s-pile'), pileCount: $('#s-pilecount'),
       statusMain: $('#s-status .status-main'), statusSub: $('#s-status .status-sub'),
@@ -313,6 +320,7 @@
     this.el.round.textContent = v.strip ? 'Round ' + v.round : 'Quick Play';
     var self = this;
     v.players.forEach(function (p) { self.renderSeat(v, p); });
+    this.renderClock(v);
     this.renderMid(v);
     this.renderStatus(v);
     this.renderControls(v);
@@ -364,14 +372,15 @@
       who = 'No Action Card';
       what = v.taker === this.me ? 'You take the pile' : this.name(v.taker) + ' takes the pile';
     } else if ((v.phase === 'roundOver' || v.phase === 'over') && v.result) {
-      who = v.strip ? 'Round ' + v.result.round : 'Quick Play';
-      what = v.result.winner === this.me ? 'You win the round!' : this.name(v.result.winner) + ' wins the round';
+      var r = v.result;
+      who = v.strip ? 'Round ' + r.round : 'Quick Play';   // (the clock above says how it ended, if time did it)
+      what = r.winner === this.me ? 'You win the round!' : this.name(r.winner) + ' wins the round';
     } else if (v.phase === 'play' && d) {
       var payer = d.by === this.me ? this.rival(v).id : this.me;
       who = this.poss(d.by).replace(/^your/, 'Your') + ' ' + RANK_NAME[d.rank];
       what = (payer === this.me ? 'You pay ' : this.name(payer) + ' pays ') + d.n;
       for (var i = 0; i < d.n; i++) pips += '<i class="' + (i < d.n - v.owe ? 'paid' : '') + '"></i>';
-    }
+    } else if (v.phase === 'play' && v.overtime) { who = 'Level when time ran out'; what = 'Sudden death'; }
     var key = who + '|' + what;
     this.el.banner.style.visibility = who ? '' : 'hidden';
     if (this.bannerKey !== key) {
@@ -434,6 +443,12 @@
         if (!r) return { main: '', sub: '' };
         var won = r.winner === me;
         var main = won ? '<span class="hl">Your deck is empty!</span>' : this.name(r.winner) + '’s deck is empty first.';
+        if (r.how === 'time') {
+          var more = r.counts[r.loser], fewer = r.counts[r.winner];
+          main = r.overtime
+            ? '<span class="hl">Sudden death:</span> ' + (r.loser === me ? 'you took the pile, ' : this.name(r.loser) + ' took the pile, ') + more + ' cards to ' + fewer + '.'
+            : '<span class="hl">Time’s up!</span> ' + (r.loser === me ? 'You have' : this.name(r.loser) + ' has') + ' more cards, ' + more + ' to ' + fewer + '.';
+        }
         var sub = '';
         if (v.strip && r.garment) {
           var kind = outfitFor(v)[r.garment - 1];
@@ -456,6 +471,33 @@
     this.el.statusSub.innerHTML = st.sub || '';
   };
 
+  /* The round's clock above the pile (timed rounds only). Returns the time
+     left while it's running, for frame(). */
+  StripMeTable.prototype.renderClock = function (v) {
+    var t = '', note = '', tone = '', left = null;
+    var live = v.phase === 'play' || v.phase === 'pickup';
+    if (v.timed) {
+      if (v.phase === 'dealing') t = clockText(v.roundMs);
+      else if (live && v.overtime) { t = 'Level!'; note = 'Next to take the pile loses'; tone = 'hot'; }
+      else if (live && v.roundEndsAt != null) {
+        left = v.roundEndsAt - this.session.now();
+        t = left > 0 ? clockText(left) : 'Time’s up!';
+        tone = left <= 10000 ? 'hot' : '';
+      } else if ((v.phase === 'roundOver' || v.phase === 'over') && v.result && v.result.how === 'time') { t = v.result.overtime ? 'Sudden death' : 'Time’s up!'; tone = 'hot'; }
+    }
+    var key = t + '|' + note + '|' + tone;
+    if (this.clockKey !== key) {
+      this.clockKey = key;
+      this.el.clock.hidden = !t;
+      this.el.clockT.textContent = t;
+      this.el.clockNote.textContent = note;
+      this.el.clockNote.hidden = !note;
+      this.el.clock.classList.toggle('hot', tone === 'hot');
+      this.el.clock.setAttribute('aria-label', !t ? '' : left != null && left > 0 ? 'Time left in this round: ' + t : t + (note ? ' ' + note : ''));
+    }
+    return left;
+  };
+
   StripMeTable.prototype.renderControls = function (v) {
     var deck = this.el.deck;
     deck.classList.toggle('ready', !!v.canPlay);
@@ -465,12 +507,24 @@
     this.el.autoBtn.classList.toggle('on', this.auto);
   };
 
-  /* ~60×/s from the app loop: Auto, and the seconds when time is short. */
+  /* ~60×/s from the app loop: Auto, the round's clock, and the seconds when time is short. */
   StripMeTable.prototype.frame = function () {
     var v = this.v;
     if (!v) return;
     var now = this.session.now();
-    if (this.auto && v.canPlay && !this.sending) {
+    var roundLeft = this.renderClock(v);
+    var rs = roundLeft == null ? null : Math.ceil(roundLeft / 1000);
+    if (rs !== this.clockSec) {
+      this.clockSec = rs;
+      // the last ten seconds beat; the last five tick
+      if (rs != null && rs > 0 && rs <= 10) {
+        this.el.clock.classList.remove('beat'); void this.el.clock.offsetWidth; this.el.clock.classList.add('beat');
+        if (rs <= 5) UI.Sound.play('tick');
+      }
+    }
+    // (not while the game is paused, e.g. while a tutorial note is being read)
+    var paused = !!(this.session.clock && this.session.clock.running === false);
+    if (this.auto && v.canPlay && !this.sending && !paused) {
       var key = v.round + ':' + v.plays + ':' + v.owe;
       if (this.autoKey !== key) { this.autoKey = key; this.autoAt = performance.now() + AUTO_MS; }
       else if (performance.now() >= this.autoAt) { this.autoAt = Infinity; this.play(true); }
@@ -479,8 +533,9 @@
     if (span) {
       var left = v.turn === this.me && v.turnEndsAt ? Math.max(0, v.turnEndsAt - now) : null;
       var sec = left == null ? null : Math.ceil(left / 1000);
-      span.textContent = sec != null && left <= 5000 && !this.auto ? '· ' + sec + 's' : '';
-      if (sec !== this.lastSecs) { this.lastSecs = sec; if (sec != null && left <= 3000 && sec > 0 && !this.auto) UI.Sound.play('tick'); }
+      // (in a timed round the round's clock does the counting)
+      span.textContent = sec != null && left <= 5000 && !this.auto && !v.timed ? '· ' + sec + 's' : '';
+      if (sec !== this.lastSecs) { this.lastSecs = sec; if (sec != null && left <= 3000 && sec > 0 && !this.auto && !v.timed) UI.Sound.play('tick'); }
     }
   };
 
@@ -534,7 +589,7 @@
     UI.Sound.unlock();
     this.auto = on;
     this.autoKey = null;
-    UI.store.set(AUTO_KEY, on);
+    if (!this.app.tutorial) UI.store.set(AUTO_KEY, on);
     if (this.v) { this.renderControls(this.v); this.renderStatus(this.v); }
     UI.toast(on ? 'Auto is on: your cards turn over by themselves.' : 'Auto is off: tap your deck to play.');
   };
@@ -635,7 +690,22 @@
           self.later(function () { UI.Sound.play(e.winners.indexOf(me) >= 0 ? 'victory' : 'lose'); }, 2600);
           break;
         case 'timeout':
-          if (e.player === me) { UI.toast('Time’s up: your cards turn over by themselves until you tap your deck.'); UI.Sound.play('nope'); }
+          if (e.player === me) { UI.toast('Too slow: your cards turn over by themselves until you tap your deck.'); UI.Sound.play('nope'); }
+          break;
+        case 'start':
+          if (e.endsAt != null && v.round === 1 && !self.timerTold) {
+            self.timerTold = true;
+            UI.toast('Timed round: whoever has more cards when time’s up loses.');
+          }
+          break;
+        case 'timeUp':
+          UI.Sound.play('buzzer');
+          UI.buzz(60);
+          if (e.level) {
+            // the clock above now says what happens next
+            v.players.forEach(function (p) { self.mood(p.id, 'shock', 1600); self.say(p.id, 'Level!', 1300); });
+            self.el.clock.classList.remove('beat'); void self.el.clock.offsetWidth; self.el.clock.classList.add('beat');
+          }
           break;
       }
     });
@@ -676,6 +746,13 @@
       case 'timeout':
         this.pushLog((e.player === me ? 'Your time ran out: your cards turn over by themselves.' : N(e.player) + '’s time ran out.'));
         break;
+      case 'timeUp': {
+        if (e.level) { this.pushLog('Time’s up, and it’s level: ' + e.counts[me] + ' cards each. Whoever takes the pile next loses.', 'set'); break; }
+        var rest = Object.keys(e.counts).filter(function (k) { return k !== e.loser; })[0];
+        if (e.overtime) this.pushLog((e.loser === me ? 'You took the pile in sudden death: ' : N(e.loser) + ' took the pile in sudden death: ') + e.counts[e.loser] + ' cards to ' + e.counts[rest] + '.');
+        else this.pushLog('Time’s up: ' + (e.loser === me ? 'you have ' : N(e.loser) + ' has ') + e.counts[e.loser] + ' cards, ' + (rest === me ? 'you have ' : N(rest) + ' has ') + e.counts[rest] + '.');
+        break;
+      }
       case 'roundEnd': {
         var text = (e.winner === me ? 'You win' : N(e.winner) + ' wins') + (v.strip ? ' round ' + e.round : ' the round') + ' after ' + e.plays + ' cards.';
         if (e.garment) {
@@ -698,14 +775,16 @@
     var w = v.winners && v.winners[0];
     var loser = v.players.filter(function (p) { return p.id !== w; })[0];
     var outfit = outfitFor(v);
+    var byTime = !!(v.result && v.result.how === 'time');
     var why = v.strip
       ? (loser.id === me ? 'You lost all ' + v.garments + ' garments.' : this.name(loser.id) + ' lost all ' + v.garments + ' garments.')
-      : (w === me ? 'Your deck was empty first.' : this.name(w) + '’s deck was empty first.');
+      : byTime ? 'Time’s up, and ' + (loser.id === me ? 'you had' : this.name(loser.id) + ' had') + ' more cards.'
+        : (w === me ? 'Your deck was empty first.' : this.name(w) + '’s deck was empty first.');
     var cards = v.players.map(function (p) {
       var left = v.strip ? outfit.length - p.lost : null;
       return '<div class="sm-final' + (p.id === w ? ' champ' : '') + '" data-pid="' + p.id + '"><div class="sm-final-fig">' + avatarSvg(lookFor(p.seat)) + '</div>' +
         '<b>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</b><span>' +
-        (v.strip ? (left ? left + ' of ' + outfit.length + ' garments on' : 'no garments left') : (p.id === w ? 'empty deck' : p.count + ' cards left')) + '</span></div>';
+        (v.strip ? (left ? left + ' of ' + outfit.length + ' garments on' : 'no garments left') : (p.id === w && !byTime ? 'empty deck' : p.count + ' cards left')) + '</span></div>';
     }).join('');
     return {
       when: v.strip ? v.round + ' round' + (v.round === 1 ? '' : 's') : 'Quick Play',

@@ -1244,6 +1244,20 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .sm-pile .card.action.top { box-shadow: 0 0 0 3px var(--ember), 0 0 20px rgba(240, 100, 60, .55); }
 .sm-pile.empty::before { content: ''; position: absolute; left: 50%; top: 7px; width: var(--pile-cw); aspect-ratio: 5 / 7; margin-left: calc(var(--pile-cw) / -2); border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .18); }
 .sm-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+/* timed rounds: the round's clock above the pile */
+.sm-clock {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px 5px 10px; border-radius: 999px;
+  background: rgba(6, 30, 29, .55); box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  color: var(--ink); font: 800 17px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.sm-clock[hidden] { display: none; }
+.sm-clock svg { width: 17px; height: 17px; color: var(--marigold); flex: none; }
+.sm-clock .note { font: 700 12.5px/1.1 var(--font-ui); color: var(--ink-soft); }
+.sm-clock.hot { color: #FFB59B; box-shadow: inset 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .3); }
+.sm-clock.hot svg { color: var(--ember); }
+.sm-clock.hot .note { color: #FFD7C7; }
+.sm-clock.beat { animation: smBeat .45s ease-out; }
+@keyframes smBeat { from { transform: scale(1.14); } to { transform: none; } }
 .sm-table .status { min-height: 0; }
 
 /* the characters: moods, and garments coming off */
@@ -1281,6 +1295,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .sm-bubble[hidden] { display: none; }
 .sm-bubble.pop { animation: claimPop .35s cubic-bezier(.2, .8, .3, 1.35); }
 .sm-me .sm-bubble { top: -16px; }   /* your name sits higher (your tools are under it), so speak from above it */
+@media (max-height: 699px) { .sm-them .sm-bubble { top: -16px; } }   /* short screens (and phones on their side): the same for your rival */
 
 /* the result: both characters as they ended up */
 .sm-finals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
@@ -1339,7 +1354,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.10.1","id":"a43a68b","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -4059,6 +4074,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
    Strip Mode: everyone wears as many garments as the losses allowed, and the
    loser of each round takes one off; lose them all and you lose the game.
    Quick Play: one round decides it.
+   Round timer (optional): when a round's time is up, whoever has more cards
+   in their deck loses it. Level? Play on: the next to take the pile loses.
 
    Flow
      dealing ─► play ─► (pickup: the pile is taken) ─► play … ─► roundOver
@@ -4069,7 +4086,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 1;
+  var ENGINE_VERSION = 2;   // 2: the round timer
   var SEATS = 2;
   var OWED = { J: 1, Q: 2, K: 3, A: 4 };   // what each Action Card makes the other player pay
 
@@ -4078,7 +4095,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     pickupHoldMs: 1300,    // the last card of a payment stays on show before the pile is taken
     roundHoldMs: 5200,     // the round's result, and the garment coming off
     turnMs: 10000,         // play within this long, or a card is turned over for you…
-    idleMs: 1200           // …and after that, quickly, until you play again yourself
+    idleMs: 1200,          // …and after that, quickly, until you play again yourself
+    timedTurnMs: 3000      // in a timed round the clock is running: play within this long
   };
 
   var OPTIONS = [
@@ -4102,6 +4120,17 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
         { value: '4', label: '4', help: 'Everyone wears 4 garments. Lose 4 rounds and you lose the game.' },
         { value: '5', label: '5', help: 'Everyone wears 5 garments. Lose 5 rounds and you lose the game. A long game.' }
       ]
+    },
+    {
+      id: 'timer',
+      label: 'Round timer',
+      default: 'off',
+      choices: [
+        { value: 'off', label: 'Off', help: 'No time limit: a round lasts until someone turns over their last card.' },
+        { value: '60', label: '1 min', help: 'Each round lasts a minute at most. When time’s up, whoever has more cards loses the round.' },
+        { value: '120', label: '2 min', help: 'Each round lasts two minutes at most. When time’s up, whoever has more cards loses the round.' },
+        { value: '180', label: '3 min', help: 'Each round lasts three minutes at most. When time’s up, whoever has more cards loses the round.' }
+      ]
     }
   ];
 
@@ -4114,6 +4143,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
   function other(state, pid) { return state.players[0].id === pid ? state.players[1].id : state.players[0].id; }
 
   function strip(state) { return state.options.mode !== 'quick'; }
+  /* How long a round may last, or 0 for no time limit. */
+  function roundMs(state) { var s = Number(state.options.timer); return s > 0 ? s * 1000 : 0; }
   /* Rounds a player may lose: their garments. Quick Play is a single round. */
   function allowed(state) { return strip(state) ? (Number(state.options.losses) || 3) : 1; }
 
@@ -4139,8 +4170,9 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
   /* When the player to move must have played by. Someone whose time ran out
      is playing on autopilot until they tap again, so their cards go quickly. */
   function deadline(state, now, pid) {
-    if (!state.timing.turnMs) return null;
-    return now + (state.idle[pid] ? state.timing.idleMs : state.timing.turnMs);
+    var limit = roundMs(state) ? state.timing.timedTurnMs : state.timing.turnMs;
+    if (!limit) return null;
+    return now + (state.idle[pid] ? Math.min(state.timing.idleMs, limit) : limit);
   }
 
   /* ---------- setup ------------------------------------------------------ */
@@ -4175,6 +4207,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       shuffled: {},       // pid → true once they've shuffled before their next card
       idle: {},           // pid → true after their time ran out, until they play again
       plays: 0,           // cards turned over this round
+      roundEndsAt: null,  // timed rounds: when this round's time is up
+      overtime: false,    // timed rounds: level when time ran out, so the next to take the pile loses
       result: null,       // the round just finished
       winners: null,
       seq: 0,
@@ -4200,6 +4234,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     state.taker = null;
     state.shuffled = {};
     state.plays = 0;
+    state.roundEndsAt = null;
+    state.overtime = false;
     state.result = null;
     state.phase = 'dealing';
     state.phaseEndsAt = now + state.timing.dealHoldMs;
@@ -4210,7 +4246,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     state.phase = 'play';
     state.turn = state.starter;
     state.turnEndsAt = deadline(state, now, state.turn);
-    emit(state, now, { type: 'start', round: state.round, player: state.starter });
+    state.roundEndsAt = roundMs(state) ? now + roundMs(state) : null;   // the clock starts with the first card
+    emit(state, now, { type: 'start', round: state.round, player: state.starter, endsAt: state.roundEndsAt });
   }
 
   /* ---------- turning cards over ----------------------------------------- */
@@ -4227,7 +4264,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       // their last card: they win the round, even in the middle of paying
       ev.last = true;
       emit(state, now, ev);
-      endRound(state, now, p.id);
+      endRound(state, now, p.id, 'out');
       return;
     }
     if (n) {
@@ -4280,21 +4317,45 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     state.turnEndsAt = deadline(state, now, next);
   }
 
-  function endRound(state, now, winner) {
+  /* how: 'out' (the winner turned over their last card) or 'time' (the loser had
+     more cards when the round's time was up, or took the pile in sudden death). */
+  function endRound(state, now, winner, how) {
     var loser = player(state, other(state, winner));
     loser.lost += 1;
     var out = loser.lost >= allowed(state);
-    state.result = { round: state.round, winner: winner, loser: loser.id, garment: strip(state) ? loser.lost : 0, plays: state.plays, final: out };
+    state.result = { round: state.round, winner: winner, loser: loser.id, garment: strip(state) ? loser.lost : 0, plays: state.plays, final: out,
+      how: how, counts: counts(state), overtime: state.overtime };
     state.turn = null;
     state.turnEndsAt = null;
     state.owe = 0;
     state.demand = null;
     state.taker = null;
+    state.roundEndsAt = null;
+    state.overtime = false;
     emit(state, now, { type: 'roundEnd', round: state.round, winner: winner, loser: loser.id, garment: state.result.garment,
-      lost: lost(state), plays: state.plays, final: out });
+      lost: lost(state), plays: state.plays, final: out, how: how, counts: state.result.counts, overtime: state.result.overtime });
     if (out) { finish(state, now, winner); return; }
     state.phase = 'roundOver';
     state.phaseEndsAt = now + state.timing.roundHoldMs;
+  }
+
+  /* The round's time is up: whoever has more cards in their deck loses it (the
+     pile belongs to nobody). Level? Play on, and whoever takes the pile next has
+     more, so loses; running out of cards still wins. */
+  function clockDue(state, now) { return state.roundEndsAt != null && !state.overtime && now >= state.roundEndsAt; }
+  function timeUp(state, now) {
+    var a = state.players[0], b = state.players[1];
+    var diff = a.deck.length - b.deck.length;
+    if (!diff) {
+      if (!state.overtime) {
+        state.overtime = true;
+        emit(state, now, { type: 'timeUp', counts: counts(state), level: true, pile: state.pile.length });
+      }
+      return;
+    }
+    var loser = diff > 0 ? a : b;
+    emit(state, now, { type: 'timeUp', counts: counts(state), loser: loser.id, overtime: state.overtime, pile: state.pile.length });
+    endRound(state, now, other(state, loser.id), 'time');
   }
 
   function finish(state, now, winner) {
@@ -4344,6 +4405,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
         startPlay(state, now);
         return true;
       case 'play':
+        if (clockDue(state, now)) { timeUp(state, now); return true; }
         if (state.turnEndsAt == null || now < state.turnEndsAt) return false;
         var p = player(state, state.turn);
         if (!state.idle[p.id]) emit(state, now, { type: 'timeout', player: p.id });
@@ -4353,6 +4415,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       case 'pickup':
         if (now < state.phaseEndsAt) return false;
         pickup(state, now);
+        // the pile was already theirs when time ran out; in sudden death, taking it loses
+        if (state.overtime || clockDue(state, now)) timeUp(state, now);
         return true;
       case 'roundOver':
         if (now < state.phaseEndsAt) return false;
@@ -4377,7 +4441,12 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       options: state.options,
       strip: strip(state),
       garments: strip(state) ? n : 0,
-      timing: { dealHoldMs: state.timing.dealHoldMs, pickupHoldMs: state.timing.pickupHoldMs, roundHoldMs: state.timing.roundHoldMs, turnMs: state.timing.turnMs, idleMs: state.timing.idleMs },
+      timing: { dealHoldMs: state.timing.dealHoldMs, pickupHoldMs: state.timing.pickupHoldMs, roundHoldMs: state.timing.roundHoldMs,
+        turnMs: roundMs(state) ? state.timing.timedTurnMs : state.timing.turnMs, idleMs: state.timing.idleMs },
+      timed: !!roundMs(state),
+      roundMs: roundMs(state),
+      roundEndsAt: state.roundEndsAt,
+      overtime: !!state.overtime,
       phaseEndsAt: state.phaseEndsAt,
       starter: state.starter,
       turn: state.turn,
@@ -4422,7 +4491,9 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
   function rules(options) {
     var o = CT.resolveOptions(OPTIONS, options);
     var n = Number(o.losses) || 3;
-    var secs = Math.round(DEFAULT_TIMING.turnMs / 1000);
+    var timer = Number(o.timer) > 0 ? Number(o.timer) : 0;
+    var secs = Math.round((timer ? DEFAULT_TIMING.timedTurnMs : DEFAULT_TIMING.turnMs) / 1000);
+    var mins = timer / 60;
     return [
       { title: 'The cards', text: 'Two players. The deck is shuffled and split, 26 cards each, face down. Nobody looks at their cards, not even their own.' },
       { title: 'Your turn', text: 'Take turns turning over the top card of your deck onto the pile in the middle. Tap your deck to do it.' },
@@ -4433,7 +4504,10 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       o.mode === 'quick'
         ? { title: 'Quick Play', text: 'One round decides the game: whoever loses it loses the game. No garments come off.' }
         : { title: 'Strip Mode', text: 'Everyone wears ' + n + ' fun garments. Lose a round and one of them comes off; lose all ' + n + ' and you lose the game. Every round is dealt afresh, and whoever lost the last round starts.' },
-      { title: 'Time limit', text: 'Play within ' + secs + ' seconds, or a card is turned over for you, and after that your cards keep turning over quickly until you tap again. Switch on Auto at the table and your cards turn over by themselves.' }
+      timer
+        ? { title: 'Round timer', text: 'Each round lasts ' + (mins === 1 ? 'a minute' : ['', '', 'two', 'three'][mins] + ' minutes') + ' at most. When time’s up, whoever has more cards in their deck loses the round; the pile doesn’t count. Level? Play on: whoever picks up the pile next loses.' }
+        : { title: 'Round timer', text: 'Off. Choose a round timer and each round lasts one, two or three minutes at most: when time’s up, whoever has more cards loses the round.' },
+      { title: 'Time limit', text: (timer ? 'In a timed round, play within ' : 'Play within ') + secs + ' seconds, or a card is turned over for you, and after that your cards keep turning over quickly until you tap again. Switch on Auto at the table and your cards turn over by themselves.' }
     ];
   }
 
@@ -5044,6 +5118,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
           case 'action': this.tone(523, 0.08, 0.1, 'triangle'); this.tone(784, 0.15, 0.11, 'triangle', 0.07); break;
           case 'boing': this.slide(170, 640, 0.17, 0.12, 'sine', 0); this.slide(640, 230, 0.3, 0.08, 'sine', 0.17); break;
           case 'whoosh': for (var w = 0; w < 6; w++) this.noise(0.06, 800 + w * 420, 0.06, w * 0.035); break;
+          case 'buzzer': this.tone(185, 0.55, 0.06, 'square'); this.tone(191, 0.55, 0.045, 'sawtooth'); this.noise(0.06, 500, 0.08); break;   // time's up
           case 'bull':   // a short, low call: two notes and a thump
             this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;
           case 'bray':   // a soft hee-haw
@@ -5070,7 +5145,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     musicOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V6.5l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15" r="2.6" fill="currentColor" stroke="none"/></svg>',
     musicOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V6.5l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15" r="2.6" fill="currentColor" stroke="none"/><path d="M3.5 3.5l17 17"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><path d="M4 4l16 16"/></svg>',
-    flame: '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flame"/></svg>'
+    flame: '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flame"/></svg>',
+    stopwatch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13.5" r="7.5"/><path d="M9.5 2.5h5M12 2.5V6M12 13.5V9.5M18.3 6.7l1.6-1.6"/></svg>'
   };
 })(window.CT);
 
@@ -9901,8 +9977,9 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
    player is a cartoon character in fun garments (as many as the losses
    allowed), over a T-shirt and shorts that always stay on. Lose a round and
    a garment flies off while its owner blushes and shivers. Tap your deck to
-   turn its top card over. Everything drawn comes from session.view(me), so
-   nothing hidden can leak onto the screen.
+   turn its top card over. With the round timer on, a clock counts down
+   above the pile. Everything drawn comes from session.view(me), so nothing
+   hidden can leak onto the screen.
    ========================================================================== */
 (function (CT) {
   'use strict';
@@ -10019,6 +10096,9 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
 
   function iconSvg(kind) { return '<svg viewBox="0 0 18 18" aria-hidden="true" fill="currentColor">' + GARMENTS[kind].icon + '</svg>'; }
 
+  /* 83 000 ms → "1:23" (rounded up, so it reads 0:01 until the very end) */
+  function clockText(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+
   function StripMeTable(app, session, me, opts) {
     opts = opts || {};
     this.app = app;
@@ -10032,7 +10112,8 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     this.quiet = !!opts.restored;
     this.flying = null;      // a garment on its way off: { pid, kind }
     this.landing = 0;
-    this.auto = !!UI.store.get(AUTO_KEY, false);
+    // Auto as you last left it, except in the tutorial, which starts without it and doesn't change it
+    this.auto = !app.tutorial && !!UI.store.get(AUTO_KEY, false);
     this.root = document.getElementById('screen-table');
     this.build();
     var self = this;
@@ -10099,6 +10180,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       '<div class="sm-table" id="s-table">' +
         this.seatHtml(them, false) +
         '<div class="sm-mid" id="s-mid">' +
+          '<div class="sm-clock" id="s-clock" role="timer" hidden>' + UI.icon.stopwatch + '<b class="t" id="s-clock-t"></b><span class="note" id="s-clock-note" hidden></span></div>' +
           '<div class="sm-banner" id="s-banner" style="visibility:hidden"><span class="who" id="s-banner-who">·</span><b class="what" id="s-banner-what">·</b><span class="sm-pips" id="s-pips"></span></div>' +
           '<div class="sm-pile" id="s-pile"></div>' +
           '<p class="sm-pilecount" id="s-pilecount"></p>' +
@@ -10118,6 +10200,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     });
     this.el = {
       round: $('#s-round'), music: $('#s-music'), sound: $('#s-sound'), mid: $('#s-mid'),
+      clock: $('#s-clock'), clockT: $('#s-clock-t'), clockNote: $('#s-clock-note'),
       banner: $('#s-banner'), bannerWho: $('#s-banner-who'), bannerWhat: $('#s-banner-what'), pips: $('#s-pips'),
       pile: $('#s-pile'), pileCount: $('#s-pilecount'),
       statusMain: $('#s-status .status-main'), statusSub: $('#s-status .status-sub'),
@@ -10210,6 +10293,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     this.el.round.textContent = v.strip ? 'Round ' + v.round : 'Quick Play';
     var self = this;
     v.players.forEach(function (p) { self.renderSeat(v, p); });
+    this.renderClock(v);
     this.renderMid(v);
     this.renderStatus(v);
     this.renderControls(v);
@@ -10261,14 +10345,15 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       who = 'No Action Card';
       what = v.taker === this.me ? 'You take the pile' : this.name(v.taker) + ' takes the pile';
     } else if ((v.phase === 'roundOver' || v.phase === 'over') && v.result) {
-      who = v.strip ? 'Round ' + v.result.round : 'Quick Play';
-      what = v.result.winner === this.me ? 'You win the round!' : this.name(v.result.winner) + ' wins the round';
+      var r = v.result;
+      who = v.strip ? 'Round ' + r.round : 'Quick Play';   // (the clock above says how it ended, if time did it)
+      what = r.winner === this.me ? 'You win the round!' : this.name(r.winner) + ' wins the round';
     } else if (v.phase === 'play' && d) {
       var payer = d.by === this.me ? this.rival(v).id : this.me;
       who = this.poss(d.by).replace(/^your/, 'Your') + ' ' + RANK_NAME[d.rank];
       what = (payer === this.me ? 'You pay ' : this.name(payer) + ' pays ') + d.n;
       for (var i = 0; i < d.n; i++) pips += '<i class="' + (i < d.n - v.owe ? 'paid' : '') + '"></i>';
-    }
+    } else if (v.phase === 'play' && v.overtime) { who = 'Level when time ran out'; what = 'Sudden death'; }
     var key = who + '|' + what;
     this.el.banner.style.visibility = who ? '' : 'hidden';
     if (this.bannerKey !== key) {
@@ -10331,6 +10416,12 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
         if (!r) return { main: '', sub: '' };
         var won = r.winner === me;
         var main = won ? '<span class="hl">Your deck is empty!</span>' : this.name(r.winner) + '’s deck is empty first.';
+        if (r.how === 'time') {
+          var more = r.counts[r.loser], fewer = r.counts[r.winner];
+          main = r.overtime
+            ? '<span class="hl">Sudden death:</span> ' + (r.loser === me ? 'you took the pile, ' : this.name(r.loser) + ' took the pile, ') + more + ' cards to ' + fewer + '.'
+            : '<span class="hl">Time’s up!</span> ' + (r.loser === me ? 'You have' : this.name(r.loser) + ' has') + ' more cards, ' + more + ' to ' + fewer + '.';
+        }
         var sub = '';
         if (v.strip && r.garment) {
           var kind = outfitFor(v)[r.garment - 1];
@@ -10353,6 +10444,33 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     this.el.statusSub.innerHTML = st.sub || '';
   };
 
+  /* The round's clock above the pile (timed rounds only). Returns the time
+     left while it's running, for frame(). */
+  StripMeTable.prototype.renderClock = function (v) {
+    var t = '', note = '', tone = '', left = null;
+    var live = v.phase === 'play' || v.phase === 'pickup';
+    if (v.timed) {
+      if (v.phase === 'dealing') t = clockText(v.roundMs);
+      else if (live && v.overtime) { t = 'Level!'; note = 'Next to take the pile loses'; tone = 'hot'; }
+      else if (live && v.roundEndsAt != null) {
+        left = v.roundEndsAt - this.session.now();
+        t = left > 0 ? clockText(left) : 'Time’s up!';
+        tone = left <= 10000 ? 'hot' : '';
+      } else if ((v.phase === 'roundOver' || v.phase === 'over') && v.result && v.result.how === 'time') { t = v.result.overtime ? 'Sudden death' : 'Time’s up!'; tone = 'hot'; }
+    }
+    var key = t + '|' + note + '|' + tone;
+    if (this.clockKey !== key) {
+      this.clockKey = key;
+      this.el.clock.hidden = !t;
+      this.el.clockT.textContent = t;
+      this.el.clockNote.textContent = note;
+      this.el.clockNote.hidden = !note;
+      this.el.clock.classList.toggle('hot', tone === 'hot');
+      this.el.clock.setAttribute('aria-label', !t ? '' : left != null && left > 0 ? 'Time left in this round: ' + t : t + (note ? ' ' + note : ''));
+    }
+    return left;
+  };
+
   StripMeTable.prototype.renderControls = function (v) {
     var deck = this.el.deck;
     deck.classList.toggle('ready', !!v.canPlay);
@@ -10362,12 +10480,24 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     this.el.autoBtn.classList.toggle('on', this.auto);
   };
 
-  /* ~60×/s from the app loop: Auto, and the seconds when time is short. */
+  /* ~60×/s from the app loop: Auto, the round's clock, and the seconds when time is short. */
   StripMeTable.prototype.frame = function () {
     var v = this.v;
     if (!v) return;
     var now = this.session.now();
-    if (this.auto && v.canPlay && !this.sending) {
+    var roundLeft = this.renderClock(v);
+    var rs = roundLeft == null ? null : Math.ceil(roundLeft / 1000);
+    if (rs !== this.clockSec) {
+      this.clockSec = rs;
+      // the last ten seconds beat; the last five tick
+      if (rs != null && rs > 0 && rs <= 10) {
+        this.el.clock.classList.remove('beat'); void this.el.clock.offsetWidth; this.el.clock.classList.add('beat');
+        if (rs <= 5) UI.Sound.play('tick');
+      }
+    }
+    // (not while the game is paused, e.g. while a tutorial note is being read)
+    var paused = !!(this.session.clock && this.session.clock.running === false);
+    if (this.auto && v.canPlay && !this.sending && !paused) {
       var key = v.round + ':' + v.plays + ':' + v.owe;
       if (this.autoKey !== key) { this.autoKey = key; this.autoAt = performance.now() + AUTO_MS; }
       else if (performance.now() >= this.autoAt) { this.autoAt = Infinity; this.play(true); }
@@ -10376,8 +10506,9 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     if (span) {
       var left = v.turn === this.me && v.turnEndsAt ? Math.max(0, v.turnEndsAt - now) : null;
       var sec = left == null ? null : Math.ceil(left / 1000);
-      span.textContent = sec != null && left <= 5000 && !this.auto ? '· ' + sec + 's' : '';
-      if (sec !== this.lastSecs) { this.lastSecs = sec; if (sec != null && left <= 3000 && sec > 0 && !this.auto) UI.Sound.play('tick'); }
+      // (in a timed round the round's clock does the counting)
+      span.textContent = sec != null && left <= 5000 && !this.auto && !v.timed ? '· ' + sec + 's' : '';
+      if (sec !== this.lastSecs) { this.lastSecs = sec; if (sec != null && left <= 3000 && sec > 0 && !this.auto && !v.timed) UI.Sound.play('tick'); }
     }
   };
 
@@ -10431,7 +10562,7 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     UI.Sound.unlock();
     this.auto = on;
     this.autoKey = null;
-    UI.store.set(AUTO_KEY, on);
+    if (!this.app.tutorial) UI.store.set(AUTO_KEY, on);
     if (this.v) { this.renderControls(this.v); this.renderStatus(this.v); }
     UI.toast(on ? 'Auto is on: your cards turn over by themselves.' : 'Auto is off: tap your deck to play.');
   };
@@ -10532,7 +10663,22 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
           self.later(function () { UI.Sound.play(e.winners.indexOf(me) >= 0 ? 'victory' : 'lose'); }, 2600);
           break;
         case 'timeout':
-          if (e.player === me) { UI.toast('Time’s up: your cards turn over by themselves until you tap your deck.'); UI.Sound.play('nope'); }
+          if (e.player === me) { UI.toast('Too slow: your cards turn over by themselves until you tap your deck.'); UI.Sound.play('nope'); }
+          break;
+        case 'start':
+          if (e.endsAt != null && v.round === 1 && !self.timerTold) {
+            self.timerTold = true;
+            UI.toast('Timed round: whoever has more cards when time’s up loses.');
+          }
+          break;
+        case 'timeUp':
+          UI.Sound.play('buzzer');
+          UI.buzz(60);
+          if (e.level) {
+            // the clock above now says what happens next
+            v.players.forEach(function (p) { self.mood(p.id, 'shock', 1600); self.say(p.id, 'Level!', 1300); });
+            self.el.clock.classList.remove('beat'); void self.el.clock.offsetWidth; self.el.clock.classList.add('beat');
+          }
           break;
       }
     });
@@ -10573,6 +10719,13 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
       case 'timeout':
         this.pushLog((e.player === me ? 'Your time ran out: your cards turn over by themselves.' : N(e.player) + '’s time ran out.'));
         break;
+      case 'timeUp': {
+        if (e.level) { this.pushLog('Time’s up, and it’s level: ' + e.counts[me] + ' cards each. Whoever takes the pile next loses.', 'set'); break; }
+        var rest = Object.keys(e.counts).filter(function (k) { return k !== e.loser; })[0];
+        if (e.overtime) this.pushLog((e.loser === me ? 'You took the pile in sudden death: ' : N(e.loser) + ' took the pile in sudden death: ') + e.counts[e.loser] + ' cards to ' + e.counts[rest] + '.');
+        else this.pushLog('Time’s up: ' + (e.loser === me ? 'you have ' : N(e.loser) + ' has ') + e.counts[e.loser] + ' cards, ' + (rest === me ? 'you have ' : N(rest) + ' has ') + e.counts[rest] + '.');
+        break;
+      }
       case 'roundEnd': {
         var text = (e.winner === me ? 'You win' : N(e.winner) + ' wins') + (v.strip ? ' round ' + e.round : ' the round') + ' after ' + e.plays + ' cards.';
         if (e.garment) {
@@ -10595,14 +10748,16 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
     var w = v.winners && v.winners[0];
     var loser = v.players.filter(function (p) { return p.id !== w; })[0];
     var outfit = outfitFor(v);
+    var byTime = !!(v.result && v.result.how === 'time');
     var why = v.strip
       ? (loser.id === me ? 'You lost all ' + v.garments + ' garments.' : this.name(loser.id) + ' lost all ' + v.garments + ' garments.')
-      : (w === me ? 'Your deck was empty first.' : this.name(w) + '’s deck was empty first.');
+      : byTime ? 'Time’s up, and ' + (loser.id === me ? 'you had' : this.name(loser.id) + ' had') + ' more cards.'
+        : (w === me ? 'Your deck was empty first.' : this.name(w) + '’s deck was empty first.');
     var cards = v.players.map(function (p) {
       var left = v.strip ? outfit.length - p.lost : null;
       return '<div class="sm-final' + (p.id === w ? ' champ' : '') + '" data-pid="' + p.id + '"><div class="sm-final-fig">' + avatarSvg(lookFor(p.seat)) + '</div>' +
         '<b>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</b><span>' +
-        (v.strip ? (left ? left + ' of ' + outfit.length + ' garments on' : 'no garments left') : (p.id === w ? 'empty deck' : p.count + ' cards left')) + '</span></div>';
+        (v.strip ? (left ? left + ' of ' + outfit.length + ' garments on' : 'no garments left') : (p.id === w && !byTime ? 'empty deck' : p.count + ' cards left')) + '</span></div>';
     }).join('');
     return {
       when: v.strip ? v.round + ' round' + (v.round === 1 ? '' : 's') : 'Quick Play',
@@ -10627,6 +10782,204 @@ CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://bur
 
   CT.UI.presenters = CT.UI.presenters || {};
   CT.UI.presenters.stripme = StripMeTable;
+})(window.CT);
+
+/* ---- src/modes/stripme/tutorial.js ---- */
+/* ==========================================================================
+   GAME MODE · STRIP-ME — interactive tutorial
+   Five short lessons on the real table against Mia, with small hand-arranged
+   decks so they're quick, and a scripted Mia who turns her cards over at an
+   easy pace and never shuffles. The steps run on the shared lesson runner
+   (src/ui/tutorial.js). Nothing is saved or counted in stats.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var StripMe = CT.getMode('stripme');
+
+  function C(id) { return { id: id, rank: id.slice(0, -1), suit: id.slice(-1) }; }
+
+  var PLAYERS = [
+    { id: 'p0', name: 'You', isBot: false },
+    { id: 'p1', name: 'Mia', isBot: true }
+  ];
+  // No time limit a card; the pile stays on show a moment before it's taken;
+  // a finished round waits (the lesson moves on before the next deal).
+  var TIMING = { dealHoldMs: 0, pickupHoldMs: 1300, roundHoldMs: 600000, turnMs: 0 };
+
+  /* ---------- helpers the lessons use ---------- */
+
+  function saw(ctx, type, pid) {
+    return ctx.events.some(function (e) { return e.type === type && (!pid || e.player === pid); });
+  }
+  function played(pid) { return function (ctx) { return saw(ctx, 'play', pid); }; }
+  function pickedUp(pid) { return function (ctx) { return saw(ctx, 'pickup', pid); }; }
+  function shuffled(ctx) { return saw(ctx, 'shuffle', 'p0'); }
+  function roundEnded(ctx) { return saw(ctx, 'roundEnd'); }
+  function autoOn() { return !!(CT.App && CT.App.table && CT.App.table.auto); }
+
+  /* ---------- the lessons ---------- */
+
+  var LESSONS = [
+    {
+      title: 'Taking turns',
+      decks: [['4S', '9H', '7C', '2D', '5H'], ['6D', '3S', '8C', '10H', '2C']],
+      turn: 'p0',
+      steps: [
+        { next: true, title: 'Welcome to Strip-Me', text: 'It’s you against Mia. You each have a deck of cards face down, and nobody looks at their cards, not even their own. The aim is to be the first to turn over all your cards. In a real game you get 26 cards each; here it’s just a few, so the lessons are quick.' },
+        { next: true, target: 'them', text: 'Mia is dressed up in fun garments, and so are you. Lose a round and one of them comes off! The little icons by each name show what’s still on.' },
+        { target: 'deck', text: 'You start. Tap your deck to turn over its top card.', done: played('p0'), after: 500 },
+        { watch: true, target: 'pile', text: 'Your card goes face up on the pile in the middle. Then it’s Mia’s turn.', done: played('p1'), after: 700 },
+        { next: true, target: 'pile', text: 'Cards from 2 to 10 do nothing: you just take turns. But four kinds of card make things exciting…' }
+      ]
+    },
+    {
+      title: 'Action Cards',
+      decks: [['KS', '7S', '10S', '3H', '6S'], ['4D', '9C', '6H', '8D', '5D']],
+      turn: 'p0',
+      steps: [
+        { target: 'deck', title: 'Action Cards', text: 'Jacks, Queens, Kings and Aces are Action Cards. Tap your deck and see what you get.', done: played('p0'), after: 600 },
+        { next: true, target: 'mid', text: 'A King! Turn over an Action Card and the other player has to pay: 1 card for a Jack, 2 for a Queen, 3 for a King, 4 for an Ace. So Mia pays 3, one card at a time.' },
+        { watch: true, target: 'mid', text: 'Mia is paying. If none of her cards is an Action Card…', done: pickedUp('p1'), after: 900 },
+        { next: true, target: 'them', text: 'No Action Card, so Mia takes the whole pile and puts it under her deck. That’s bad news for her: more cards to get through before she can win. And you, who made her pay, start again.' }
+      ]
+    },
+    {
+      title: 'Paying up',
+      decks: [['8S', 'JH', '2H', '4H', '9S'], ['QD', '3C', '5C', '7D', '10C']],
+      turn: 'p1',
+      steps: [
+        { watch: true, target: 'them', title: 'Paying up', text: 'This time Mia starts…', done: played('p1'), after: 500 },
+        { target: 'deck', text: 'Mia turned over a Queen, so you pay 2. Tap your deck to turn over the first card.', done: played('p0'), after: 400 },
+        // (done when your Jack is the card being paid for, however quickly it was tapped)
+        { target: 'deck', text: 'Not an Action Card. One more to pay: tap your deck again.', done: function (ctx) { return !!(ctx.v.demand && ctx.v.demand.by === 'p0'); }, after: 600 },
+        { next: true, target: 'mid', text: 'A Jack! Turn up an Action Card while you’re paying and the rest of your payment is cancelled. Now Mia pays you 1 card.' },
+        { watch: true, target: 'mid', text: 'Mia pays…', done: pickedUp('p1'), after: 900 },
+        { next: true, target: 'them', text: 'Just a 3, so Mia takes the pile. Payments can go back and forth like this several times before somebody takes the pile.' }
+      ]
+    },
+    {
+      title: 'Shuffle and Auto',
+      decks: [['5S', '8H', '3D', '10D', '6C', '9D', '2S', '7H'], ['4C', '9S', '2H', '6D', '8S', '3S', '10S', '5H']],
+      turn: 'p0',
+      shuffle: true,   // the lesson where you can
+      steps: [
+        { target: 'shuffle', title: 'Shuffle', text: 'Before each card you turn over, you may shuffle your own deck once. Nobody knows what’s in it, but it might change your luck. Tap Shuffle.', done: shuffled, after: 700 },
+        { target: 'deck', text: 'Now tap your deck.', done: played('p0'), after: 400 },
+        { watch: true, target: 'them', text: 'Mia’s turn…', done: played('p1'), after: 500 },
+        { target: 'auto', title: 'Auto', text: 'Rounds can be long. Switch on Auto and your cards turn over by themselves while it’s your turn. Try it.',
+          done: function (ctx) { return autoOn() && played('p0')(ctx); }, after: 900 },
+        { next: true, target: 'auto', text: 'Auto keeps going until you tap it again to play yourself. And in a game, if you don’t play within 10 seconds, a card is turned over for you, then more, quickly, until you tap your deck.' }
+      ]
+    },
+    {
+      title: 'Winning a round',
+      decks: [['6C'], ['2D', '9H', 'KC', '4S', '7D', '3H']],
+      turn: 'p0',
+      steps: [
+        { target: 'deck', title: 'Winning a round', text: function (ctx) {
+          return roundEnded(ctx) ? 'Your deck is empty! Watch Mia…' : 'You’re down to your last card. Turn it over!';
+        }, done: roundEnded, after: 3000 },
+        { final: true, title: 'You win the round!', text: 'You ran out first, so you win the round, and off comes Mia’s silly hat! Running out wins even in the middle of paying. Each round is dealt afresh until someone has lost all their garments: you choose 2 to 5. Or pick Quick Play, one round, and add a round timer if you like: when time’s up, whoever has more cards loses.' }
+      ]
+    }
+  ];
+
+  /* ---------- a scripted Mia: an easy pace, no shuffling ---------- */
+
+  function scriptedBot() {
+    return {
+      intent: function (v) { return v.canPlay ? { kind: 'play', key: 'P' + v.round + ':' + v.plays + ':' + v.owe } : null; },
+      delay: function (intent, v) { return v.owe ? 800 : 1100; },
+      decide: function (v) { return v.canPlay ? { type: 'play', payload: {} } : null; }
+    };
+  }
+
+  /* The mode with scripted Mia. Shuffling waits for its lesson, so your
+     deck stays in the order each lesson needs. */
+  function modeFor(lesson) {
+    var mode = Object.assign({}, StripMe, { bot: scriptedBot() });
+    mode.act = function (state, pid, type, payload, now) {
+      if (pid === 'p0' && type === 'shuffle' && !lesson.shuffle) return CT.fail('lesson', 'Shuffling comes in lesson 4. For now, just tap your deck.');
+      return StripMe.act(state, pid, type, payload, now);
+    };
+    if (!lesson.shuffle) {
+      mode.view = function (state, pid, opts) {
+        var v = StripMe.view(state, pid, opts);
+        if (pid === 'p0') v.canShuffle = false;
+        return v;
+      };
+    }
+    return mode;
+  }
+
+  /* Lay out the lesson: both decks (top card first), whose turn, an empty pile. */
+  function rig(state, lesson) {
+    state.players.forEach(function (p, i) { p.deck = lesson.decks[i].map(C); p.lost = 0; });
+    state.pile = [];
+    state.round = 1;
+    state.phase = 'play';
+    state.phaseEndsAt = 0;
+    state.turn = lesson.turn;
+    state.starter = lesson.turn;
+    state.turnEndsAt = null;
+    state.owe = 0;
+    state.demand = null;
+    state.taker = null;
+    state.shuffled = {};
+    state.idle = {};
+    state.plays = 0;
+    state.roundEndsAt = null;
+    state.overtime = false;
+    state.result = null;
+    state.winners = null;
+    state.events = [];
+    state.seq = 0;
+  }
+
+  function makeSession(lesson) {
+    var session = new CT.Session({ mode: modeFor(lesson), players: PLAYERS, options: { mode: 'strip', losses: '3', timer: 'off' }, seed: 7, timing: TIMING });
+    rig(session.state, lesson);
+    return session;
+  }
+
+  /* A phone on its side: you, the pile and Mia side by side (styles.css). */
+  function SIDE_BY_SIDE() {
+    return !!(window.matchMedia && window.matchMedia('(max-height: 560px) and (orientation: landscape) and (min-width: 600px)').matches);
+  }
+
+  /* ---------- the runner (shared with the other modes' tutorials) ---------- */
+
+  UI.tutorials = UI.tutorials || {};
+  UI.tutorials.stripme = UI.makeTutorial({
+    modeId: 'stripme',
+    lessons: LESSONS,
+    makeSession: makeSession,
+    modeFor: modeFor,
+    target: function (key) {
+      var $ = function (id) { return document.getElementById(id); };
+      if (key === 'deck') return $('s-deck');
+      if (key === 'shuffle') return $('s-shuffle');
+      if (key === 'auto') return $('s-auto');
+      if (key === 'mid') return UI.around([$('s-banner'), $('s-pile'), $('s-pilecount')]);
+      if (key === 'pile') return UI.around([$('s-pile'), $('s-pilecount')]);
+      if (key === 'them') return document.querySelector('.sm-seat.sm-them');
+      if (key === 'me') return document.querySelector('.sm-seat.sm-me');
+      return null;
+    },
+    // your deck and buttons are at the bottom: notes about them go up top
+    topTargets: /^(deck|shuffle|auto|me)$/,
+    // A phone on its side: notes about the middle or Mia sit in the column beside them.
+    anchor: function (key) {
+      if (!SIDE_BY_SIDE()) return null;
+      if (key === 'them') return document.querySelector('.sm-seat.sm-them');
+      if (key === 'mid' || key === 'pile') return $mid();
+      return null;
+    },
+    playLabel: 'Play Strip-Me'
+  });
+
+  function $mid() { return document.getElementById('s-mid'); }
 })(window.CT);
 
 /* ---- src/ui/online.js ---- */

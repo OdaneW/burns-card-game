@@ -11,6 +11,8 @@
    Strip Mode: everyone wears as many garments as the losses allowed, and the
    loser of each round takes one off; lose them all and you lose the game.
    Quick Play: one round decides it.
+   Round timer (optional): when a round's time is up, whoever has more cards
+   in their deck loses it. Level? Play on: the next to take the pile loses.
 
    Flow
      dealing ─► play ─► (pickup: the pile is taken) ─► play … ─► roundOver
@@ -21,7 +23,7 @@
 (function (CT) {
   'use strict';
 
-  var ENGINE_VERSION = 1;
+  var ENGINE_VERSION = 2;   // 2: the round timer
   var SEATS = 2;
   var OWED = { J: 1, Q: 2, K: 3, A: 4 };   // what each Action Card makes the other player pay
 
@@ -30,7 +32,8 @@
     pickupHoldMs: 1300,    // the last card of a payment stays on show before the pile is taken
     roundHoldMs: 5200,     // the round's result, and the garment coming off
     turnMs: 10000,         // play within this long, or a card is turned over for you…
-    idleMs: 1200           // …and after that, quickly, until you play again yourself
+    idleMs: 1200,          // …and after that, quickly, until you play again yourself
+    timedTurnMs: 3000      // in a timed round the clock is running: play within this long
   };
 
   var OPTIONS = [
@@ -54,6 +57,17 @@
         { value: '4', label: '4', help: 'Everyone wears 4 garments. Lose 4 rounds and you lose the game.' },
         { value: '5', label: '5', help: 'Everyone wears 5 garments. Lose 5 rounds and you lose the game. A long game.' }
       ]
+    },
+    {
+      id: 'timer',
+      label: 'Round timer',
+      default: 'off',
+      choices: [
+        { value: 'off', label: 'Off', help: 'No time limit: a round lasts until someone turns over their last card.' },
+        { value: '60', label: '1 min', help: 'Each round lasts a minute at most. When time’s up, whoever has more cards loses the round.' },
+        { value: '120', label: '2 min', help: 'Each round lasts two minutes at most. When time’s up, whoever has more cards loses the round.' },
+        { value: '180', label: '3 min', help: 'Each round lasts three minutes at most. When time’s up, whoever has more cards loses the round.' }
+      ]
     }
   ];
 
@@ -66,6 +80,8 @@
   function other(state, pid) { return state.players[0].id === pid ? state.players[1].id : state.players[0].id; }
 
   function strip(state) { return state.options.mode !== 'quick'; }
+  /* How long a round may last, or 0 for no time limit. */
+  function roundMs(state) { var s = Number(state.options.timer); return s > 0 ? s * 1000 : 0; }
   /* Rounds a player may lose: their garments. Quick Play is a single round. */
   function allowed(state) { return strip(state) ? (Number(state.options.losses) || 3) : 1; }
 
@@ -91,8 +107,9 @@
   /* When the player to move must have played by. Someone whose time ran out
      is playing on autopilot until they tap again, so their cards go quickly. */
   function deadline(state, now, pid) {
-    if (!state.timing.turnMs) return null;
-    return now + (state.idle[pid] ? state.timing.idleMs : state.timing.turnMs);
+    var limit = roundMs(state) ? state.timing.timedTurnMs : state.timing.turnMs;
+    if (!limit) return null;
+    return now + (state.idle[pid] ? Math.min(state.timing.idleMs, limit) : limit);
   }
 
   /* ---------- setup ------------------------------------------------------ */
@@ -127,6 +144,8 @@
       shuffled: {},       // pid → true once they've shuffled before their next card
       idle: {},           // pid → true after their time ran out, until they play again
       plays: 0,           // cards turned over this round
+      roundEndsAt: null,  // timed rounds: when this round's time is up
+      overtime: false,    // timed rounds: level when time ran out, so the next to take the pile loses
       result: null,       // the round just finished
       winners: null,
       seq: 0,
@@ -152,6 +171,8 @@
     state.taker = null;
     state.shuffled = {};
     state.plays = 0;
+    state.roundEndsAt = null;
+    state.overtime = false;
     state.result = null;
     state.phase = 'dealing';
     state.phaseEndsAt = now + state.timing.dealHoldMs;
@@ -162,7 +183,8 @@
     state.phase = 'play';
     state.turn = state.starter;
     state.turnEndsAt = deadline(state, now, state.turn);
-    emit(state, now, { type: 'start', round: state.round, player: state.starter });
+    state.roundEndsAt = roundMs(state) ? now + roundMs(state) : null;   // the clock starts with the first card
+    emit(state, now, { type: 'start', round: state.round, player: state.starter, endsAt: state.roundEndsAt });
   }
 
   /* ---------- turning cards over ----------------------------------------- */
@@ -179,7 +201,7 @@
       // their last card: they win the round, even in the middle of paying
       ev.last = true;
       emit(state, now, ev);
-      endRound(state, now, p.id);
+      endRound(state, now, p.id, 'out');
       return;
     }
     if (n) {
@@ -232,21 +254,45 @@
     state.turnEndsAt = deadline(state, now, next);
   }
 
-  function endRound(state, now, winner) {
+  /* how: 'out' (the winner turned over their last card) or 'time' (the loser had
+     more cards when the round's time was up, or took the pile in sudden death). */
+  function endRound(state, now, winner, how) {
     var loser = player(state, other(state, winner));
     loser.lost += 1;
     var out = loser.lost >= allowed(state);
-    state.result = { round: state.round, winner: winner, loser: loser.id, garment: strip(state) ? loser.lost : 0, plays: state.plays, final: out };
+    state.result = { round: state.round, winner: winner, loser: loser.id, garment: strip(state) ? loser.lost : 0, plays: state.plays, final: out,
+      how: how, counts: counts(state), overtime: state.overtime };
     state.turn = null;
     state.turnEndsAt = null;
     state.owe = 0;
     state.demand = null;
     state.taker = null;
+    state.roundEndsAt = null;
+    state.overtime = false;
     emit(state, now, { type: 'roundEnd', round: state.round, winner: winner, loser: loser.id, garment: state.result.garment,
-      lost: lost(state), plays: state.plays, final: out });
+      lost: lost(state), plays: state.plays, final: out, how: how, counts: state.result.counts, overtime: state.result.overtime });
     if (out) { finish(state, now, winner); return; }
     state.phase = 'roundOver';
     state.phaseEndsAt = now + state.timing.roundHoldMs;
+  }
+
+  /* The round's time is up: whoever has more cards in their deck loses it (the
+     pile belongs to nobody). Level? Play on, and whoever takes the pile next has
+     more, so loses; running out of cards still wins. */
+  function clockDue(state, now) { return state.roundEndsAt != null && !state.overtime && now >= state.roundEndsAt; }
+  function timeUp(state, now) {
+    var a = state.players[0], b = state.players[1];
+    var diff = a.deck.length - b.deck.length;
+    if (!diff) {
+      if (!state.overtime) {
+        state.overtime = true;
+        emit(state, now, { type: 'timeUp', counts: counts(state), level: true, pile: state.pile.length });
+      }
+      return;
+    }
+    var loser = diff > 0 ? a : b;
+    emit(state, now, { type: 'timeUp', counts: counts(state), loser: loser.id, overtime: state.overtime, pile: state.pile.length });
+    endRound(state, now, other(state, loser.id), 'time');
   }
 
   function finish(state, now, winner) {
@@ -296,6 +342,7 @@
         startPlay(state, now);
         return true;
       case 'play':
+        if (clockDue(state, now)) { timeUp(state, now); return true; }
         if (state.turnEndsAt == null || now < state.turnEndsAt) return false;
         var p = player(state, state.turn);
         if (!state.idle[p.id]) emit(state, now, { type: 'timeout', player: p.id });
@@ -305,6 +352,8 @@
       case 'pickup':
         if (now < state.phaseEndsAt) return false;
         pickup(state, now);
+        // the pile was already theirs when time ran out; in sudden death, taking it loses
+        if (state.overtime || clockDue(state, now)) timeUp(state, now);
         return true;
       case 'roundOver':
         if (now < state.phaseEndsAt) return false;
@@ -329,7 +378,12 @@
       options: state.options,
       strip: strip(state),
       garments: strip(state) ? n : 0,
-      timing: { dealHoldMs: state.timing.dealHoldMs, pickupHoldMs: state.timing.pickupHoldMs, roundHoldMs: state.timing.roundHoldMs, turnMs: state.timing.turnMs, idleMs: state.timing.idleMs },
+      timing: { dealHoldMs: state.timing.dealHoldMs, pickupHoldMs: state.timing.pickupHoldMs, roundHoldMs: state.timing.roundHoldMs,
+        turnMs: roundMs(state) ? state.timing.timedTurnMs : state.timing.turnMs, idleMs: state.timing.idleMs },
+      timed: !!roundMs(state),
+      roundMs: roundMs(state),
+      roundEndsAt: state.roundEndsAt,
+      overtime: !!state.overtime,
       phaseEndsAt: state.phaseEndsAt,
       starter: state.starter,
       turn: state.turn,
@@ -374,7 +428,9 @@
   function rules(options) {
     var o = CT.resolveOptions(OPTIONS, options);
     var n = Number(o.losses) || 3;
-    var secs = Math.round(DEFAULT_TIMING.turnMs / 1000);
+    var timer = Number(o.timer) > 0 ? Number(o.timer) : 0;
+    var secs = Math.round((timer ? DEFAULT_TIMING.timedTurnMs : DEFAULT_TIMING.turnMs) / 1000);
+    var mins = timer / 60;
     return [
       { title: 'The cards', text: 'Two players. The deck is shuffled and split, 26 cards each, face down. Nobody looks at their cards, not even their own.' },
       { title: 'Your turn', text: 'Take turns turning over the top card of your deck onto the pile in the middle. Tap your deck to do it.' },
@@ -385,7 +441,10 @@
       o.mode === 'quick'
         ? { title: 'Quick Play', text: 'One round decides the game: whoever loses it loses the game. No garments come off.' }
         : { title: 'Strip Mode', text: 'Everyone wears ' + n + ' fun garments. Lose a round and one of them comes off; lose all ' + n + ' and you lose the game. Every round is dealt afresh, and whoever lost the last round starts.' },
-      { title: 'Time limit', text: 'Play within ' + secs + ' seconds, or a card is turned over for you, and after that your cards keep turning over quickly until you tap again. Switch on Auto at the table and your cards turn over by themselves.' }
+      timer
+        ? { title: 'Round timer', text: 'Each round lasts ' + (mins === 1 ? 'a minute' : ['', '', 'two', 'three'][mins] + ' minutes') + ' at most. When time’s up, whoever has more cards in their deck loses the round; the pile doesn’t count. Level? Play on: whoever picks up the pile next loses.' }
+        : { title: 'Round timer', text: 'Off. Choose a round timer and each round lasts one, two or three minutes at most: when time’s up, whoever has more cards loses the round.' },
+      { title: 'Time limit', text: (timer ? 'In a timed round, play within ' : 'Play within ') + secs + ' seconds, or a card is turned over for you, and after that your cards keep turning over quickly until you tap again. Switch on Auto at the table and your cards turn over by themselves.' }
     ];
   }
 

@@ -1221,6 +1221,20 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .sm-pile .card.action.top { box-shadow: 0 0 0 3px var(--ember), 0 0 20px rgba(240, 100, 60, .55); }
 .sm-pile.empty::before { content: ''; position: absolute; left: 50%; top: 7px; width: var(--pile-cw); aspect-ratio: 5 / 7; margin-left: calc(var(--pile-cw) / -2); border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .18); }
 .sm-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+/* timed rounds: the round's clock above the pile */
+.sm-clock {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px 5px 10px; border-radius: 999px;
+  background: rgba(6, 30, 29, .55); box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  color: var(--ink); font: 800 17px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.sm-clock[hidden] { display: none; }
+.sm-clock svg { width: 17px; height: 17px; color: var(--marigold); flex: none; }
+.sm-clock .note { font: 700 12.5px/1.1 var(--font-ui); color: var(--ink-soft); }
+.sm-clock.hot { color: #FFB59B; box-shadow: inset 0 0 0 2px var(--ember), 0 0 16px rgba(240, 100, 60, .3); }
+.sm-clock.hot svg { color: var(--ember); }
+.sm-clock.hot .note { color: #FFD7C7; }
+.sm-clock.beat { animation: smBeat .45s ease-out; }
+@keyframes smBeat { from { transform: scale(1.14); } to { transform: none; } }
 .sm-table .status { min-height: 0; }
 
 /* the characters: moods, and garments coming off */
@@ -1258,6 +1272,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 .sm-bubble[hidden] { display: none; }
 .sm-bubble.pop { animation: claimPop .35s cubic-bezier(.2, .8, .3, 1.35); }
 .sm-me .sm-bubble { top: -16px; }   /* your name sits higher (your tools are under it), so speak from above it */
+@media (max-height: 699px) { .sm-them .sm-bubble { top: -16px; } }   /* short screens (and phones on their side): the same for your rival */
 
 /* the result: both characters as they ended up */
 .sm-finals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }

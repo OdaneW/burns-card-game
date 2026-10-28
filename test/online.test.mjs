@@ -368,7 +368,7 @@ test('Real Burns online: played to a loser, then every winner’s penalty turn',
 
 test('Strip-Me online: two phones, Strip Mode with two losses, played to the end', () => {
   const { io, core } = setup(31);
-  const all = { burns: 3, donkey: 1, bull: 2, stripme: 1 };
+  const all = { burns: 3, donkey: 1, bull: 2, stripme: 2 };
   join(core, 'a', T(1), 'Odane', { mode: 'stripme', size: 2, options: { mode: 'strip', losses: '2' }, engines: all });
   join(core, 'b', T(2), 'Tess', { engines: all });
   core.message('a', { t: 'start' });
@@ -391,6 +391,29 @@ test('Strip-Me online: two phones, Strip Mode with two losses, played to the end
   const v = last(io, 'b', 'state').view;
   eq([v.mode, v.phase, v.me, v.garments], ['stripme', 'over', 'p1', 2]);
   assert(JSON.stringify(v).indexOf('"deck"') < 0, 'phones are never sent a deck');
+});
+
+test('Strip-Me online: a one-minute round; when time is up, whoever has more cards loses', () => {
+  const { io, core } = setup(37);
+  const all = { burns: 3, donkey: 1, bull: 2, stripme: 2 };
+  join(core, 'a', T(1), 'Odane', { mode: 'stripme', size: 2, options: { mode: 'quick', timer: '60' }, engines: all });
+  join(core, 'b', T(2), 'Tess', { engines: all });
+  core.message('a', { t: 'start' });
+  const s = core.session.state;
+  eq(s.options, { mode: 'quick', losses: '3', timer: '60' });
+  // nobody taps: after three seconds the cards turn over by themselves, quickly, until the clock runs out
+  run(core, io, 30000);
+  const v = last(io, 'b', 'state').view;
+  eq([v.timed, v.roundMs, v.timing.turnMs, v.roundEndsAt - s.events.find(e => e.type === 'start').t], [true, 60000, 3000, 60000]);
+  assert(v.players.every(p => p.idle), 'both on autopilot');
+  run(core, io, 32000);
+  for (let i = 0; i < 20 && core.room.phase === 'playing'; i++) run(core, io, 5000);   // level? sudden death plays on
+  eq(core.room.phase, 'over');
+  const r = s.result;
+  eq([s.phase, r.how], ['over', 'time']);
+  assert(r.counts[r.loser] > r.counts[r.winner], 'the loser had more cards: ' + JSON.stringify(r.counts));
+  const seen = to(io, 'a', 'state').some(m => (m.view.events || []).some(e => e.type === 'timeUp'));
+  assert(seen, 'the phones were told the time was up');
 });
 
 test('apps without a room’s game are asked to update', () => {

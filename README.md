@@ -16,7 +16,8 @@ A phone-first card game with several game modes, played against computer players
   King or Ace makes the other player pay 1, 2, 3 or 4 cards; turn up one of those while paying and the payment
   switches back. Pay in full and you pick up the whole pile under your deck. Play your last card to win the
   round: the loser's cartoon avatar loses a garment, and you choose how many losses (2 to 5) end the game.
-  Quick Play is a single round.
+  Quick Play is a single round. Add a round timer if you like: when time's up, whoever has more cards loses
+  the round.
 
 **Play:** https://odanew.github.io/burns-card-game/
 
@@ -55,9 +56,10 @@ at the bottom of the menu screen.
 | `src/modes/bull/bot.js` | The Bull computer player: when to bluff, and when to call Bull from the cards it has seen |
 | `src/modes/bull/ui.js` | The Bull table screen: three to six seats round an oval table |
 | `src/modes/bull/tutorial.js` | The interactive Bull tutorial: five rigged lessons on the real table, from your first play to calling Bull and winning |
-| `src/modes/stripme/rules.js` | The Strip-Me rules: the deal, Action Cards and payments, picking up the pile, rounds and garments, the shuffle and autopilot |
+| `src/modes/stripme/rules.js` | The Strip-Me rules: the deal, Action Cards and payments, picking up the pile, rounds and garments, the round timer, the shuffle and autopilot |
 | `src/modes/stripme/bot.js` | The Strip-Me computer player: it turns cards over at a human pace and sometimes shuffles |
-| `src/modes/stripme/ui.js` | The Strip-Me table screen: two avatars that lose a garment for each round they lose, Auto and the shuffle |
+| `src/modes/stripme/ui.js` | The Strip-Me table screen: two avatars that lose a garment for each round they lose, the round's clock, Auto and the shuffle |
+| `src/modes/stripme/tutorial.js` | The interactive Strip-Me tutorial: five rigged lessons on the real table against Mia |
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |

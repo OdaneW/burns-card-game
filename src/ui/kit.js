@@ -227,6 +227,7 @@
           case 'action': this.tone(523, 0.08, 0.1, 'triangle'); this.tone(784, 0.15, 0.11, 'triangle', 0.07); break;
           case 'boing': this.slide(170, 640, 0.17, 0.12, 'sine', 0); this.slide(640, 230, 0.3, 0.08, 'sine', 0.17); break;
           case 'whoosh': for (var w = 0; w < 6; w++) this.noise(0.06, 800 + w * 420, 0.06, w * 0.035); break;
+          case 'buzzer': this.tone(185, 0.55, 0.06, 'square'); this.tone(191, 0.55, 0.045, 'sawtooth'); this.noise(0.06, 500, 0.08); break;   // time's up
           case 'bull':   // a short, low call: two notes and a thump
             this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;
           case 'bray':   // a soft hee-haw
@@ -253,6 +254,7 @@
     musicOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V6.5l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15" r="2.6" fill="currentColor" stroke="none"/></svg>',
     musicOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V6.5l10-2.5v11"/><circle cx="6.5" cy="17.5" r="2.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15" r="2.6" fill="currentColor" stroke="none"/><path d="M3.5 3.5l17 17"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><path d="M4 4l16 16"/></svg>',
-    flame: '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flame"/></svg>'
+    flame: '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flame"/></svg>',
+    stopwatch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13.5" r="7.5"/><path d="M9.5 2.5h5M12 2.5V6M12 13.5V9.5M18.3 6.7l1.6-1.6"/></svg>'
   };
 })(window.CT);

@@ -44,7 +44,7 @@ async function open(browser, opts) {
   // start from clean storage (plus any preset settings), then load again. Unless
   // the scenario is about a first visit, the tutorials count as already offered,
   // so Play goes straight to the setup screen.
-  const preset = Object.assign({}, opts.firstVisit ? {} : { 'cardtable.tutorials.v1': { burns: 'offered', donkey: 'offered', bull: 'offered' } }, opts.storage || {});
+  const preset = Object.assign({}, opts.firstVisit ? {} : { 'cardtable.tutorials.v1': { burns: 'offered', donkey: 'offered', bull: 'offered', stripme: 'offered' } }, opts.storage || {});
   if (opts.settings) preset['cardtable.settings.v1'] = opts.settings;
   await p.evaluate(preset => {
     localStorage.clear();
@@ -571,6 +571,111 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (/^stripme-tutorial/.test(SCENARIO)) {
+      // Follow the Strip-Me tutorial from How to play to the end, trying a wrong move
+      // and Previous on the way, on a phone (default), a small phone, a phone on its
+      // side, or a desktop. Auto was left on in a real game: the lessons start without it.
+      const size = {
+        'stripme-tutorial': { viewport: { width: 390, height: 844 } },
+        'stripme-tutorial-small': { viewport: { width: 360, height: 640 } },
+        'stripme-tutorial-landscape': { viewport: { width: 844, height: 390 } },
+        'stripme-tutorial-wide': { viewport: { width: 1280, height: 820 }, isMobile: false, deviceScaleFactor: 1 }
+      }[SCENARIO];
+      const tag = SCENARIO;
+      const p = await open(browser, { ctx: size, seed: 4, storage: { 'cardtable.stripme.auto': true } });
+      await p.tap('[data-rules="stripme"]');
+      await sleep(350);
+      await shot(p, tag + '-00-how-to-play');
+      await p.evaluate(() => {
+        const T = CT.UI.tutorials.stripme.prototype;
+        const log = window.__tut = [];
+        const render = T.render, check = T.check;
+        T.render = function () {
+          render.call(this);
+          const s = this.current();
+          log.push({ key: 'L' + (this.index + 1) + '-S' + (this.step + 1), t: performance.now(), reading: this.readingTime(),
+            kind: s.next || s.final ? 'read' : s.watch ? 'watch' : 'act', how: s.next || s.final ? 'next' : 'player' });
+        };
+        T.check = function () {
+          const was = this.advancing;
+          check.call(this);
+          const s = this.current(), last = log[log.length - 1];
+          if (!was && this.advancing && s && s.watch && last) {
+            last.how = !this.holding ? 'auto' : document.querySelector('.coach-actions:not([hidden]) .btn-primary') ? 'next' : 'held-auto';
+          }
+        };
+      });
+      await p.tap('#r-tutorial');
+      await sleep(500);
+      const seen = [], checks = [], back = {}, tried = {};
+      let guard = 0, acted = {};
+      const state = () => p.evaluate(() => {
+        const t = CT.App.tutorial; if (!t) return { done: true };
+        const s = t.current(); const v = CT.App.session.view('p0', { events: false });
+        const held = !s.next && !s.final && !!document.querySelector('.coach-actions:not([hidden]) .btn-primary');
+        return { done: false, lesson: t.index, step: t.step, next: !!s.next, final: !!s.final, held, act: !s.next && !s.final && !s.watch, watch: !!s.watch,
+          phase: v.phase, turn: v.turn, owe: v.owe, canPlay: v.canPlay, counts: v.players.map(x => x.count).join(' '), pile: v.pileCount,
+          lost: v.players.map(x => x.lost).join(' '), auto: CT.App.table.auto, shuffleOff: document.getElementById('s-shuffle').disabled,
+          toast: (document.querySelector('#toast.show') || {}).textContent || '' };
+      });
+      while (guard++ < 900) {
+        const st = await state();
+        if (st.done) break;
+        const key = 'L' + (st.lesson + 1) + '-S' + (st.step + 1);
+        if (!seen.includes(key)) {
+          seen.push(key);
+          if (key === 'L1-S4' && st.turn === 'p1') {
+            // watching Mia: tapping your deck now only gets a reminder
+            const covered = await p.tap('#s-deck', { timeout: 1000 }).then(() => false, () => true); await sleep(200);
+            const w = await state();
+            checks.push('tapping your deck on Mia’s turn: ' + (covered ? 'the note is over it here' : '"' + w.toast + '", decks still ' + w.counts));
+          }
+          await sleep(450); await shot(p, tag + '-' + key);
+          if (key === 'L1-S1') checks.push('Auto at the start of the tutorial: ' + st.auto + ' (left on in a real game)');
+          if (key === 'L5-S1') checks.push('Auto in the last lesson, after switching it on in lesson 4: ' + st.auto);
+        }
+        if (st.final) break;
+        // Previous: across lessons from the start of lesson 2, and in the middle of paying in lesson 3
+        const tryBack = { 'L2-S1': 'a', 'L3-S3': 'b' }[key];
+        if (tryBack && !back[tryBack] && st.canPlay) {
+          back[tryBack] = true;
+          await p.tap('[data-act="prev"]'); await sleep(600);
+          acted = {};
+          const w = await state();
+          checks.push('Previous from ' + key + ' → L' + (w.lesson + 1) + '-S' + (w.step + 1) + ' (decks ' + w.counts + ', pile ' + w.pile + ', ' + (w.owe ? 'you owe ' + w.owe : 'nothing owed') + ')');
+          continue;
+        }
+        if (st.next || st.held) { await p.tap('.coach-actions [data-act="next"]'); await sleep(300); continue; }
+        if (!st.act) { await sleep(200); continue; }
+        // one tap a step, as a person would (the step moves on a moment later)
+        if (acted[key]) { await sleep(150); continue; }
+        if (key === 'L4-S1') { acted[key] = 1; await p.tap('#s-shuffle'); await sleep(300); continue; }
+        if (key === 'L4-S4') { acted[key] = 1; await p.tap('#s-auto'); await sleep(300); continue; }
+        if (st.canPlay) {
+          if (st.lesson === 0 && !tried.shuffle) { tried.shuffle = true; checks.push('lesson 1: Shuffle button disabled = ' + st.shuffleOff); }
+          acted[key] = 1; await p.tap('#s-deck'); await sleep(300); continue;
+        }
+        await sleep(200);
+      }
+      const end = await state();
+      const finalText = await p.evaluate(() => document.querySelector('.coach-title').textContent + ' · ' + document.querySelector('.coach-text').textContent);
+      checks.push('At the end: ' + end.phase + ', decks ' + end.counts + ', garments lost ' + end.lost);
+      await p.tap('[data-act="play"]');
+      await sleep(400);
+      const after = await p.evaluate(() => ({ screen: CT.App.screen, setup: (document.querySelector('#screen-setup .wordmark') || {}).textContent,
+        tutorial: !!CT.App.tutorial, save: !!localStorage.getItem('cardtable.save.v1'), stats: localStorage.getItem('cardtable.stats.v1'),
+        auto: localStorage.getItem('cardtable.stripme.auto') }));
+      console.log('  steps:', seen.join(' '));
+      checks.forEach(c => console.log('  ' + c));
+      const notes = await p.evaluate(() => window.__tut.map((e, i, a) => Object.assign({}, e, { shown: a[i + 1] ? Math.round(a[i + 1].t - e.t) : null })));
+      notes.filter(n => n.kind === 'watch').forEach(n => console.log('  watch note ' + n.key + ': ' + n.how + ', up ' + n.shown + ' ms, reading time ' + n.reading + ' ms'));
+      const rushed = notes.filter(n => (n.how === 'auto' || n.how === 'held-auto') && n.shown != null && n.shown < n.reading);
+      console.log('  notes that left before their reading time:', rushed.length ? rushed.map(n => n.key + ' (' + n.shown + '/' + n.reading + ' ms)') : 'none');
+      console.log('  final:', finalText);
+      console.log('  Play Strip-Me →', after);
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (/^bull(-small|-landscape|-six)?(-lies)?$/.test(SCENARIO)) {
       // A game of Bull through the screen: playing true cards and bluffs, calling Bull, big hands.
       // -lies: with bluffs nobody calls revealed (a rule choice).
@@ -925,8 +1030,9 @@ async function playGame(p, tag, want) {
 
     if (SCENARIO === 'online-stripme') {
       // Two phones playing Strip-Me through the game server (run it locally: cd server && npm run dev).
-      // Strip Mode with two losses: the host taps, the guest starts on Auto, drops off for a while
-      // (their deck goes on autopilot), comes back, then both tap until someone has lost two garments.
+      // Strip Mode with two losses and one-minute rounds: the host taps, the guest starts on Auto,
+      // drops off for a while (their deck goes on autopilot), comes back, then both tap until
+      // someone has lost two garments.
       const server = process.env.SERVER || 'ws://127.0.0.1:8787';
       const phone = { viewport: { width: 390, height: 844 } };
       const storage = { 'cardtable.server': server };
@@ -956,7 +1062,8 @@ async function playGame(p, tag, want) {
       checks.push('Quick Play → losses shown (host/guest) = ' + await lossesShown(host) + '/' + await lossesShown(guest));
       await shot(guest, tag + '-01-lobby-guest-quick');
       await host.tap('[data-l-opt="mode"][data-val="strip"]'); await sleep(500);
-      await host.tap('[data-l-opt="losses"][data-val="2"]'); await sleep(600);
+      await host.tap('[data-l-opt="losses"][data-val="2"]'); await sleep(400);
+      await host.tap('[data-l-opt="timer"][data-val="60"]'); await sleep(600);
       checks.push('Strip Mode, 2 losses → guest sees ' + JSON.stringify(await guest.evaluate(() => CT.App.online.room.options)) +
         ', losses shown (host/guest) = ' + await lossesShown(host) + '/' + await lossesShown(guest));
       await shot(host, tag + '-02-lobby-host');
@@ -972,10 +1079,11 @@ async function playGame(p, tag, want) {
         if (!s || !s.remote) return { none: true, sheet: CT.App.sheet, status };
         const v = s.view(s.me, { events: false });
         const i = v.players.findIndex(x => x.id === s.me);
+        const c = document.getElementById('s-clock');
         return { me: s.me, i, phase: v.phase, round: v.round, plays: v.plays, canPlay: v.canPlay, turn: v.turn, game: s.game,
           lost: v.players.map(x => x.lost), counts: v.players.map(x => x.count), idle: v.players.map(x => !!x.idle),
           names: v.players.map(x => x.name + (x.isBot ? '*' : '')), sheet: CT.App.sheet, status,
-          flying: !!document.querySelector('.gm.flying') };
+          flying: !!document.querySelector('.gm.flying'), how: v.result && v.result.how, clock: c && !c.hidden ? c.textContent : '' };
       });
       const tapDeck = async p => { try { await p.tap('#s-deck', { timeout: 1200 }); } catch (e) { /* the moment passed */ } };
       const hostTaps = async ms => { const t = Date.now(); while (Date.now() - t < ms) { const h = await look(host); if (h.canPlay) await tapDeck(host); await sleep(90); } };
@@ -1021,13 +1129,14 @@ async function playGame(p, tag, want) {
         const h = await look(host), g = await look(guest);
         if ((h.none || h.phase === 'over') && (g.none || g.phase === 'over')) break;
         if (h.flying || g.flying) await once('strip' + h.round, async () => { await sleep(250); await shot(host, tag + '-08-strip-host-r' + h.round); await shot(guest, tag + '-09-strip-guest-r' + h.round); });
-        if (h.phase === 'roundOver') await once('ro' + h.round, async () => { checks.push('round ' + h.round + ' over: garments lost ' + JSON.stringify(h.names) + ' ' + JSON.stringify(h.lost)); await sleep(1600); await shot(host, tag + '-10-round-over-host-r' + h.round); });
+        if (h.phase === 'roundOver') await once('ro' + h.round, async () => { const g2 = await look(guest); checks.push('round ' + h.round + ' over (' + h.how + '): garments lost ' + JSON.stringify(h.names) + ' ' + JSON.stringify(h.lost) + ' · clock host "' + h.clock + '", guest "' + g2.clock + '"'); await sleep(1600); await shot(host, tag + '-10-round-over-host-r' + h.round); });
+        if (h.phase === 'play' && !seen.clock) { seen.clock = 1; const g2 = await look(guest); checks.push('round ' + h.round + ' clocks: host "' + h.clock + '", guest "' + g2.clock + '"'); }
         if (h.canPlay) await tapDeck(host);
         if (g.canPlay) await tapDeck(guest);
         await sleep(50);
       }
       const end = await look(host);
-      checks.push('game over after ' + Math.round((Date.now() - t1) / 1000) + ' s more: garments lost ' + JSON.stringify(end.names) + ' ' + JSON.stringify(end.lost));
+      checks.push('game over (' + end.how + ') after ' + Math.round((Date.now() - t1) / 1000) + ' s more: garments lost ' + JSON.stringify(end.names) + ' ' + JSON.stringify(end.lost));
       for (const p of pages) await p.waitForFunction(() => CT.App.sheet === 'result', null, { timeout: 20000 }).catch(() => {});
       await sleep(700);
       await shot(host, tag + '-11-result-host');
@@ -1135,6 +1244,92 @@ async function playGame(p, tag, want) {
       await p.tap('#s-menu'); await sleep(250);
       await p.tap('#m-rules'); await sleep(300);
       await shot(p, tag + '-11-rules');
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
+    if (/^stripme-timed(-small|-landscape)?$/.test(SCENARIO)) {
+      // Strip-Me with one-minute rounds, two losses. Each round is rigged and its clock
+      // cut short: round 1 Mia has more cards when time's up; round 2 it's level when time
+      // runs out, so sudden death, and You take the pile; round 3 Mia has more again.
+      const size = /small/.test(SCENARIO) ? { viewport: { width: 360, height: 640 } }
+        : /landscape/.test(SCENARIO) ? { viewport: { width: 844, height: 390 } } : { viewport: { width: 390, height: 844 } };
+      const tag = SCENARIO;
+      const p = await open(browser, { ctx: size, seed: 29, settings: { format: 2, stripme: { options: { mode: 'strip', losses: '2', timer: '60' } } } });
+      await p.tap('[data-play="stripme"]'); await sleep(300);
+      await shot(p, tag + '-01-setup');
+      const checks = [];
+      checks.push('setup: round timer ' + JSON.stringify(await p.evaluate(() =>
+        [...document.querySelectorAll('[data-opt="timer"]')].map(b => b.textContent + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')))) +
+        ' · ' + await p.evaluate(() => (document.getElementById('help-timer') || {}).textContent));
+      await p.tap('#s-deal'); await sleep(150);
+      // the computer player doesn't shuffle here, so each rigged round goes as planned
+      await p.evaluate(() => { const b = CT.getMode('stripme').bot, d = b.decide; b.decide = function () { const a = d.apply(this, arguments); return a && a.type === 'shuffle' ? { type: 'play', payload: {} } : a; }; });
+      const rig = round => p.evaluate(round => {
+        const st = CT.App.session.state;
+        const card = id => ({ id, rank: id.slice(0, -1), suit: id.slice(-1) });
+        const all = CT.standardDeck().map(c => c.id);
+        const numbers = all.filter(id => !/^[JQKA]/.test(id)), actions = all.filter(id => /^[JQKA]/.test(id));
+        let mine, theirs;
+        if (round === 2) {
+          // Mia 3♣ · You 2♠ · level, time's up · Mia Q♦ · You pay 4♠ 5♠ and take the pile
+          const top = ['2S', '4S', '5S'], miaTop = ['3C', 'QD'];
+          const rest = all.filter(id => top.indexOf(id) < 0 && miaTop.indexOf(id) < 0);
+          mine = top.concat(rest.filter(id => !/^[JQKA]/.test(id)).slice(0, 23));
+          theirs = miaTop.concat(rest.filter(id => mine.indexOf(id) < 0));
+        } else {
+          mine = numbers.slice(0, 18);                                  // number cards only
+          theirs = numbers.slice(18).concat(actions);                   // the Action Cards at the bottom
+        }
+        st.players[0].deck = mine.map(card); st.players[1].deck = theirs.map(card);
+        st.starter = round === 2 ? 'p1' : 'p0';
+      }, round);
+      const look = () => p.evaluate(() => {
+        const s = CT.App.session; if (!s) return null;
+        const v = s.view('p0', { events: false });
+        const c = document.getElementById('s-clock');
+        return { phase: v.phase, round: v.round, plays: v.plays, turn: v.turn, owe: v.owe, canPlay: v.canPlay, overtime: v.overtime,
+          left: v.roundEndsAt != null ? v.roundEndsAt - s.now() : null, counts: v.players.map(x => x.count), lost: v.players.map(x => x.lost),
+          result: v.result && { how: v.result.how, loser: v.result.loser, overtime: v.result.overtime, counts: v.result.counts },
+          sheet: CT.App.sheet, clock: c && !c.hidden ? c.textContent + (c.classList.contains('hot') ? ' (hot)' : '') : '',
+          status: document.querySelector('#s-status .status-main').textContent, banner: document.getElementById('s-banner-who').textContent + ' · ' + document.getElementById('s-banner-what').textContent };
+      });
+      const cut = ms => p.evaluate(ms => { const s = CT.App.session; s.state.roundEndsAt = s.now() + ms; }, ms);
+      let v = await look(), guard = 0, rigged = 0;
+      const cutDone = {}, seen = {};
+      const once = async (key, name, wait) => { if (seen[key]) return; seen[key] = 1; if (wait) await sleep(wait); await shot(p, tag + '-' + name); };
+      while (v && v.sheet !== 'result' && guard++ < 3000) {
+        if (v.phase === 'dealing' && rigged < v.round) {
+          rigged = v.round; await rig(v.round);
+          if (v.round === 1) { await sleep(300); checks.push('dealing: clock shows ' + (await look()).clock); await once('deal1', '02-deal', 0); }
+        }
+        if (v.phase === 'play' && !cutDone[v.round]) {
+          if (v.round !== 2) { cutDone[v.round] = 1; await cut(v.round === 1 ? 9000 : 6000); }
+          else if (v.plays === 2) { cutDone[2] = 1; checks.push('round 2: level at ' + JSON.stringify(v.counts) + ', time up now'); await cut(150); }
+        }
+        if (v.round === 1 && v.phase === 'play' && v.left != null && v.left < 8000 && v.left > 5500) await once('run', '03-clock-running', 0);
+        if (v.round === 1 && v.phase === 'play' && v.left != null && v.left < 4000 && v.left > 1500) await once('hot', '04-last-seconds', 0);
+        if (v.overtime && v.phase === 'play') {
+          if (!seen.level) checks.push('sudden death: clock "' + v.clock + '", banner "' + v.banner + '"');
+          await once('level', '06-sudden-death', 350);
+        }
+        if (v.phase === 'roundOver' && !seen['ro' + v.round]) {
+          checks.push('round ' + v.round + ' over: ' + JSON.stringify(v.result) + ' · "' + v.status + '" · banner "' + v.banner + '" · clock "' + v.clock + '"');
+          await once('ro' + v.round, (v.round === 1 ? '05' : '07') + '-round-over-r' + v.round, 2600);
+        }
+        if (v.canPlay && !(v.round === 2 && v.plays >= 2 && !v.overtime && !v.owe)) { await p.tap('#s-deck'); await sleep(v.round === 2 ? 450 : 380); }
+        else await sleep(100);
+        v = await look();
+      }
+      await sleep(600);
+      await shot(p, tag + '-08-result');
+      const end = await p.evaluate(() => ({ sheet: CT.App.sheet, why: (document.querySelector('#overlay .result-why') || document.querySelector('#overlay p') || {}).textContent,
+        log: CT.App.table.logItems.slice(-8).map(x => x.html.replace(/<[^>]+>/g, '')) }));
+      checks.forEach(c => console.log('  ' + c));
+      console.log('  game over:', JSON.stringify(end));
+      await p.tap('#r-table'); await sleep(300);
+      await p.tap('#s-menu'); await sleep(250);
+      await p.tap('#m-rules'); await sleep(300);
+      await shot(p, tag + '-09-rules');
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
