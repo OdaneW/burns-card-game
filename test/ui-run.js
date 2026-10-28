@@ -435,6 +435,22 @@ async function playGame(p, tag, want) {
       console.log('  play-by-play ends:', JSON.stringify(end.log));
       await p.tap('#r-home'); await sleep(300);
       console.log('  Back to games →', await p.evaluate(() => CT.App.screen));
+      // the next game, at another table: nothing of the penalty round may be left on the screen
+      for (const next of ['donkey', 'bull']) {
+        await p.tap('[data-play="' + next + '"]'); await sleep(300);
+        await p.tap('#s-deal'); await sleep(1800);
+        const after = await p.evaluate(() => {
+          const root = document.getElementById('screen-table');
+          const wrap = root.querySelector('.hand-wrap');
+          const cards = [...root.querySelectorAll('.hand .hcard')];
+          return { classes: root.className, hand: wrap ? getComputedStyle(wrap).display : 'none found', height: wrap ? Math.round(wrap.getBoundingClientRect().height) : 0,
+            cards: cards.length, shown: cards.filter(c => c.getBoundingClientRect().height > 0 && getComputedStyle(c).visibility !== 'hidden').length };
+        });
+        console.log('  then ' + next + ' → table classes "' + after.classes + '", your hand: display ' + after.hand + ', ' + after.height + ' px tall, ' + after.shown + ' of ' + after.cards + ' cards showing');
+        await shot(p, tag + '-09-then-' + next);
+        await p.tap('[id$="-menu"]'); await sleep(250);
+        await p.tap('#m-home'); await sleep(300);
+      }
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 

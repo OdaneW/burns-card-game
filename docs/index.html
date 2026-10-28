@@ -1510,7 +1510,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.11.0","id":"85b06ed","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -6264,6 +6264,7 @@ CT.BUILD = {"version":"0.11.0","id":"85b06ed","target":"app","server":"wss://bur
     window.removeEventListener('resize', this.onResize);
     clearTimeout(this.overTimer);
     this.root.innerHTML = '';
+    this.root.classList.remove('pen-on');   // the penalty round's layout mustn't outlive this table
     var fx = document.getElementById('fx');
     if (fx) fx.innerHTML = '';   // cards still in flight belonged to this table
   };
@@ -12605,9 +12606,21 @@ CT.BUILD = {"version":"0.11.0","id":"85b06ed","target":"app","server":"wss://bur
       this.attach(session, false);
     },
 
+    /* The table screen, as bare as when the page loaded: one game's table
+       mustn't leave anything on it for the next (Real Burns's penalty round
+       once hid the next game's hand). */
+    freshTable: function () {
+      if (this.table) this.table.destroy();
+      this.table = null;
+      var root = $('screen-table');
+      root.className = 'screen';
+      root.removeAttribute('style');
+      root.innerHTML = '';
+    },
+
     attach: function (session, restored) {
       this.closeSheet(true);
-      if (this.table) this.table.destroy();
+      this.freshTable();
       this.session = session;
       this.recorded = session.state.phase === 'over';
       this.show('table');
@@ -12622,7 +12635,7 @@ CT.BUILD = {"version":"0.11.0","id":"85b06ed","target":"app","server":"wss://bur
     /* An online game on the table: the same table screens, fed by the server. */
     attachOnline: function (session, opts) {
       if (this.sheet !== 'rules') this.closeSheet(true);
-      if (this.table) this.table.destroy();
+      this.freshTable();
       this.session = session;
       this.show('table');
       var Presenter = UI.presenters[session.mode.presenter];
@@ -12695,7 +12708,7 @@ CT.BUILD = {"version":"0.11.0","id":"85b06ed","target":"app","server":"wss://bur
     },
 
     attachTutorial: function (session) {
-      if (this.table) this.table.destroy();
+      this.freshTable();
       this.session = session;
       this.show('table');
       var Presenter = UI.presenters[session.mode.presenter];

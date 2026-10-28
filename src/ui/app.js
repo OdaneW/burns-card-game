@@ -287,9 +287,21 @@
       this.attach(session, false);
     },
 
+    /* The table screen, as bare as when the page loaded: one game's table
+       mustn't leave anything on it for the next (Real Burns's penalty round
+       once hid the next game's hand). */
+    freshTable: function () {
+      if (this.table) this.table.destroy();
+      this.table = null;
+      var root = $('screen-table');
+      root.className = 'screen';
+      root.removeAttribute('style');
+      root.innerHTML = '';
+    },
+
     attach: function (session, restored) {
       this.closeSheet(true);
-      if (this.table) this.table.destroy();
+      this.freshTable();
       this.session = session;
       this.recorded = session.state.phase === 'over';
       this.show('table');
@@ -304,7 +316,7 @@
     /* An online game on the table: the same table screens, fed by the server. */
     attachOnline: function (session, opts) {
       if (this.sheet !== 'rules') this.closeSheet(true);
-      if (this.table) this.table.destroy();
+      this.freshTable();
       this.session = session;
       this.show('table');
       var Presenter = UI.presenters[session.mode.presenter];
@@ -377,7 +389,7 @@
     },
 
     attachTutorial: function (session) {
-      if (this.table) this.table.destroy();
+      this.freshTable();
       this.session = session;
       this.show('table');
       var Presenter = UI.presenters[session.mode.presenter];

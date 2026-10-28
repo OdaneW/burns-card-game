@@ -70,6 +70,7 @@
     window.removeEventListener('resize', this.onResize);
     clearTimeout(this.overTimer);
     this.root.innerHTML = '';
+    this.root.classList.remove('pen-on');   // the penalty round's layout mustn't outlive this table
     var fx = document.getElementById('fx');
     if (fx) fx.innerHTML = '';   // cards still in flight belonged to this table
   };
