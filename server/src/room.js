@@ -5,6 +5,10 @@
    engine and computer players as the app. Everyone only ever receives their
    own view of the table, so nobody's phone holds anyone else's cards.
 
+   Everyone in the room can chat and send quick reactions (a laughing face,
+   a crying one…), which go straight out to everyone else; the last few
+   messages are kept for anyone who joins or comes back.
+
    Seats go to people in the order they joined; computer players take the
    rest. When someone's connection drops, the game carries on: after a few
    seconds a computer player looks after their seat, and they take it back
@@ -29,6 +33,11 @@ const LOBBY_DROP_MS = 120000;   // someone gone from the lobby this long comes o
 const CHECK_MS = 5000;          // how often to look again while someone is away
 const QUIET_MS = 12000;         // during a game phones check in every 4 seconds; silence this long means gone
 const BOT_NAMES = ['Mia', 'Dex', 'Rae', 'Kofi', 'Tess', 'Jun', 'Nia', 'Omar', 'Lena', 'Ravi', 'Zoe', 'Ike'];
+const CHAT_MAX = 200;           // characters in a chat message
+const CHAT_KEEP = 40;           // messages kept for phones that join or come back
+const CHAT_BURST = 5;           // at most this many messages from one person…
+const CHAT_WINDOW_MS = 8000;    // …in this long
+const REACT_GAP_MS = 500;       // and a reaction at most this often
 const FIRST_MODES = ['burns', 'donkey'];   // what apps from before they said which games they have can play
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
@@ -36,6 +45,16 @@ function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 export function cleanName(s) {
   s = String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f-\u009f<>]/g, '').replace(/\s+/g, ' ').trim();
   return Array.from(s).slice(0, NAME_MAX).join('').trim();
+}
+
+/* One line of chat: no control characters or text-direction tricks, spaces
+   tidied, and not too long. Shown as text by the app, never as markup. */
+export function cleanChat(s) {
+  s = String(s == null ? '' : s)
+    .replace(/[\u202a-\u202e\u2066-\u2069\u200e\u200f]/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  return Array.from(s).slice(0, CHAT_MAX).join('').trim();
 }
 
 function cleanToken(s) {
@@ -67,6 +86,7 @@ export class RoomCore {
     this.room = null;
     this.session = null;
     this.dirty = false;
+    this.rates = new Map();     // memberId → recent chat times and the last reaction (not saved)
     if (saved) this.load(saved);
   }
 
@@ -80,7 +100,8 @@ export class RoomCore {
       mode: null, size: null, options: {},
       members: [], host: null, nextId: 1,
       phase: 'lobby',             // lobby → playing → over → (playing again | lobby)
-      gameNo: 0
+      gameNo: 0,
+      chat: [], chatSeq: 0        // the last few chat messages, numbered
     };
     this.io.persist(true);
   }
@@ -211,6 +232,8 @@ export class RoomCore {
       case 'lobby': this.backToLobby(m); break;
       case 'act': this.act(m, msg); break;
       case 'leave': this.leave(m); break;
+      case 'chat': this.chat(m, msg.text); break;
+      case 'react': this.react(m, msg.r); break;
     }
   }
 
@@ -254,7 +277,7 @@ export class RoomCore {
     this.conns.set(connId, m.id);
     this.io.bind(connId, m.id);
     if (m.computer) this.takeBack(m);
-    this.io.send(connId, { t: 'welcome', protocol: PROTOCOL, code: r.code, you: m.id, engines: engineVersions() });
+    this.io.send(connId, { t: 'welcome', protocol: PROTOCOL, code: r.code, you: m.id, engines: engineVersions(), chat: r.chat.slice() });
     this.broadcastRoom();
     if (this.session && m.pid) this.sendState(m, { reset: true });
     this.flush();
@@ -282,6 +305,41 @@ export class RoomCore {
     if (this.room.phase === 'over') this.backToLobby(m);
     this.broadcastRoom();
     this.io.persist(true);
+  }
+
+  /* ---------- chat and reactions ---------- */
+
+  toAll(msg) { for (const [connId, id] of this.conns) if (id != null) this.io.send(connId, msg); }
+
+  rateFor(m) {
+    let r = this.rates.get(m.id);
+    if (!r) { r = { chat: [], react: -Infinity }; this.rates.set(m.id, r); }
+    return r;
+  }
+
+  /* A message to everyone in the room, players and anyone waiting alike. */
+  chat(m, text) {
+    text = cleanChat(text);
+    if (!text) return;
+    const now = this.io.now(), rate = this.rateFor(m), r = this.room;
+    rate.chat = rate.chat.filter(t => now - t < CHAT_WINDOW_MS);
+    if (rate.chat.length >= CHAT_BURST) { this.notice(m, 'Slow down a little: that’s a lot of messages at once.'); return; }
+    rate.chat.push(now);
+    const line = { id: ++r.chatSeq, from: m.id, name: m.name, text: text, at: now };
+    r.chat.push(line);
+    if (r.chat.length > CHAT_KEEP) r.chat.splice(0, r.chat.length - CHAT_KEEP);
+    this.toAll({ t: 'chat', m: line });
+    this.io.persist();
+  }
+
+  /* A quick reaction: a name the apps know (a face they draw), straight out to everyone. */
+  react(m, kind) {
+    kind = String(kind == null ? '' : kind);
+    if (!/^[a-z]{2,12}$/.test(kind)) return;
+    const now = this.io.now(), rate = this.rateFor(m);
+    if (now - rate.react < REACT_GAP_MS) return;
+    rate.react = now;
+    this.toAll({ t: 'react', from: m.id, r: kind, at: now });
   }
 
   /* ---------- the game ---------- */
@@ -500,6 +558,7 @@ export class RoomCore {
     if (!saved || saved.v !== 1 || !saved.room) return;
     const now = this.io.now();
     this.room = saved.room;
+    if (!Array.isArray(this.room.chat)) { this.room.chat = []; this.room.chatSeq = 0; }   // saved before there was chat
     this.room.members.forEach(m => { m.connected = false; m.connId = null; m.seq = 0; m.goneAt = now; });
     const s = saved.session;
     const mode = s && CT.getMode(s.modeId);

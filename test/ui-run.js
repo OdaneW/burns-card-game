@@ -1028,6 +1028,213 @@ async function playGame(p, tag, want) {
       console.log('  errors:', errors.length ? errors : 'none');
     }
 
+    if (SCENARIO === 'online-chat') {
+      // Chat and quick reactions in a room, with three phones of different sizes: in the
+      // lobby, then at a Bull table. Run the game server locally (cd server && npm run dev).
+      const server = process.env.SERVER || 'ws://127.0.0.1:8787';
+      const storage = { 'cardtable.server': server };
+      const host = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 51, storage });
+      const tess = await open(browser, { ctx: { viewport: { width: 360, height: 640 } }, seed: 52, storage });
+      const ravi = await open(browser, { ctx: { viewport: { width: 844, height: 390 } }, seed: 53, storage });
+      const pages = [host, tess, ravi], names = ['Odane', 'Tess', 'Ravi'];
+      const tag = 'oc';
+      const checks = [];
+      await host.tap('[data-online="create"]'); await sleep(300);
+      await host.tap('#overlay [data-mode="bull"]');
+      await host.fill('#o-name', names[0]);
+      await host.tap('#o-go');
+      await host.waitForSelector('.room-code', { timeout: 10000 });
+      const code = (await host.textContent('.room-code')).trim();
+      for (const [i, p] of [[1, tess], [2, ravi]]) {
+        await p.tap('[data-online="join"]'); await sleep(300);
+        await p.fill('#o-code', code);
+        await p.fill('#o-name', names[i]);
+        await p.tap('#o-go');
+        await p.waitForSelector('.room-code', { timeout: 10000 });
+      }
+      await sleep(700);
+      const social = p => p.evaluate(() => {
+        const s = CT.App.online.social;
+        const btn = document.querySelector('.chat-btn');
+        const pops = [...document.querySelectorAll('#rx-layer .rxpop')].map(e => e.querySelector('svg').getAttribute('class').replace('rx rx-', '') + (e.classList.contains('named') ? '(top)' : ''));
+        const bubbles = [...document.querySelectorAll('#rx-layer .chat-pop')].map(e => e.textContent);
+        return { unread: s.unread, badge: btn ? (btn.querySelector('.chat-badge').hidden ? '' : btn.querySelector('.chat-badge').textContent) : 'no button',
+          open: s.isOpen, lines: s.lines.map(l => l.sys ? '(' + l.text + ')' : l.name + ': ' + l.text), pops, bubbles, screen: CT.App.screen,
+          toast: (document.querySelector('#toast.show') || {}).textContent || '' };
+      });
+      const send = async (p, text) => {
+        if (!(await social(p)).open) { await p.tap('.chat-btn'); await sleep(350); }
+        await p.fill('#chat-input', text);
+        await p.tap('#chat-send'); await sleep(150);
+      };
+      const react = async (p, kind) => {
+        if (!(await social(p)).open) { await p.tap('.chat-btn'); await sleep(350); }
+        await p.tap('.chat-rx [data-rx="' + kind + '"]');
+      };
+      // the lobby: the chat starts empty
+      await host.tap('#l-chat'); await sleep(400);
+      await shot(host, tag + '-01-lobby-chat-empty');
+      await send(host, 'Hi all! Ready for some Bull?');
+      await sleep(500);
+      await shot(host, tag + '-02-lobby-host-sent');
+      const t1 = await social(tess);
+      checks.push('host says hi → Tess: badge ' + t1.badge + ', pop-up ' + JSON.stringify(t1.bubbles) + ' · host sees ' + JSON.stringify((await social(host)).lines));
+      await shot(tess, tag + '-03-lobby-tess-popup');
+      await host.tap('#chat-close'); await sleep(200);
+      // a reaction from Tess, seen by her name on the others' screens
+      await react(tess, 'laugh');
+      await sleep(450);
+      await shot(host, tag + '-04-lobby-host-sees-laugh');
+      checks.push('Tess laughs → panel closed on her phone: ' + !(await social(tess)).open + ' · host sees ' + JSON.stringify((await social(host)).pops) + ', Ravi sees ' + JSON.stringify((await social(ravi)).pops));
+      // Tess reads and answers
+      await tess.tap('#l-chat'); await sleep(400);
+      checks.push('Tess opens the chat → badge "' + (await social(tess)).badge + '"');
+      await send(tess, 'Let’s go! 😄');
+      await sleep(300);
+      await shot(tess, tag + '-05-lobby-tess-chat');
+      await tess.tap('#chat-close'); await sleep(200);
+      // the game
+      await host.tap('[data-l-size="3"]'); await sleep(400);
+      await host.tap('#l-start');
+      for (const p of pages) await p.waitForSelector('#screen-table:not([hidden])', { timeout: 10000 });
+      await sleep(1200);
+      const bars = await Promise.all(pages.map(p => p.evaluate(() => {
+        const bar = document.querySelector('#screen-table .topbar');
+        return { button: !!bar.querySelector('.chat-btn'), fits: bar.scrollWidth <= bar.clientWidth + 1, wordmark: getComputedStyle(bar.querySelector('.wordmark')).display !== 'none' };
+      })));
+      checks.push('table top bars (phone, small, landscape): ' + JSON.stringify(bars));
+      await react(ravi, 'cry'); await sleep(500);
+      await shot(host, tag + '-06-table-host-sees-cry');
+      await shot(tess, tag + '-07-table-tess-sees-cry');
+      checks.push('Ravi cries → host ' + JSON.stringify((await social(host)).pops) + ', Tess ' + JSON.stringify((await social(tess)).pops));
+      await sleep(3000);
+      await react(host, 'love'); await sleep(600);
+      await shot(host, tag + '-08-table-host-own-love');
+      await shot(ravi, tag + '-09-table-ravi-sees-love');
+      checks.push('host loves it → own screen ' + JSON.stringify((await social(host)).pops) + ', Ravi ' + JSON.stringify((await social(ravi)).pops));
+      await sleep(2800);
+      await send(tess, 'nice bluff, Ravi');
+      await tess.tap('#chat-close'); await sleep(500);
+      await shot(host, tag + '-10-table-host-sees-message');
+      await shot(ravi, tag + '-11-table-ravi-sees-message');
+      checks.push('Tess at the table → host badge ' + (await social(host)).badge + ', pop-ups ' + JSON.stringify((await social(host)).bubbles));
+      // too many messages at once
+      await tess.tap('.chat-btn'); await sleep(300);
+      for (let i = 1; i <= 6; i++) { await tess.fill('#chat-input', 'spam ' + i); await tess.press('#chat-input', 'Enter'); await sleep(60); }
+      await sleep(500);
+      checks.push('six quick messages → host has ' + (await social(host)).lines.filter(l => /spam/.test(l)).length + ', Tess told "' + (await social(tess)).toast + '"');
+      await tess.tap('#chat-close'); await sleep(200);
+      // Ravi drops off for a few seconds and misses a message
+      await ravi.context().setOffline(true);
+      await sleep(1500);
+      await send(host, 'Ravi, your turn!');
+      await host.tap('#chat-close'); await sleep(300);
+      await sleep(6000);
+      await ravi.context().setOffline(false);
+      await ravi.waitForFunction(() => CT.App.online.conn && CT.App.online.conn.status === 'open', null, { timeout: 20000 });
+      await sleep(1500);
+      checks.push('Ravi back → badge ' + (await social(ravi)).badge + ', has "Ravi, your turn!" = ' + (await social(ravi)).lines.some(l => /your turn!/.test(l)) +
+        ' · ' + JSON.stringify(await ravi.evaluate(() => { const s = CT.App.online.social; return { you: CT.App.online.you, lastSeen: s.lastSeen, ids: s.lines.map(l => (l.id || 's') + '/' + l.from) }; })));
+      await ravi.tap('.chat-btn'); await sleep(450);
+      await shot(ravi, tag + '-12-table-ravi-chat-landscape');
+      await tess.tap('.chat-btn'); await sleep(450);
+      await shot(tess, tag + '-13-table-tess-chat-small');
+      checks.push('Tess’s chat: ' + JSON.stringify((await social(tess)).lines));
+      await ravi.tap('#chat-close'); await tess.tap('#chat-close'); await sleep(300);
+      // every face, mid-movement
+      await host.evaluate(() => {
+        const layer = document.getElementById('rx-layer') || document.body;
+        CT.UI.reactions.forEach((r, i) => {
+          const el = document.createElement('div');
+          el.className = 'rxpop gallery';
+          el.innerHTML = CT.UI.reactionFace(r.id) + '<span class="rx-name">' + r.label + '</span>';
+          el.style.left = (20 + (i % 4) * 90) + 'px';
+          el.style.top = (170 + Math.floor(i / 4) * 150) + 'px';
+          layer.appendChild(el);
+        });
+      });
+      await sleep(450); await shot(host, tag + '-14-faces-a');
+      await sleep(500); await shot(host, tag + '-15-faces-b');
+      await sleep(700); await shot(host, tag + '-16-faces-c');
+      checks.forEach(c => console.log('  ' + c));
+      const errors = [].concat(...pages.map(p => p.errors)).filter(e => !/ERR_INTERNET_DISCONNECTED/.test(e));
+      console.log('  errors:', errors.length ? errors : 'none');
+    }
+
+    if (SCENARIO === 'online-chat-tables') {
+      // The chat button and reactions at each game's table: two phones (a phone and a
+      // small phone) play Burns, Donkey and Strip-Me in turn against the local server.
+      const server = process.env.SERVER || 'ws://127.0.0.1:8787';
+      const storage = { 'cardtable.server': server };
+      const checks = [];
+      const all = [];
+      for (const mode of ['burns', 'donkey', 'stripme']) {
+        const host = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 61, storage });
+        const guest = await open(browser, { ctx: { viewport: { width: 360, height: 640 } }, seed: 62, storage });
+        all.push(host, guest);
+        await host.tap('[data-online="create"]'); await sleep(300);
+        await host.tap('#overlay [data-mode="' + mode + '"]');
+        await host.fill('#o-name', 'Odane');
+        await host.tap('#o-go');
+        await host.waitForSelector('.room-code', { timeout: 10000 });
+        const code = (await host.textContent('.room-code')).trim();
+        await guest.tap('[data-online="join"]'); await sleep(300);
+        await guest.fill('#o-code', code);
+        await guest.fill('#o-name', 'Tess');
+        await guest.tap('#o-go');
+        await guest.waitForSelector('.room-code', { timeout: 10000 });
+        await sleep(500);
+        await host.tap('#l-start');
+        for (const p of [host, guest]) await p.waitForSelector('#screen-table:not([hidden])', { timeout: 10000 });
+        await sleep(1600);
+        const bar = p => p.evaluate(() => {
+          const b = document.querySelector('#screen-table .topbar');
+          return (b.querySelector('.chat-btn') ? 'button' : 'NO BUTTON') + (b.scrollWidth <= b.clientWidth + 1 ? ', fits' : ', OVERFLOWS') +
+            (getComputedStyle(b.querySelector('.wordmark')).display === 'none' ? ', name hidden' : ', name shown');
+        });
+        // where a reaction lands: over the sender's seat (not the fallback at the top)
+        const landed = (p, pid) => p.evaluate(pid => {
+          const pop = document.querySelector('#rx-layer .rxpop');
+          if (!pop) return 'nothing';
+          if (pop.classList.contains('named')) return 'at the top';
+          const r = pop.getBoundingClientRect();
+          const root = document.getElementById('screen-table');
+          const seat = root.querySelector('[data-pid="' + pid + '"]') || root.querySelector('#t-me, #d-me, #b-me');
+          const s = seat.getBoundingClientRect();
+          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+          return cx >= s.left - 10 && cx <= s.right + 10 && cy >= s.top - 40 && cy <= s.bottom + 20 ? 'on the seat' : 'off the seat';
+        }, pid);
+        const pids = await Promise.all([host, guest].map(p => p.evaluate(() => CT.App.session.me)));
+        await guest.tap('.chat-btn'); await sleep(350);
+        await guest.tap('.chat-rx [data-rx="wow"]'); await sleep(500);
+        const onHost = await landed(host, pids[1]), onGuest = await landed(guest, pids[1]);
+        await shot(host, 'oct-' + mode + '-host-sees-wow');
+        await sleep(2900);
+        await host.tap('.chat-btn'); await sleep(350);
+        await host.tap('.chat-rx [data-rx="sleepy"]'); await sleep(500);
+        const onGuest2 = await landed(guest, pids[0]), onHost2 = await landed(host, pids[0]);
+        await shot(guest, 'oct-' + mode + '-guest-sees-sleepy');
+        await sleep(2900);
+        await host.tap('.chat-btn'); await sleep(300);
+        await host.fill('#chat-input', 'Your turn, Tess!');
+        await host.tap('#chat-send'); await sleep(200);
+        await host.tap('#chat-close'); await sleep(500);
+        await shot(guest, 'oct-' + mode + '-guest-sees-message');
+        checks.push(mode + ': bars ' + await bar(host) + ' | ' + await bar(guest) +
+          ' · Tess’s wow on the host ' + onHost + ', on hers ' + onGuest + ' · Odane’s sleepy on Tess ' + onGuest2 + ', on his ' + onHost2 +
+          ' · message pop-up on Tess: ' + JSON.stringify(await guest.evaluate(() => [...document.querySelectorAll('#rx-layer .chat-pop')].map(e => e.className + ' · ' + e.textContent))));
+        for (const p of [guest, host]) {
+          await p.tap('[id$="-menu"]'); await sleep(250);
+          await p.tap('#m-leave'); await sleep(250);
+          if (await p.$('#o-leave')) await p.tap('#o-leave');
+          await sleep(400);
+        }
+      }
+      checks.forEach(c => console.log('  ' + c));
+      const errors = [].concat(...all.map(p => p.errors));
+      console.log('  errors:', errors.length ? errors : 'none');
+    }
+
     if (SCENARIO === 'online-stripme') {
       // Two phones playing Strip-Me through the game server (run it locally: cd server && npm run dev).
       // Strip Mode with two losses and one-minute rounds: the host taps, the guest starts on Auto,

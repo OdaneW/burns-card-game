@@ -35,6 +35,7 @@ const SOURCES = [
   'src/modes/bull/tutorial.js',
   'src/modes/stripme/ui.js',
   'src/modes/stripme/tutorial.js',
+  'src/ui/social.js',
   'src/ui/online.js',
   'src/ui/app.js'
 ];

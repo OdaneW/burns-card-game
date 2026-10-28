@@ -2,7 +2,7 @@
    pretend phones, with a controllable clock. Joining and hosting, seats and
    computer players, private views, dropped connections, leaving, playing
    again, and restarting the server mid-game. Run: node test/online.test.mjs */
-import { RoomCore, PROTOCOL, cleanName } from '../server/src/room.js';
+import { RoomCore, PROTOCOL, cleanName, cleanChat } from '../server/src/room.js';
 
 const CT = globalThis.CT;
 let passed = 0, failed = 0;
@@ -447,6 +447,92 @@ test('Donkey online: the race uses the time each phone measured', () => {
   core.message('a', { t: 'act', id: 1, type: 'react', payload: { ms: 240 } });
   const res = last(io, 'a', 'result');
   eq([res.id, res.res.ok, res.res.ms], [1, true, 240]);
+});
+
+test('chat: everyone in the room gets each message, tidied, and newcomers get the last few', () => {
+  eq(cleanChat('  hi\n  there\u202e!\u0007 '), 'hi there!', 'one line, no control or direction characters');
+  eq(Array.from(cleanChat('é'.repeat(300))).length, 200, 'two hundred characters at most');
+  const { io, core } = setup(5);
+  const all = { burns: 3, donkey: 1, bull: 2, stripme: 2 };
+  join(core, 'a', T(1), 'Odane', { mode: 'bull', size: 3, engines: all });
+  join(core, 'b', T(2), 'Tess', { engines: all });
+  join(core, 'c', T(3), 'Ravi', { engines: all });
+  core.message('b', { t: 'chat', text: '  <b>Hi</b>   everyone!\n' });
+  ['a', 'b', 'c'].forEach(c => {
+    const m = last(io, c, 'chat').m;
+    eq([m.id, m.from, m.name, m.text], [1, 2, 'Tess', '<b>Hi</b> everyone!'], c + ' gets it, as plain text to show');
+  });
+  core.message('a', { t: 'chat', text: '   ' });
+  eq(to(io, 'b', 'chat').length, 1, 'nothing to say: nothing sent');
+  // too many at once: the sixth in eight seconds waits
+  for (let i = 0; i < 6; i++) { io.t += 200; core.message('c', { t: 'chat', text: 'go ' + i }); }
+  eq(to(io, 'a', 'chat').map(x => x.m.text), ['<b>Hi</b> everyone!', 'go 0', 'go 1', 'go 2', 'go 3', 'go 4']);
+  assert(/Slow down/.test(last(io, 'c', 'notice').message), 'the sender is told to slow down');
+  io.t += 8000;
+  core.message('c', { t: 'chat', text: 'and now?' });
+  eq(last(io, 'a', 'chat').m.text, 'and now?', 'after a moment, fine again');
+  // someone new, and someone coming back, see what was said
+  join(core, 'd', T(4), 'Kofi', { engines: all });
+  eq(last(io, 'd', 'welcome').chat.map(x => x.id), [1, 2, 3, 4, 5, 6, 7]);
+  core.disconnect('b');
+  core.message('a', { t: 'chat', text: 'where did Tess go?' });
+  join(core, 'b2', T(2), 'Tess', { engines: all });
+  eq(last(io, 'b2', 'welcome').chat.slice(-1)[0].text, 'where did Tess go?', 'missed while away');
+  // a game: three seated, Kofi waits; everyone still talks to everyone
+  core.message('a', { t: 'start' });
+  core.message('d', { t: 'chat', text: 'go Tess!' });
+  ['a', 'b2', 'c'].forEach(c => eq(last(io, c, 'chat').m.text, 'go Tess!', 'waiting players reach the table'));
+  core.message('b2', { t: 'chat', text: 'thanks Kofi' });
+  eq(last(io, 'd', 'chat').m.text, 'thanks Kofi', 'and the table reaches them');
+  // only the last forty are kept
+  for (let i = 0; i < 45; i++) { io.t += 9000; core.message('a', { t: 'chat', text: 'n' + i }); }
+  eq(core.room.chat.length, 40);
+  eq(core.room.chat[39].text, 'n44');
+  // someone who has left can't talk
+  core.message('c', { t: 'leave' });
+  const before = to(io, 'a', 'chat').length;
+  core.message('c', { t: 'chat', text: 'still here?' });
+  eq(to(io, 'a', 'chat').length, before);
+});
+
+test('reactions: out to everyone with who sent them; odd names ignored; at most two a second', () => {
+  const { io, core } = setup(6);
+  join(core, 'a', T(1), 'Odane', { mode: 'stripme', engines: { burns: 3, donkey: 1, bull: 2, stripme: 2 } });
+  join(core, 'b', T(2), 'Tess', { engines: { burns: 3, donkey: 1, bull: 2, stripme: 2 } });
+  core.message('a', { t: 'react', r: 'laugh' });
+  ['a', 'b'].forEach(c => { const m = last(io, c, 'react'); eq([m.from, m.r], [1, 'laugh'], c); });
+  core.message('a', { t: 'react', r: 'cry' });
+  eq(to(io, 'b', 'react').length, 1, 'a second one straight after is dropped');
+  io.t += 500;
+  core.message('a', { t: 'react', r: 'cry' });
+  eq(last(io, 'b', 'react').r, 'cry');
+  [{ r: '<img>' }, { r: 'LAUGH' }, { r: 'x' }, { r: 'a'.repeat(20) }, {}].forEach(bad => { io.t += 600; core.message('b', Object.assign({ t: 'react' }, bad)); });
+  eq(to(io, 'a', 'react').length, 2, 'only short lowercase names');
+  core.message('a', { t: 'start' });
+  io.t += 600;
+  core.message('b', { t: 'react', r: 'wow' });
+  eq([last(io, 'a', 'react').from, last(io, 'a', 'react').r], [2, 'wow'], 'during a game too');
+});
+
+test('chat is kept when the server restarts, and the numbering carries on', () => {
+  const { io, core } = setup(7);
+  join(core, 'a', T(1), 'Odane', { mode: 'donkey' });
+  join(core, 'b', T(2), 'Tess');
+  core.message('a', { t: 'chat', text: 'one' });
+  core.message('b', { t: 'chat', text: 'two' });
+  const again = new RoomCore(io, JSON.parse(JSON.stringify(core.snapshot())));
+  join(again, 'a2', T(1), 'Odane');
+  eq(last(io, 'a2', 'welcome').chat.map(x => x.text), ['one', 'two']);
+  again.message('a2', { t: 'chat', text: 'three' });
+  eq(last(io, 'a2', 'chat').m.id, 3);
+  // a room saved before there was chat
+  const old = JSON.parse(JSON.stringify(core.snapshot()));
+  delete old.room.chat; delete old.room.chatSeq;
+  const older = new RoomCore(io, old);
+  join(older, 'a3', T(1), 'Odane');
+  eq(last(io, 'a3', 'welcome').chat, []);
+  older.message('a3', { t: 'chat', text: 'hello' });
+  eq(last(io, 'a3', 'chat').m.id, 1);
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

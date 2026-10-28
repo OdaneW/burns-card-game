@@ -227,6 +227,7 @@
           case 'action': this.tone(523, 0.08, 0.1, 'triangle'); this.tone(784, 0.15, 0.11, 'triangle', 0.07); break;
           case 'boing': this.slide(170, 640, 0.17, 0.12, 'sine', 0); this.slide(640, 230, 0.3, 0.08, 'sine', 0.17); break;
           case 'whoosh': for (var w = 0; w < 6; w++) this.noise(0.06, 800 + w * 420, 0.06, w * 0.035); break;
+          case 'pop': this.tone(620, 0.07, 0.06, 'sine'); this.tone(930, 0.08, 0.05, 'sine', 0.05); break;   // a chat message or a reaction
           case 'buzzer': this.tone(185, 0.55, 0.06, 'square'); this.tone(191, 0.55, 0.045, 'sawtooth'); this.noise(0.06, 500, 0.08); break;   // time's up
           case 'bull':   // a short, low call: two notes and a thump
             this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;

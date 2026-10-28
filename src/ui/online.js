@@ -5,6 +5,7 @@
    offline game. The host picks the game and starts it; computer players
    take any empty seats. If the connection drops, the app reconnects by
    itself, and a computer player looks after your seat until you're back.
+   Chat and quick reactions are in social.js.
    ========================================================================== */
 (function (CT) {
   'use strict';
@@ -51,6 +52,7 @@
     this.you = null;         // my id in the room
     this.remote = null;      // the game in progress (a RemoteSession)
     this.form = null;        // the create/join sheet, while it's waiting
+    this.social = new UI.Social(this);   // chat and reactions
   }
 
   Online.prototype.store = function () { UI.store.set(KEY, this.data); };
@@ -238,6 +240,8 @@
         state: function (m) { self.onState(m); },
         result: function (m) { if (self.remote) self.remote.result(m); },
         notice: function (m) { UI.toast(esc(m.message)); },
+        chat: function (m) { self.social.receive(m.m); },
+        react: function (m) { self.social.reaction(m); },
         error: function (m) { self.onError(m); },
         lost: function () { if (self.remote) self.remote.dropPending(); },
         status: function (s) { self.onStatus(s); }
@@ -265,6 +269,7 @@
     this.you = msg.you;
     this.data.room = { code: msg.code, mode: this.data.room && this.data.room.code === msg.code ? this.data.room.mode : null, at: Date.now() };
     this.store();
+    this.social.history(msg.code, msg.chat);
   };
 
   Online.prototype.onRoom = function (room) {
@@ -274,6 +279,7 @@
       return;
     }
     var first = !this.room;
+    this.social.members(this.room, room);   // "Tess joined the room." in the chat
     this.room = room;
     this.data.room = { code: room.code, mode: room.mode, at: Date.now() };
     this.store();
@@ -301,12 +307,14 @@
       this.remote = new CT.Net.RemoteSession(this.conn, msg);
       this.conn.syncing = true;
       this.app.attachOnline(this.remote, { restored: !msg.fresh });
+      this.social.mountTable();
       return;
     }
     if (msg.reset) {
       // back after a dropped connection: redraw the table as it is now
       this.remote.apply(msg, true);
       this.app.attachOnline(this.remote, { restored: true });
+      this.social.mountTable();
       return;
     }
     this.remote.apply(msg);
@@ -358,6 +366,7 @@
 
   Online.prototype.showLobby = function () {
     var app = this.app;
+    if (app.screen !== 'lobby') this.social.clearAll();   // whatever was popping up at the table
     if (app.sheet && app.sheet !== 'online' && app.sheet !== 'rules') app.closeSheet(true);
     app.show('lobby');
     this.renderLobby();
@@ -397,7 +406,7 @@
       if (m.id === self.you) tags.push('you');
       if (m.id === r.host) tags.push('host');
       var state = row.waits ? (lobby ? 'Waits' : 'Next game') : m.computer ? 'Computer covering' : m.connected ? 'Here' : 'Away';
-      return '<li class="lobby-seat' + (row.waits ? ' waits' : '') + '"><span class="avatar" style="--paint:' + PAINTS[i % PAINTS.length] + '">' + esc(m.name.charAt(0).toUpperCase()) + '</span>' +
+      return '<li class="lobby-seat' + (row.waits ? ' waits' : '') + '" data-member="' + m.id + '"><span class="avatar" style="--paint:' + PAINTS[i % PAINTS.length] + '">' + esc(m.name.charAt(0).toUpperCase()) + '</span>' +
         '<span class="who">' + esc(m.name) + (tags.length ? ' <small>' + tags.join(' · ') + '</small>' : '') + '</span>' +
         '<span class="state ' + (m.connected ? 'on' : 'off') + '">' + state + '</span></li>';
     }).join('');
@@ -444,6 +453,7 @@
       '<header class="setup-head lobby-head">' +
         '<button class="icon-btn" id="l-back" type="button" aria-label="Leave the room">' + UI.icon.back + '</button>' +
         '<span class="wordmark">ROOM</span><span class="spacer"></span>' +
+        this.social.buttonHtml('l-chat') +
         '<span class="net-dot ' + (this.conn && this.conn.isOpen() ? 'on' : 'off') + '" id="l-net" title="Connection"></span>' +
       '</header>' +
       '<div class="setup-body lobby-body">' +
@@ -466,6 +476,7 @@
 
     if (scrolled) document.querySelector('#screen-lobby .lobby-body').scrollTop = scrolled;
     $('l-back').addEventListener('click', function () { self.confirmLeave(); });
+    this.social.wire($('l-chat'));
     $('l-share').addEventListener('click', function () { self.share(); });
     $('l-copy').addEventListener('click', function () { self.copy(self.inviteUrl()); });
     $('l-rules').addEventListener('click', function () { app.openRules(mode.id, r.options); });
@@ -556,6 +567,7 @@
 
   Online.prototype.endOnline = function () {
     clearTimeout(this.barTimer);
+    this.social.reset();
     var bar = $('net-bar');
     if (bar) bar.hidden = true;
     this.leaveTable();
