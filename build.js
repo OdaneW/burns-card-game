@@ -20,6 +20,8 @@ const SOURCES = [
   'src/modes/donkey/bot.js',
   'src/modes/bull/rules.js',
   'src/modes/bull/bot.js',
+  'src/modes/stripme/rules.js',
+  'src/modes/stripme/bot.js',
   'src/net/online.js',
   'src/ui/kit.js',
   'src/ui/music.js',
@@ -31,6 +33,7 @@ const SOURCES = [
   'src/modes/donkey/tutorial.js',
   'src/modes/bull/ui.js',
   'src/modes/bull/tutorial.js',
+  'src/modes/stripme/ui.js',
   'src/ui/online.js',
   'src/ui/app.js'
 ];

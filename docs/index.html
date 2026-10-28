@@ -320,7 +320,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   touch-action: manipulation;
 }
 .topbar { display: flex; align-items: center; gap: 6px; height: 40px; flex: none; }
-.topbar .wordmark { font-size: 19px; margin: 0 4px 0 2px; }
+.topbar .wordmark { font-size: 19px; margin: 0 4px 0 2px; white-space: nowrap; }
 
 .seats { display: flex; justify-content: center; gap: 4px; flex: none; }
 .seat {
@@ -1164,6 +1164,150 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+/* ---------- Strip-Me: two characters, two decks and the pile between them ---------- */
+:root { --fig-h: 118px; --pile-cw: 72px; }
+@media (max-height: 699px) { :root { --fig-h: 92px; --pile-cw: 60px; } }
+@media (min-height: 820px) and (min-width: 380px) { :root { --fig-h: 130px; --pile-cw: 80px; } }
+.sm-table { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+.sm-seat {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 6px 12px 6px 8px; border-radius: 20px;
+  background: rgba(6, 30, 29, .32); box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow .2s;
+}
+.sm-seat.is-turn { box-shadow: inset 0 0 0 2px rgba(244, 185, 66, .75); }
+.sm-seat.is-paying { box-shadow: inset 0 0 0 2px var(--ember), 0 0 20px rgba(240, 100, 60, .28); }
+.sm-fig { position: relative; width: calc(var(--fig-h) * .72); height: var(--fig-h); }
+.sm-av-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.sm-info { display: grid; gap: 5px; min-width: 0; }
+.sm-name { font: 800 17px/1.1 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-wear { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+.sm-g { width: 24px; height: 22px; display: grid; place-items: center; border-radius: 7px; background: rgba(244, 185, 66, .16); color: var(--marigold); }
+.sm-g svg { width: 16px; height: 16px; }
+.sm-g.lost { background: transparent; color: rgba(238, 244, 234, .22); box-shadow: inset 0 0 0 1px rgba(238, 244, 234, .14); }
+.sm-chip { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+.sm-chip.hot { color: var(--marigold); }
+.sm-chip.warn { color: #FFB59B; }
+
+/* the decks: face down, nobody knows what's in them */
+.sm-deck { position: relative; display: grid; justify-items: center; gap: 3px; padding: 0; border: 0; background: none; color: inherit; }
+.sm-stack { position: relative; display: block; width: calc(var(--rail-cw) + 8px); height: calc(var(--rail-cw) * 1.4 + 8px); }
+.sm-stack .card { --cw: var(--rail-cw); position: absolute; left: 0; top: 0; }
+.sm-stack .card:nth-child(2) { left: 3px; top: 3px; }
+.sm-stack .card:nth-child(3) { left: 6px; top: 6px; }
+.sm-count { font: 800 13px/1 var(--font-ui); }
+.sm-deck.empty .sm-stack { border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .2); }
+.sm-stack.shuffling .card:nth-child(2) { animation: riffleL .25s ease-in-out 3; }
+.sm-stack.shuffling .card:nth-child(3) { animation: riffleR .25s ease-in-out .12s 3; }
+.sm-deck.mine { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.sm-deck.mine .sm-stack { width: calc(var(--rail-cw) * 1.2 + 8px); height: calc(var(--rail-cw) * 1.68 + 8px); }
+.sm-deck.mine .sm-stack .card { --cw: calc(var(--rail-cw) * 1.2); }
+.sm-deck.mine.ready .sm-stack .card:nth-child(3) { box-shadow: 0 0 0 3px var(--marigold), 0 0 18px rgba(244, 185, 66, .55); animation: smReady .9s ease-in-out infinite alternate; }
+.sm-deck.mine.paying .sm-stack .card:nth-child(3) { box-shadow: 0 0 0 3px var(--ember), 0 0 18px rgba(240, 100, 60, .6); }
+.sm-deck.mine:active .sm-stack { transform: scale(.97); }
+.sm-tap { font: 800 11px/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--marigold); visibility: hidden; }
+.sm-deck.mine.ready .sm-tap { visibility: visible; }
+.sm-deck.nudge { animation: wiggle .3s ease; }
+@keyframes smReady { from { translate: 0 0; } to { translate: 0 -3px; } }
+.sm-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.sm-tool { padding: 8px 11px; font-size: 13px; background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line-strong); white-space: nowrap; }
+.sm-tool:disabled { opacity: .35; }
+.sm-auto { display: flex; align-items: center; gap: 6px; }
+.sm-me .sm-chip { display: none; }   /* your own turn shows on your deck and in the line above */
+@media (max-width: 380px) {
+  .sm-seat { gap: 8px; padding-right: 10px; }
+  .sm-tool { padding: 7px 9px; font-size: 12.5px; }
+  .sm-auto { gap: 5px; }
+  .sm-auto .sw { width: 22px; }
+  .sm-auto.on .sw::after { transform: translateX(7px); }
+}
+.sm-auto .sw { position: relative; width: 26px; height: 15px; border-radius: 99px; background: rgba(238, 244, 234, .2); flex: none; transition: background .2s; }
+.sm-auto .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--ink); transition: transform .2s, background .2s; }
+.sm-auto.on { box-shadow: inset 0 0 0 1.5px var(--marigold); color: var(--marigold); }
+.sm-auto.on .sw { background: var(--marigold); }
+.sm-auto.on .sw::after { transform: translateX(11px); background: #2A1E05; }
+
+/* the middle: what's owed, and the pile */
+.sm-mid { flex: 1 1 auto; min-height: 0; display: grid; justify-items: center; align-content: center; gap: 8px; }
+.sm-banner { display: grid; justify-items: center; gap: 3px; }
+.sm-banner .who { font: 800 11px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+.sm-banner .what { font: 800 24px/1.08 var(--font-ui); color: var(--ink); white-space: nowrap; text-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+.sm-banner.hot .who { color: #FFB59B; }
+.sm-banner.hot .what { color: var(--marigold); }
+.sm-banner.pop .what { animation: claimPop .45s cubic-bezier(.2, .8, .3, 1.35); }
+.sm-pips { display: flex; gap: 7px; min-height: 12px; }
+.sm-pips i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--ember); transition: background .15s; }
+.sm-pips i.paid { background: var(--ember); }
+.sm-pile { position: relative; width: calc(var(--pile-cw) * 1.6); height: calc(var(--pile-cw) * 1.4 + 14px); }
+.sm-pile .card { --cw: var(--pile-cw); position: absolute; left: 50%; top: 7px; margin-left: calc(var(--pile-cw) / -2); transform: translateX(var(--dx, 0)) rotate(var(--tilt, 0deg)); }
+.sm-pile .card.top { box-shadow: 0 8px 18px rgba(0, 0, 0, .35); }
+.sm-pile .card.action.top { box-shadow: 0 0 0 3px var(--ember), 0 0 20px rgba(240, 100, 60, .55); }
+.sm-pile.empty::before { content: ''; position: absolute; left: 50%; top: 7px; width: var(--pile-cw); aspect-ratio: 5 / 7; margin-left: calc(var(--pile-cw) / -2); border-radius: 8px; box-shadow: inset 0 0 0 1.5px rgba(238, 244, 234, .18); }
+.sm-pilecount { font: 700 12px/1.2 var(--font-ui); color: var(--ink-soft); min-height: 1.2em; }
+.sm-table .status { min-height: 0; }
+
+/* the characters: moods, and garments coming off */
+.sm-av-svg .sm-shadow { fill: rgba(0, 0, 0, .25); }
+.sm-av-svg .sm-m-grin, .sm-av-svg .sm-m-oh, .sm-av-svg .sm-blush, .sm-av-svg .sm-sweat { display: none; }
+.sm-av-svg.mood-shock .sm-m-smile, .sm-av-svg.mood-grin .sm-m-smile { display: none; }
+.sm-av-svg.mood-shock .sm-m-oh, .sm-av-svg.mood-shock .sm-blush, .sm-av-svg.mood-shock .sm-sweat,
+.sm-av-svg.mood-grin .sm-m-grin, .sm-av-svg.mood-blush .sm-blush { display: inline; }
+.sm-av-svg.mood-shock .sm-brows { transform: translateY(-2.5px); }
+.sm-av-svg .sm-eyes { transform-box: fill-box; transform-origin: center; animation: smBlink 5s infinite; }
+@keyframes smBlink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+.sm-av-svg .gm { transform-box: fill-box; transform-origin: 50% 50%; }
+.sm-av-svg .gm.off { display: none; }
+.sm-fig.cheer .sm-av-svg { animation: smCheer .5s ease-in-out 2; }
+.sm-fig.shiver .sm-av-svg { animation: smShiver .1s linear 13; }
+@keyframes smCheer { 50% { transform: translateY(-10px); } }
+@keyframes smShiver { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2.5px); } 75% { transform: translateX(2.5px); } }
+.sm-av-svg .fly-hat { animation: flyHat 1.1s cubic-bezier(.3, .6, .4, 1) forwards; }
+.sm-av-svg .fly-glasses { animation: flyGlasses 1s ease-in forwards; }
+.sm-av-svg .fly-scarf { animation: flyScarf 1.1s ease-out forwards; }
+.sm-av-svg .fly-coat { animation: flyCoat 1.1s cubic-bezier(.4, .1, .6, 1) forwards; }
+.sm-av-svg .fly-socks { animation: flySocks 1s ease-out forwards; }
+@keyframes flyHat { 0% { transform: none; } 18% { transform: translateY(-16px) rotate(-12deg); } 100% { transform: translate(40px, -170px) rotate(-280deg); opacity: 0; } }
+@keyframes flyGlasses { 0% { transform: none; } 25% { transform: translateY(-8px) rotate(10deg) scale(1.1); } 100% { transform: translate(-60px, 130px) rotate(-160deg); opacity: 0; } }
+@keyframes flyScarf { 0% { transform: none; } 30% { transform: translate(10px, -12px) rotate(10deg); } 100% { transform: translate(-150px, -90px) rotate(-220deg) scale(.8); opacity: 0; } }
+@keyframes flyCoat { 0% { transform: none; } 30% { transform: translateY(-14px) scale(1.06); } 100% { transform: translate(170px, -70px) rotate(50deg) scale(.7); opacity: 0; } }
+@keyframes flySocks { 0% { transform: none; } 30% { transform: translateY(-24px) scale(1.1); } 100% { transform: translate(20px, -150px) rotate(400deg) scale(.5); opacity: 0; } }
+.sm-bubble {
+  position: absolute; z-index: 3; left: 62%; top: -4px;
+  padding: 4px 9px; border-radius: 12px 12px 12px 3px;
+  background: var(--card); color: var(--ink-on-paint);
+  font: 800 12px/1.15 var(--font-ui); white-space: nowrap;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .3); pointer-events: none;
+}
+.sm-bubble[hidden] { display: none; }
+.sm-bubble.pop { animation: claimPop .35s cubic-bezier(.2, .8, .3, 1.35); }
+.sm-me .sm-bubble { top: -16px; }   /* your name sits higher (your tools are under it), so speak from above it */
+
+/* the result: both characters as they ended up */
+.sm-finals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.sm-final { display: grid; justify-items: center; gap: 2px; padding: 10px 6px 8px; border-radius: 16px; background: rgba(6, 30, 29, .4); }
+.sm-final.champ { box-shadow: inset 0 0 0 1.5px var(--marigold); }
+.sm-final-fig { width: 74px; height: 104px; }
+.sm-final-fig svg { width: 100%; height: 100%; overflow: visible; }
+.sm-final b { font: 800 15px/1.2 var(--font-ui); }
+.sm-final span { font: 600 12px/1.2 var(--font-ui); color: var(--ink-soft); }
+
+/* a phone on its side: you, the pile and your rival side by side */
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  :root { --fig-h: 92px; --pile-cw: 56px; }
+  #screen-table:has(.sm-table) { display: flex; }
+  .sm-table {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "them mid me" "them status me";
+    column-gap: 12px; row-gap: 4px; align-items: stretch;
+  }
+  .sm-them { grid-area: them; }
+  .sm-me { grid-area: me; }
+  .sm-mid { grid-area: mid; }
+  .sm-table .status { grid-area: status; }
+  .sm-seat { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; padding: 8px; }
+  .sm-seat .sm-deck { grid-column: 1 / -1; justify-self: center; }
+}
+
 </style>
 </head>
 <body>
@@ -1195,7 +1339,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.9.2","id":"dacba48","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.10.0","id":"d3da69f","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -3901,6 +4045,464 @@ CT.BUILD = {"version":"0.9.2","id":"dacba48","target":"app","server":"wss://burn
   Bull.bot = bot;
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
 
+/* ---- src/modes/stripme/rules.js ---- */
+/* ==========================================================================
+   GAME MODE · STRIP-ME — rules
+   Two players, the deck split 26 and 26, face down: nobody looks at their
+   cards. Taking turns, each turns over the top card of their own deck onto
+   the pile in the middle. Jacks, Queens, Kings and Aces are Action Cards:
+   the other player must pay 1, 2, 3 or 4 cards, one at a time. Turn up an
+   Action Card while paying and the rest is cancelled: now the other player
+   pays for that one. Pay in full without one and you take the whole pile
+   under your deck, and the player who made you pay starts again. The first
+   to turn over their last card wins the round.
+   Strip Mode: everyone wears as many garments as the losses allowed, and the
+   loser of each round takes one off; lose them all and you lose the game.
+   Quick Play: one round decides it.
+
+   Flow
+     dealing ─► play ─► (pickup: the pile is taken) ─► play … ─► roundOver
+       ─► dealing (Strip Mode, garments left) … ─► over
+   Pure rules: every function takes the state and the game time; no timers,
+   no DOM. Nobody, not even the owner, is ever shown the order of a deck.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+
+  var ENGINE_VERSION = 1;
+  var SEATS = 2;
+  var OWED = { J: 1, Q: 2, K: 3, A: 4 };   // what each Action Card makes the other player pay
+
+  var DEFAULT_TIMING = {
+    dealHoldMs: 1400,      // the new round's cards are dealt
+    pickupHoldMs: 1300,    // the last card of a payment stays on show before the pile is taken
+    roundHoldMs: 5200,     // the round's result, and the garment coming off
+    turnMs: 10000,         // play within this long, or a card is turned over for you…
+    idleMs: 1200           // …and after that, quickly, until you play again yourself
+  };
+
+  var OPTIONS = [
+    {
+      id: 'mode',
+      label: 'Game',
+      default: 'strip',
+      choices: [
+        { value: 'strip', label: 'Strip Mode', help: 'Lose a round and one of your garments comes off. Lose them all and you lose the game.' },
+        { value: 'quick', label: 'Quick Play', help: 'One round, no stripping: whoever loses the round loses the game.' }
+      ]
+    },
+    {
+      id: 'losses',
+      label: 'Losses',
+      default: '3',
+      showIf: { mode: 'strip' },
+      choices: [
+        { value: '2', label: '2', help: 'Everyone wears 2 garments. Lose 2 rounds and you lose the game.' },
+        { value: '3', label: '3', help: 'Everyone wears 3 garments. Lose 3 rounds and you lose the game.' },
+        { value: '4', label: '4', help: 'Everyone wears 4 garments. Lose 4 rounds and you lose the game.' },
+        { value: '5', label: '5', help: 'Everyone wears 5 garments. Lose 5 rounds and you lose the game. A long game.' }
+      ]
+    }
+  ];
+
+  /* ---------- helpers ---------------------------------------------------- */
+
+  function player(state, pid) {
+    for (var i = 0; i < state.players.length; i++) if (state.players[i].id === pid) return state.players[i];
+    return null;
+  }
+  function other(state, pid) { return state.players[0].id === pid ? state.players[1].id : state.players[0].id; }
+
+  function strip(state) { return state.options.mode !== 'quick'; }
+  /* Rounds a player may lose: their garments. Quick Play is a single round. */
+  function allowed(state) { return strip(state) ? (Number(state.options.losses) || 3) : 1; }
+
+  function counts(state) {
+    var out = {};
+    state.players.forEach(function (p) { out[p.id] = p.deck.length; });
+    return out;
+  }
+  function lost(state) {
+    var out = {};
+    state.players.forEach(function (p) { out[p.id] = p.lost; });
+    return out;
+  }
+
+  function emit(state, now, ev) {
+    state.seq += 1;
+    ev.seq = state.seq;
+    ev.t = Math.round(now);
+    state.events.push(ev);
+    if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
+  }
+
+  /* When the player to move must have played by. Someone whose time ran out
+     is playing on autopilot until they tap again, so their cards go quickly. */
+  function deadline(state, now, pid) {
+    if (!state.timing.turnMs) return null;
+    return now + (state.idle[pid] ? state.timing.idleMs : state.timing.turnMs);
+  }
+
+  /* ---------- setup ------------------------------------------------------ */
+
+  function createGame(config) {
+    var players = config.players || [];
+    if (players.length !== SEATS) throw new Error('Strip-Me needs exactly two players');
+    var now = config.now || 0;
+    var timing = {};
+    for (var k in DEFAULT_TIMING) timing[k] = DEFAULT_TIMING[k];
+    if (config.timing) for (var t in config.timing) timing[t] = config.timing[t];
+
+    var state = {
+      mode: 'stripme',
+      engineVersion: ENGINE_VERSION,
+      rng: ((config.seed != null ? config.seed : Date.now()) >>> 0) || 1,
+      options: CT.resolveOptions(OPTIONS, config.options),
+      timing: timing,
+      players: players.map(function (p, i) {
+        return { id: p.id, name: p.name, isBot: !!p.isBot, seat: i, deck: [], lost: 0 };
+      }),
+      round: 0,
+      phase: 'dealing',
+      phaseEndsAt: 0,
+      starter: null,
+      turn: null,         // who turns over the next card
+      turnEndsAt: null,
+      owe: 0,             // cards the player to move still has to pay (0: an ordinary turn)
+      demand: null,       // the Action Card being paid for: { by, rank, n }
+      taker: null,        // who is about to take the pile (pickup)
+      pile: [],           // face up in the middle, oldest first
+      shuffled: {},       // pid → true once they've shuffled before their next card
+      idle: {},           // pid → true after their time ran out, until they play again
+      plays: 0,           // cards turned over this round
+      result: null,       // the round just finished
+      winners: null,
+      seq: 0,
+      events: []
+    };
+    deal(state, now, CT.pickRandom(state.players, state).id);
+    return state;
+  }
+
+  /* A fresh deal: the whole deck shuffled and split, 26 each, face down. */
+  function deal(state, now, starter) {
+    state.round += 1;
+    var deck = CT.shuffle(CT.standardDeck(), state);
+    state.players.forEach(function (p) { p.deck = []; });
+    var a = state.players.indexOf(player(state, starter));
+    deck.forEach(function (c, i) { state.players[(a + i) % SEATS].deck.push(c); });
+    state.pile = [];
+    state.starter = starter;
+    state.turn = null;
+    state.turnEndsAt = null;
+    state.owe = 0;
+    state.demand = null;
+    state.taker = null;
+    state.shuffled = {};
+    state.plays = 0;
+    state.result = null;
+    state.phase = 'dealing';
+    state.phaseEndsAt = now + state.timing.dealHoldMs;
+    emit(state, now, { type: 'deal', round: state.round, starter: starter, counts: counts(state) });
+  }
+
+  function startPlay(state, now) {
+    state.phase = 'play';
+    state.turn = state.starter;
+    state.turnEndsAt = deadline(state, now, state.turn);
+    emit(state, now, { type: 'start', round: state.round, player: state.starter });
+  }
+
+  /* ---------- turning cards over ----------------------------------------- */
+
+  function turnOver(state, p, now, auto) {
+    var card = p.deck.shift();
+    state.pile.push(card);
+    state.plays += 1;
+    state.shuffled[p.id] = false;
+    var paying = state.owe > 0;
+    var ev = { type: 'play', player: p.id, card: card, n: state.plays, pile: state.pile.length, left: p.deck.length, auto: !!auto };
+    var n = OWED[card.rank];
+    if (!p.deck.length) {
+      // their last card: they win the round, even in the middle of paying
+      ev.last = true;
+      emit(state, now, ev);
+      endRound(state, now, p.id);
+      return;
+    }
+    if (n) {
+      // an Action Card: the other player pays; whatever was still owed here is cancelled
+      if (paying) ev.cancelled = state.owe;
+      ev.demand = n;
+      state.demand = { by: p.id, rank: card.rank, n: n };
+      state.owe = n;
+      state.turn = other(state, p.id);
+      state.turnEndsAt = deadline(state, now, state.turn);
+      emit(state, now, ev);
+      return;
+    }
+    if (paying) {
+      state.owe -= 1;
+      ev.owe = state.owe;
+      emit(state, now, ev);
+      if (state.owe === 0) {
+        // paid in full without an Action Card: they take the pile, once everyone has seen the card
+        state.phase = 'pickup';
+        state.taker = p.id;
+        state.turn = null;
+        state.turnEndsAt = null;
+        state.phaseEndsAt = now + state.timing.pickupHoldMs;
+        emit(state, now, { type: 'paid', player: p.id, by: state.demand.by, count: state.pile.length });
+        return;
+      }
+      state.turnEndsAt = deadline(state, now, p.id);   // still paying: their turn again
+      return;
+    }
+    emit(state, now, ev);
+    state.turn = other(state, p.id);
+    state.turnEndsAt = deadline(state, now, state.turn);
+  }
+
+  /* The pile goes under the taker's deck, in the order it was played; the
+     player who made them pay starts again. */
+  function pickup(state, now) {
+    var p = player(state, state.taker);
+    var count = state.pile.length;
+    p.deck = p.deck.concat(state.pile);
+    state.pile = [];
+    var next = state.demand.by;
+    emit(state, now, { type: 'pickup', player: p.id, count: count, counts: counts(state), next: next });
+    state.taker = null;
+    state.owe = 0;
+    state.demand = null;
+    state.phase = 'play';
+    state.turn = next;
+    state.turnEndsAt = deadline(state, now, next);
+  }
+
+  function endRound(state, now, winner) {
+    var loser = player(state, other(state, winner));
+    loser.lost += 1;
+    var out = loser.lost >= allowed(state);
+    state.result = { round: state.round, winner: winner, loser: loser.id, garment: strip(state) ? loser.lost : 0, plays: state.plays, final: out };
+    state.turn = null;
+    state.turnEndsAt = null;
+    state.owe = 0;
+    state.demand = null;
+    state.taker = null;
+    emit(state, now, { type: 'roundEnd', round: state.round, winner: winner, loser: loser.id, garment: state.result.garment,
+      lost: lost(state), plays: state.plays, final: out });
+    if (out) { finish(state, now, winner); return; }
+    state.phase = 'roundOver';
+    state.phaseEndsAt = now + state.timing.roundHoldMs;
+  }
+
+  function finish(state, now, winner) {
+    state.phase = 'over';
+    state.winners = [winner];
+    emit(state, now, { type: 'gameOver', winners: [winner], lost: lost(state), rounds: state.round });
+  }
+
+  /* ---------- actions and time ------------------------------------------- */
+
+  function actPlay(state, p, now) {
+    if (state.phase !== 'play') return CT.fail('phase', state.phase === 'pickup' ? 'Wait: the pile is being taken.' : 'It isn’t time to play.');
+    if (state.turn !== p.id) return CT.fail('turn', 'Wait for your turn.');
+    delete state.idle[p.id];   // back in charge
+    turnOver(state, p, now, false);
+    return CT.ok();
+  }
+
+  /* Once a turn, before turning a card over, a player may shuffle their own deck. */
+  function actShuffle(state, p, now) {
+    if (state.phase !== 'play') return CT.fail('phase', 'It isn’t time to play.');
+    if (state.turn !== p.id) return CT.fail('turn', 'You can only shuffle on your turn.');
+    if (state.shuffled[p.id]) return CT.fail('again', 'One shuffle a turn. Turn a card over first.');
+    if (p.deck.length < 2) return CT.fail('few', 'Nothing to shuffle.');
+    p.deck = CT.shuffle(p.deck, state);
+    state.shuffled[p.id] = true;
+    if (state.idle[p.id]) { delete state.idle[p.id]; state.turnEndsAt = deadline(state, now, p.id); }
+    emit(state, now, { type: 'shuffle', player: p.id, left: p.deck.length });
+    return CT.ok();
+  }
+
+  function act(state, pid, type, payload, now) {
+    var p = player(state, pid);
+    if (!p) return CT.fail('no-player', 'You’re not in this game.');
+    if (state.phase === 'over') return CT.fail('over', 'This game is over.');
+    switch (type) {
+      case 'play': return actPlay(state, p, now);
+      case 'shuffle': return actShuffle(state, p, now);
+    }
+    return CT.fail('unknown', 'That move doesn’t exist in this game.');
+  }
+
+  function tick(state, now) {
+    switch (state.phase) {
+      case 'dealing':
+        if (now < state.phaseEndsAt) return false;
+        startPlay(state, now);
+        return true;
+      case 'play':
+        if (state.turnEndsAt == null || now < state.turnEndsAt) return false;
+        var p = player(state, state.turn);
+        if (!state.idle[p.id]) emit(state, now, { type: 'timeout', player: p.id });
+        state.idle[p.id] = true;
+        turnOver(state, p, now, true);
+        return true;
+      case 'pickup':
+        if (now < state.phaseEndsAt) return false;
+        pickup(state, now);
+        return true;
+      case 'roundOver':
+        if (now < state.phaseEndsAt) return false;
+        deal(state, now, state.result.loser);    // the player who lost starts the next round
+        return true;
+    }
+    return false;
+  }
+
+  /* ---------- what one player may see ------------------------------------ */
+
+  function view(state, pid, opts) {
+    opts = opts || {};
+    var me = player(state, pid);
+    var n = allowed(state);
+    var v = {
+      mode: 'stripme',
+      engineVersion: state.engineVersion,
+      me: pid,
+      phase: state.phase,
+      round: state.round,
+      options: state.options,
+      strip: strip(state),
+      garments: strip(state) ? n : 0,
+      timing: { dealHoldMs: state.timing.dealHoldMs, pickupHoldMs: state.timing.pickupHoldMs, roundHoldMs: state.timing.roundHoldMs, turnMs: state.timing.turnMs, idleMs: state.timing.idleMs },
+      phaseEndsAt: state.phaseEndsAt,
+      starter: state.starter,
+      turn: state.turn,
+      turnEndsAt: state.turnEndsAt,
+      owe: state.owe,
+      demand: state.demand ? { by: state.demand.by, rank: state.demand.rank, n: state.demand.n } : null,
+      taker: state.taker,
+      players: state.players.map(function (p) {
+        return {
+          id: p.id, name: p.name, isBot: p.isBot, seat: p.seat,
+          count: p.deck.length,                       // how many, never which
+          lost: p.lost,
+          left: strip(state) ? Math.max(0, n - p.lost) : null,
+          isTurn: state.phase === 'play' && state.turn === p.id,
+          shuffled: !!state.shuffled[p.id],
+          idle: !!state.idle[p.id]
+        };
+      }),
+      pileCount: state.pile.length,
+      pileTop: state.pile.slice(-6),                   // face up: everyone has seen them
+      plays: state.plays,
+      result: state.result,
+      winners: state.winners,
+      seq: state.seq
+    };
+    v.canPlay = !!me && state.phase === 'play' && state.turn === pid;
+    v.canShuffle = v.canPlay && !state.shuffled[pid] && me.deck.length >= 2;
+
+    if (opts.events !== false) {
+      var since = opts.sinceSeq || 0;
+      v.events = state.events.filter(function (e) { return e.seq > since; }).map(function (e) {
+        var copy = {};
+        for (var k in e) copy[k] = e[k];
+        return copy;
+      });
+    }
+    return v;
+  }
+
+  /* ---------- How to play ------------------------------------------------- */
+
+  function rules(options) {
+    var o = CT.resolveOptions(OPTIONS, options);
+    var n = Number(o.losses) || 3;
+    var secs = Math.round(DEFAULT_TIMING.turnMs / 1000);
+    return [
+      { title: 'The cards', text: 'Two players. The deck is shuffled and split, 26 cards each, face down. Nobody looks at their cards, not even their own.' },
+      { title: 'Your turn', text: 'Take turns turning over the top card of your deck onto the pile in the middle. Tap your deck to do it.' },
+      { title: 'Action Cards', text: 'Jacks, Queens, Kings and Aces are Action Cards. Turn one over and the other player has to pay: 1 card for a Jack, 2 for a Queen, 3 for a King, 4 for an Ace, turned over one at a time. Cards from 2 to 10 do nothing.' },
+      { title: 'Paying up', text: 'Turn up an Action Card while you’re paying and the rest of your payment is cancelled: now the other player pays for your card. Pay in full without one and you take the whole pile and put it under your deck, and the player who made you pay starts again.' },
+      { title: 'Shuffle', text: 'Once a turn, before you turn a card over, you may shuffle your own deck. Nobody knows what’s in it, but it might change your luck.' },
+      { title: 'Winning a round', text: 'The first player to turn over their last card wins the round, even in the middle of paying up.' },
+      o.mode === 'quick'
+        ? { title: 'Quick Play', text: 'One round decides the game: whoever loses it loses the game. No garments come off.' }
+        : { title: 'Strip Mode', text: 'Everyone wears ' + n + ' fun garments. Lose a round and one of them comes off; lose all ' + n + ' and you lose the game. Every round is dealt afresh, and whoever lost the last round starts.' },
+      { title: 'Time limit', text: 'Play within ' + secs + ' seconds, or a card is turned over for you, and after that your cards keep turning over quickly until you tap again. Switch on Auto at the table and your cards turn over by themselves.' }
+    ];
+  }
+
+  /* One line for the "game in progress" card on the home screen. */
+  function describe(state, pid) {
+    var me = player(state, pid), them = player(state, other(state, pid));
+    var deck = me ? me.deck.length + ' cards in your deck' : '';
+    if (!strip(state)) return 'Quick Play · ' + deck;
+    var n = allowed(state);
+    return 'Round ' + state.round + ' · ' + deck + ' · garments: you ' + (n - (me ? me.lost : 0)) + ', ' + (them ? them.name : 'them') + ' ' + (n - (them ? them.lost : 0));
+  }
+
+  CT.registerMode({
+    id: 'stripme',
+    name: 'Strip-Me',
+    shortName: 'Strip-Me',
+    fan: ['KH', 'JS', 'AD'],
+    tagline: 'Turn your cards over in turn, make your rival pay with Jacks, Queens, Kings and Aces, and empty your deck first, or lose a garment!',
+    handText: '26 cards each, face down',
+    engineVersion: ENGINE_VERSION,
+    players: { min: SEATS, max: SEATS, default: SEATS },
+    options: OPTIONS,
+    defaultTiming: DEFAULT_TIMING,
+    owed: OWED,
+    rules: rules,
+    describe: describe,
+    createGame: createGame,
+    act: act,
+    tick: tick,
+    view: view,
+    presenter: 'stripme'
+  });
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/modes/stripme/bot.js ---- */
+/* ==========================================================================
+   GAME MODE · STRIP-ME — computer player
+   There's nothing to choose but when: nobody knows what's in their deck. It
+   turns its cards over briskly (rounds are long), a little quicker while
+   paying up, and now and then shuffles for luck, mostly when it owes three
+   or four cards or the pile it might take is big.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var StripMe = CT.getMode('stripme');
+
+  var bot = {
+    intent: function (v) {
+      if (!v.canPlay) return null;
+      return { kind: 'play', key: 'P' + v.round + ':' + v.plays + ':' + v.owe + ':' + (v.canShuffle ? 1 : 0) };
+    },
+
+    delay: function (intent, v, rnd) {
+      return (v.owe ? 360 : 460) + rnd() * 360;
+    },
+
+    decide: function (v, memory, rnd) {
+      if (!v.canPlay) return null;
+      if (v.canShuffle) {
+        var odds = v.owe >= 3 ? 0.3 : (v.owe && v.pileCount >= 12) ? 0.25 : 0.03;
+        if (rnd() < odds) return { type: 'shuffle', payload: {} };
+      }
+      return { type: 'play', payload: {} };
+    }
+  };
+
+  StripMe.bot = bot;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
 /* ---- src/net/online.js ---- */
 /* ==========================================================================
    ONLINE · the link to the game server
@@ -4438,6 +5040,10 @@ CT.BUILD = {"version":"0.9.2","id":"dacba48","target":"app","server":"wss://burn
           case 'slapHard': this.tone(110, 0.14, 0.2, 'sine'); this.noise(0.11, 600, 0.42); this.noise(0.05, 1800, 0.12, 0.01); break;
           case 'riffle': for (var r = 0; r < 7; r++) this.noise(0.025, 2600 + r * 90, 0.07, r * 0.045); break;
           case 'thud': this.tone(120, 0.09, 0.08, 'sine'); this.noise(0.06, 600, 0.14); break;
+          // Strip-Me: an Action Card, a garment springing off, and it flying away
+          case 'action': this.tone(523, 0.08, 0.1, 'triangle'); this.tone(784, 0.15, 0.11, 'triangle', 0.07); break;
+          case 'boing': this.slide(170, 640, 0.17, 0.12, 'sine', 0); this.slide(640, 230, 0.3, 0.08, 'sine', 0.17); break;
+          case 'whoosh': for (var w = 0; w < 6; w++) this.noise(0.06, 800 + w * 420, 0.06, w * 0.035); break;
           case 'bull':   // a short, low call: two notes and a thump
             this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;
           case 'bray':   // a soft hee-haw
@@ -9288,6 +9894,741 @@ CT.BUILD = {"version":"0.9.2","id":"dacba48","target":"app","server":"wss://burn
   });
 })(window.CT);
 
+/* ---- src/modes/stripme/ui.js ---- */
+/* ==========================================================================
+   GAME MODE · STRIP-ME — table screen
+   Your rival across the top, you at the bottom, the pile between you. Each
+   player is a cartoon character in fun garments (as many as the losses
+   allowed), over a T-shirt and shorts that always stay on. Lose a round and
+   a garment flies off while its owner blushes and shivers. Tap your deck to
+   turn its top card over. Everything drawn comes from session.view(me), so
+   nothing hidden can leak onto the screen.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var StripMe = CT.getMode('stripme');
+  var OWED = StripMe.owed;
+  var RANK_NAME = { J: 'Jack', Q: 'Queen', K: 'King', A: 'Ace' };
+  var NUM = ['no', 'one', 'two', 'three', 'four'];
+  var AUTO_KEY = 'cardtable.stripme.auto';
+  var AUTO_MS = 620;          // Auto: a card every so often while it's your turn
+
+  /* The garments for each number of losses allowed, in the order they come off. */
+  var OUTFITS = {
+    1: ['hat'],
+    2: ['hat', 'coat'],
+    3: ['hat', 'glasses', 'coat'],
+    4: ['hat', 'glasses', 'coat', 'socks'],
+    5: ['hat', 'glasses', 'scarf', 'coat', 'socks']
+  };
+  var QUICK_OUTFIT = ['hat', 'glasses', 'coat'];   // Quick Play: dressed up, but nothing comes off
+  var GARMENTS = {
+    hat: { name: 'silly hat', icon: '<path d="M5.5 2.5h7v8h-7z"/><rect x="2" y="10.5" width="14" height="2.6" rx="1.3"/><rect x="5.5" y="7.6" width="7" height="1.6" fill="var(--board)"/>' },
+    glasses: { name: 'giant sunglasses', plural: true, icon: '<rect x="1.5" y="6" width="6.5" height="5" rx="2"/><rect x="10" y="6" width="6.5" height="5" rx="2"/><rect x="7.5" y="7.2" width="3" height="1.4"/>' },
+    scarf: { name: 'stripy scarf', icon: '<path d="M3 4.5q6 4 12 0l1 2.4q-7 5-14 0z"/><path d="M10.5 8h3l1.3 7.5h-3.4z"/>' },
+    coat: { name: 'oversized coat', icon: '<path d="M5 2.5q4-1.5 8 0l3.5 9-2.4.8-.9-4 .5 8.2H4.3l.5-8.2-.9 4-2.4-.8z"/>' },
+    socks: { name: 'odd socks', plural: true, icon: '<path d="M4 2h4v8.5q0 2-2 3.5L4.6 15q-1.6 1-2.4-.5t.6-2.4L4 11z"/><path d="M11 2h4v8.5q0 2-2 3.5l-1.4 1q-1.6 1-2.4-.5t.6-2.4L11 11z" opacity=".6"/>' }
+  };
+
+  /* Two characters, tied to the seats so every phone shows the same player the same way. */
+  var LOOKS = [
+    { skin: '#8D5A3B', hair: '#1E1A17', style: 'puffs', shirt: '#F4B942', shorts: '#2E5E8C', shoes: '#2B2B2B',
+      hat: '#7A3FB0', band: '#F0643C', glasses: '#14213D', scarf: '#F0643C', scarf2: '#FBF7EC', coat: '#3FA796', trim: '#25695E',
+      sock1: '#E94F37', sock1b: '#FBF7EC', sock2: '#FFD23F', sock2b: '#3A86FF' },
+    { skin: '#F2C9A0', hair: '#D9692A', style: 'spikes', shirt: '#9CC9EE', shorts: '#6B4E9B', shoes: '#3B2A1F',
+      hat: '#2B9348', band: '#FFD23F', glasses: '#B5179E', scarf: '#3A86FF', scarf2: '#FFD23F', coat: '#F0643C', trim: '#A8401E',
+      sock1: '#2B9348', sock1b: '#FBF7EC', sock2: '#F7A1C4', sock2b: '#7A3FB0' }
+  ];
+
+  function lookFor(seat) { return LOOKS[seat % LOOKS.length]; }
+  function outfitFor(v) { return v.strip ? OUTFITS[v.garments] || OUTFITS[3] : QUICK_OUTFIT; }
+
+  /* A character in SVG: the body, a face that can change mood, and the
+     garments as separate groups that can be taken off. */
+  function avatarSvg(L) {
+    var dark = '#24160F';
+    var hair = L.style === 'puffs'
+      ? '<circle cx="43" cy="31" r="10" fill="' + L.hair + '"/><circle cx="77" cy="31" r="10" fill="' + L.hair + '"/>' +
+        '<path d="M39 42Q41 18 60 19Q79 18 81 42Q73 30 60 30Q47 30 39 42Z" fill="' + L.hair + '"/>'
+      : '<path d="M38 43L41 24L48 32L53 17L59 29L66 16L71 30L78 22L82 42Q71 31 60 31Q49 31 38 43Z" fill="' + L.hair + '"/>';
+    return '<svg class="sm-av-svg" viewBox="0 0 120 170" aria-hidden="true">' +
+      '<ellipse class="sm-shadow" cx="60" cy="161" rx="30" ry="5"/>' +
+      '<g class="sm-body">' +
+        // arms behind the sleeves, legs, shoes
+        '<path d="M33 86L27 108Q26 115 32 116L35 116Q39 114 37 108L41 90Z" fill="' + L.skin + '"/>' +
+        '<path d="M87 86L93 108Q94 115 88 116L85 116Q81 114 83 108L79 90Z" fill="' + L.skin + '"/>' +
+        '<rect x="45" y="122" width="11" height="34" rx="5" fill="' + L.skin + '"/><rect x="64" y="122" width="11" height="34" rx="5" fill="' + L.skin + '"/>' +
+        '<path d="M40 157Q40 151 47 151H54Q58 151 58 156V159H40Z" fill="' + L.shoes + '"/><path d="M62 156Q62 151 66 151H73Q80 151 80 157V159H62Z" fill="' + L.shoes + '"/>' +
+        // shorts and T-shirt: these always stay on
+        '<path d="M41 106H79V127H63L60 118L57 127H41Z" fill="' + L.shorts + '"/>' +
+        '<path d="M41 72Q60 64 79 72L91 84L84 92L79 88V110H41V88L36 92L29 84Z" fill="' + L.shirt + '"/>' +
+        '<path d="M53 68Q60 74 67 68" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2"/>' +
+        // neck, head, ears, hair
+        '<rect x="55" y="61" width="10" height="10" rx="3" fill="' + L.skin + '"/>' +
+        '<circle cx="39" cy="48" r="4.2" fill="' + L.skin + '"/><circle cx="81" cy="48" r="4.2" fill="' + L.skin + '"/>' +
+        '<circle cx="60" cy="45" r="21.5" fill="' + L.skin + '"/>' + hair +
+        // the face
+        '<g class="sm-face">' +
+          '<g class="sm-eyes" fill="' + dark + '"><circle cx="52" cy="46" r="2.6"/><circle cx="68" cy="46" r="2.6"/></g>' +
+          '<path class="sm-brows" d="M47.5 40Q52 37.5 56 39.5M64 39.5Q68 37.5 72.5 40" fill="none" stroke="' + dark + '" stroke-width="2" stroke-linecap="round"/>' +
+          '<g class="sm-blush" fill="#FF6B6B" opacity=".55"><ellipse cx="45" cy="53" rx="4.6" ry="2.8"/><ellipse cx="75" cy="53" rx="4.6" ry="2.8"/></g>' +
+          '<path class="sm-m-smile" d="M53 54Q60 60 67 54" fill="none" stroke="' + dark + '" stroke-width="2.4" stroke-linecap="round"/>' +
+          '<path class="sm-m-grin" d="M51 52Q60 64 69 52Z" fill="' + dark + '"/>' +
+          '<ellipse class="sm-m-oh" cx="60" cy="56" rx="3.6" ry="4.6" fill="' + dark + '"/>' +
+          '<path class="sm-sweat" d="M84 28Q88 34 84 38Q80 34 84 28Z" fill="#9CDBFF"/>' +
+        '</g>' +
+      '</g>' +
+      // the garments, bottom layer first
+      '<g class="gm gm-socks">' +
+        '<rect x="44.3" y="131" width="12.4" height="23" rx="4" fill="' + L.sock1 + '"/>' +
+        '<path d="M44.3 136.5h12.4M44.3 142.5h12.4M44.3 148.5h12.4" stroke="' + L.sock1b + '" stroke-width="2.6"/>' +
+        '<rect x="63.3" y="131" width="12.4" height="23" rx="4" fill="' + L.sock2 + '"/>' +
+        '<g fill="' + L.sock2b + '"><circle cx="67" cy="136" r="1.7"/><circle cx="72.5" cy="140.5" r="1.7"/><circle cx="67" cy="145" r="1.7"/><circle cx="72.5" cy="149.5" r="1.7"/></g>' +
+      '</g>' +
+      '<g class="gm gm-coat">' +
+        '<path d="M34 70Q60 59 86 70L101 118L89 122L86 104L88 141H32L34 104L31 122L19 118Z" fill="' + L.coat + '"/>' +
+        '<path d="M51 67L60 91L69 67" fill="none" stroke="' + L.trim + '" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M60 91V141" stroke="' + L.trim + '" stroke-width="1.6"/>' +
+        '<g fill="' + L.trim + '"><circle cx="64" cy="102" r="2.2"/><circle cx="64" cy="115" r="2.2"/><circle cx="64" cy="128" r="2.2"/></g>' +
+        '<path d="M19 118L31 122M89 122L101 118" stroke="' + L.trim + '" stroke-width="4" stroke-linecap="round"/>' +
+        '<path d="M38 120h12M70 120h12" stroke="' + L.trim + '" stroke-width="2" stroke-linecap="round"/>' +
+      '</g>' +
+      '<g class="gm gm-scarf">' +
+        '<path d="M45 63Q60 74 75 63L77 71Q60 83 43 71Z" fill="' + L.scarf + '"/>' +
+        '<path d="M63 71L70 71L74 101L65 102Z" fill="' + L.scarf + '"/>' +
+        '<path d="M64.6 79H71.2M65.4 87H72.2M66 95H73" stroke="' + L.scarf2 + '" stroke-width="3"/>' +
+        '<path d="M65.5 102v4M68.5 102v4M71.5 101.5v4" stroke="' + L.scarf + '" stroke-width="1.6" stroke-linecap="round"/>' +
+      '</g>' +
+      '<g class="gm gm-glasses">' +
+        '<path d="M35.5 44L32 46.5M84.5 44L88 46.5" stroke="' + L.glasses + '" stroke-width="2.2" stroke-linecap="round"/>' +
+        '<rect x="35" y="38" width="22" height="15" rx="6" fill="' + L.glasses + '"/><rect x="63" y="38" width="22" height="15" rx="6" fill="' + L.glasses + '"/>' +
+        '<path d="M57 44Q60 40.5 63 44" fill="none" stroke="' + L.glasses + '" stroke-width="3"/>' +
+        '<path d="M39 42.5l7-2.4M67 42.5l7-2.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".75"/>' +
+      '</g>' +
+      '<g class="gm gm-hat">' +
+        '<g transform="rotate(-8 60 22)">' +
+          '<rect x="43" y="1" width="34" height="25" rx="4" fill="' + L.hat + '"/>' +
+          '<rect x="43" y="17" width="34" height="5" fill="' + L.band + '"/>' +
+          '<ellipse cx="60" cy="27" rx="27" ry="5" fill="' + L.hat + '"/>' +
+          '<circle cx="72" cy="15" r="5" fill="#FBF7EC"/><circle cx="72" cy="15" r="2.2" fill="' + L.band + '"/>' +
+        '</g>' +
+      '</g>' +
+    '</svg>';
+  }
+
+  function iconSvg(kind) { return '<svg viewBox="0 0 18 18" aria-hidden="true" fill="currentColor">' + GARMENTS[kind].icon + '</svg>'; }
+
+  function StripMeTable(app, session, me, opts) {
+    opts = opts || {};
+    this.app = app;
+    this.session = session;
+    this.me = me;
+    this.lastSeq = 0;
+    this.logItems = [];
+    this.seats = {};
+    this.v = null;
+    this.first = true;
+    this.quiet = !!opts.restored;
+    this.flying = null;      // a garment on its way off: { pid, kind }
+    this.landing = 0;
+    this.auto = !!UI.store.get(AUTO_KEY, false);
+    this.root = document.getElementById('screen-table');
+    this.build();
+    var self = this;
+    this.unsub = session.on(function () { self.update(); });
+    this.update();
+  }
+
+  StripMeTable.prototype.destroy = function () {
+    if (this.unsub) this.unsub();
+    clearTimeout(this.overTimer);
+    (this.timers || []).forEach(clearTimeout);
+    this.root.innerHTML = '';
+    var fx = document.getElementById('fx');
+    if (fx) fx.innerHTML = '';
+  };
+
+  StripMeTable.prototype.later = function (fn, ms) {
+    var t = setTimeout(fn, ms);
+    (this.timers = this.timers || []).push(t);
+    return t;
+  };
+
+  StripMeTable.prototype.name = function (pid) {
+    if (pid === this.me) return 'You';
+    var p = this.session.state.players.filter(function (x) { return x.id === pid; })[0];
+    return p ? UI.esc(p.name) : 'Someone';
+  };
+  StripMeTable.prototype.lname = function (pid) { return pid === this.me ? 'you' : this.name(pid); };
+  StripMeTable.prototype.poss = function (pid) { return pid === this.me ? 'your' : this.name(pid) + '’s'; };
+  StripMeTable.prototype.player = function (v, pid) { return v.players.filter(function (p) { return p.id === pid; })[0]; };
+  StripMeTable.prototype.rival = function (v) { var me = this.me; return v.players.filter(function (p) { return p.id !== me; })[0]; };
+
+  /* ---------- static layout ---------- */
+
+  StripMeTable.prototype.seatHtml = function (p, mine) {
+    var deck = '<span class="sm-stack" aria-hidden="true"><span class="card back"></span><span class="card back"></span><span class="card back"></span></span>' +
+      '<b class="sm-count"></b>';
+    return '<section class="sm-seat ' + (mine ? 'sm-me' : 'sm-them') + '" data-pid="' + p.id + '">' +
+      '<div class="sm-fig"><span class="sm-bubble" hidden></span>' + avatarSvg(lookFor(p.seat)) + '</div>' +
+      '<div class="sm-info"><span class="sm-name">' + (mine ? 'You' : UI.esc(p.name)) + '</span>' +
+        '<span class="sm-wear"></span><span class="sm-chip"></span>' +
+        (mine ? '<div class="sm-tools"><button class="btn sm-tool" type="button" id="s-shuffle">Shuffle</button>' +
+          '<button class="btn sm-tool sm-auto" type="button" id="s-auto" aria-pressed="false"><span class="sw" aria-hidden="true"></span>Auto</button></div>' : '') +
+      '</div>' +
+      (mine
+        ? '<button class="sm-deck mine" type="button" id="s-deck" aria-label="Your deck: tap to turn over the top card">' + deck + '<span class="sm-tap">Tap</span></button>'
+        : '<div class="sm-deck" aria-hidden="true">' + deck + '</div>') +
+      '</section>';
+  };
+
+  StripMeTable.prototype.build = function () {
+    var v = this.session.view(this.me, { events: false });
+    var self = this, me = this.me;
+    var mine = this.player(v, me), them = this.rival(v);
+    this.root.innerHTML =
+      '<header class="topbar">' +
+        '<button class="icon-btn" id="s-menu" type="button" aria-label="Game menu">' + UI.icon.menu + '</button>' +
+        '<span class="wordmark">STRIP-ME</span>' +
+        '<span class="chip" id="s-round"></span>' +
+        '<span class="spacer"></span>' +
+        '<button class="icon-btn" id="s-music" type="button"></button>' +
+        '<button class="icon-btn" id="s-sound" type="button"></button>' +
+      '</header>' +
+      '<div class="sm-table" id="s-table">' +
+        this.seatHtml(them, false) +
+        '<div class="sm-mid" id="s-mid">' +
+          '<div class="sm-banner" id="s-banner" style="visibility:hidden"><span class="who" id="s-banner-who">·</span><b class="what" id="s-banner-what">·</b><span class="sm-pips" id="s-pips"></span></div>' +
+          '<div class="sm-pile" id="s-pile"></div>' +
+          '<p class="sm-pilecount" id="s-pilecount"></p>' +
+        '</div>' +
+        '<div class="status" id="s-status" aria-live="polite"><p class="status-main"></p><p class="status-sub"></p></div>' +
+        this.seatHtml(mine, true) +
+      '</div>';
+
+    var $ = function (sel) { return self.root.querySelector(sel); };
+    [them, mine].forEach(function (p) {
+      var el = $('.sm-seat[data-pid="' + p.id + '"]');
+      self.seats[p.id] = {
+        seat: el, fig: el.querySelector('.sm-fig'), av: el.querySelector('.sm-av-svg'), bubble: el.querySelector('.sm-bubble'),
+        wear: el.querySelector('.sm-wear'), chip: el.querySelector('.sm-chip'), deck: el.querySelector('.sm-deck'),
+        stack: el.querySelector('.sm-stack'), count: el.querySelector('.sm-count')
+      };
+    });
+    this.el = {
+      round: $('#s-round'), music: $('#s-music'), sound: $('#s-sound'), mid: $('#s-mid'),
+      banner: $('#s-banner'), bannerWho: $('#s-banner-who'), bannerWhat: $('#s-banner-what'), pips: $('#s-pips'),
+      pile: $('#s-pile'), pileCount: $('#s-pilecount'),
+      statusMain: $('#s-status .status-main'), statusSub: $('#s-status .status-sub'),
+      deck: $('#s-deck'), shuffle: $('#s-shuffle'), autoBtn: $('#s-auto')
+    };
+    this.renderAudio();
+
+    $('#s-menu').addEventListener('click', function () { self.app.openMenu(); });
+    this.el.music.addEventListener('click', function () { self.app.toggleMusic(); self.renderAudio(); });
+    this.el.sound.addEventListener('click', function () { self.app.toggleSound(); self.renderAudio(); });
+    // a card goes over on the press, not the release: paying four should be quick
+    this.el.deck.addEventListener('pointerdown', function (e) { e.preventDefault(); self.tapDeck(); });
+    this.el.deck.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); self.tapDeck(); }
+    });
+    this.el.shuffle.addEventListener('click', function () { self.shuffle(); });
+    this.el.autoBtn.addEventListener('click', function () { self.setAuto(!self.auto); });
+  };
+
+  StripMeTable.prototype.renderAudio = function () {
+    var m = UI.Music.on, s = UI.Sound.on;
+    this.el.music.innerHTML = m ? UI.icon.musicOn : UI.icon.musicOff;
+    this.el.music.setAttribute('aria-label', m ? 'Music on. Tap to turn it off.' : 'Music off. Tap to turn it on.');
+    this.el.music.classList.toggle('off', !m);
+    this.el.sound.innerHTML = s ? UI.icon.soundOn : UI.icon.soundOff;
+    this.el.sound.setAttribute('aria-label', s ? 'Sound effects on. Tap to mute.' : 'Sound effects off. Tap to turn on.');
+    this.el.sound.classList.toggle('off', !s);
+  };
+
+  /* ---------- update cycle ---------- */
+
+  StripMeTable.prototype.update = function () {
+    var v = this.session.view(this.me, { sinceSeq: this.lastSeq });
+    var events = v.events || [];
+    this.v = v;
+    var pre = (events.length && !this.quiet) ? this.capture() : null;
+    var self = this;
+    // a garment that's coming off stays on until its little sequence plays
+    if (!this.quiet) events.forEach(function (e) { if (e.type === 'roundEnd' && e.garment) self.flying = { pid: e.loser, garment: e.garment }; });
+    this.render(v);
+    if (pre) this.animate(events, pre, v);
+    if (!this.quiet) this.react(events, v);
+    events.forEach(function (e) { self.logEvent(e, v); });
+    if (events.length) this.lastSeq = events[events.length - 1].seq;
+    this.first = false;
+    this.quiet = false;
+    if (this.app.logOpen) this.app.renderLog();
+
+    if (v.phase === 'over' && !this.overShown) {
+      this.overShown = true;
+      this.overTimer = setTimeout(function () { self.app.showResult(self.v); }, events.length ? 3600 : 200);
+    }
+  };
+
+  /* Where things are before the screen changes. */
+  StripMeTable.prototype.capture = function () {
+    var pre = { pile: this.el.pile.getBoundingClientRect(), decks: {} };
+    for (var pid in this.seats) pre.decks[pid] = this.seats[pid].stack.getBoundingClientRect();
+    return pre;
+  };
+
+  /* Cards flying: from a deck to the pile, the pile to whoever takes it, and the deal. */
+  StripMeTable.prototype.animate = function (events, pre, v) {
+    var self = this;
+    events.forEach(function (e) {
+      if (e.type === 'play') {
+        var top = self.el.pile.lastElementChild;
+        if (!top) return;
+        var n = ++self.landing;
+        top.style.visibility = 'hidden';
+        UI.fly({ fromRect: pre.decks[e.player], to: top, card: e.card, duration: 230, spin: e.player === self.me ? -6 : 6 }).then(function () {
+          if (self.landing === n && top.parentNode) top.style.visibility = '';
+        });
+      } else if (e.type === 'pickup') {
+        var to = self.seats[e.player] && self.seats[e.player].stack;
+        for (var i = 0; i < Math.min(6, e.count); i++) UI.fly({ fromRect: pre.pile, to: to, card: null, delay: i * 60, duration: 380 });
+      } else if (e.type === 'deal') {
+        var ids = v.players.map(function (p) { return p.id; });
+        for (var j = 0; j < 10; j++) {
+          var s = self.seats[ids[j % 2]];
+          UI.fly({ fromRect: pre.pile, to: s && s.stack, card: null, delay: j * 70, duration: 320 });
+        }
+      }
+    });
+  };
+
+  /* ---------- rendering ---------- */
+
+  StripMeTable.prototype.render = function (v) {
+    this.el.round.textContent = v.strip ? 'Round ' + v.round : 'Quick Play';
+    var self = this;
+    v.players.forEach(function (p) { self.renderSeat(v, p); });
+    this.renderMid(v);
+    this.renderStatus(v);
+    this.renderControls(v);
+  };
+
+  StripMeTable.prototype.renderSeat = function (v, p) {
+    var s = this.seats[p.id];
+    if (!s) return;
+    var outfit = outfitFor(v);
+    // garments already off; one on its way off stays until its sequence plays
+    var off = v.strip ? p.lost : 0;
+    if (this.flying && this.flying.pid === p.id) off = Math.min(off, this.flying.garment - 1);
+    ['hat', 'glasses', 'scarf', 'coat', 'socks'].forEach(function (kind) {
+      var at = outfit.indexOf(kind);
+      var g = s.av.querySelector('.gm-' + kind);
+      var on = at >= 0 && at >= off;
+      if (!g.classList.contains('flying')) g.classList.toggle('off', !on);
+    });
+    // what's still on, as little icons (Strip Mode)
+    var wearKey = v.strip ? outfit.join(',') + ':' + off : '';
+    if (s.wearKey !== wearKey) {
+      s.wearKey = wearKey;
+      s.wear.innerHTML = v.strip ? outfit.map(function (kind, i) {
+        return '<span class="sm-g' + (i < off ? ' lost' : '') + '" title="' + GARMENTS[kind].name + '">' + iconSvg(kind) + '</span>';
+      }).join('') : '';
+      s.wear.setAttribute('aria-label', v.strip ? (outfit.length - off) + ' of ' + outfit.length + ' garments left' : '');
+    }
+    s.count.textContent = String(p.count);
+    s.deck.classList.toggle('empty', p.count === 0);
+    s.stack.querySelectorAll('.card').forEach(function (c, i) { c.style.visibility = p.count > i ? '' : 'hidden'; });
+    var turn = v.phase === 'play' && v.turn === p.id;
+    s.seat.classList.toggle('is-turn', turn);
+    s.seat.classList.toggle('is-paying', turn && v.owe > 0);
+    var chip = '', tone = '';
+    if (p.idle) { chip = 'on autopilot'; tone = 'warn'; }
+    else if (turn && v.owe) { chip = 'paying · ' + v.owe + ' to go'; tone = 'hot'; }
+    else if (turn) { chip = p.id === this.me ? 'your turn' : 'turning over'; tone = 'hot'; }
+    else if (v.phase === 'pickup' && v.taker === p.id) { chip = 'takes the pile'; tone = 'warn'; }
+    if (s.chip.textContent !== chip) s.chip.textContent = chip;
+    s.chip.className = 'sm-chip' + (tone ? ' ' + tone : '');
+  };
+
+  StripMeTable.prototype.renderMid = function (v) {
+    // the banner: an Action Card being paid for, the pile being taken, or the round's result
+    var who = '', what = '', pips = '';
+    var d = v.demand;
+    if (v.phase === 'dealing') { who = 'Round ' + v.round; what = '26 cards each'; }
+    else if (v.phase === 'pickup' && v.taker) {
+      who = 'No Action Card';
+      what = v.taker === this.me ? 'You take the pile' : this.name(v.taker) + ' takes the pile';
+    } else if ((v.phase === 'roundOver' || v.phase === 'over') && v.result) {
+      who = v.strip ? 'Round ' + v.result.round : 'Quick Play';
+      what = v.result.winner === this.me ? 'You win the round!' : this.name(v.result.winner) + ' wins the round';
+    } else if (v.phase === 'play' && d) {
+      var payer = d.by === this.me ? this.rival(v).id : this.me;
+      who = this.poss(d.by).replace(/^your/, 'Your') + ' ' + RANK_NAME[d.rank];
+      what = (payer === this.me ? 'You pay ' : this.name(payer) + ' pays ') + d.n;
+      for (var i = 0; i < d.n; i++) pips += '<i class="' + (i < d.n - v.owe ? 'paid' : '') + '"></i>';
+    }
+    var key = who + '|' + what;
+    this.el.banner.style.visibility = who ? '' : 'hidden';
+    if (this.bannerKey !== key) {
+      this.bannerKey = key;
+      this.el.bannerWho.textContent = who || '·';
+      this.el.bannerWhat.textContent = what || '·';
+      if (who && !this.quiet) { this.el.banner.classList.remove('pop'); void this.el.banner.offsetWidth; this.el.banner.classList.add('pop'); }
+    }
+    if (this.el.pips.innerHTML !== pips) this.el.pips.innerHTML = pips;
+    this.el.banner.classList.toggle('hot', !!d && v.phase === 'play');
+
+    // the pile: the last few cards, the newest on top
+    var top = v.pileTop.slice(-3);
+    var pileKey = top.map(function (c) { return c.id; }).join(',') + ':' + v.pileCount;
+    if (this.pileKey !== pileKey) {
+      this.pileKey = pileKey;
+      var box = this.el.pile;
+      box.innerHTML = '';
+      top.forEach(function (c, i) {
+        var el = UI.makeCard(c);
+        var h = 0;
+        for (var k = 0; k < c.id.length; k++) h = (h * 31 + c.id.charCodeAt(k)) % 997;
+        el.style.setProperty('--tilt', ((h % 17) - 8) + 'deg');
+        el.style.setProperty('--dx', ((h % 11) - 5) + 'px');
+        el.classList.toggle('action', !!OWED[c.rank]);
+        el.classList.toggle('top', i === top.length - 1);
+        box.appendChild(el);
+      });
+      box.classList.toggle('empty', !top.length);
+    }
+    this.el.pileCount.textContent = v.pileCount ? (v.pileCount === 1 ? '1 card in the pile' : v.pileCount + ' cards in the pile') : (v.phase === 'play' ? 'The pile is empty' : '');
+  };
+
+  StripMeTable.prototype.statusFor = function (v) {
+    var me = this.me, them = this.rival(v), mine = this.player(v, me);
+    var secs = ' <span class="secs"></span>';
+    var d = v.demand;
+    switch (v.phase) {
+      case 'dealing':
+        return { main: 'Round ' + v.round + ': dealing…', sub: '26 cards each, face down. ' + (v.starter === me ? 'You start.' : this.name(v.starter) + ' starts.') };
+      case 'play':
+        if (v.turn === me) {
+          if (mine && mine.idle) return { main: '<span class="em">Your cards are turning over by themselves.</span>', sub: 'Tap your deck to take over.' };
+          if (v.owe) return {
+            main: '<span class="hl">Pay up:</span> ' + (v.owe === 1 ? 'one more card.' : NUM[v.owe] + ' more cards.') + secs,
+            sub: 'Turn up a Jack, Queen, King or Ace and ' + this.name(them.id) + ' pays instead.'
+          };
+          return { main: (this.auto ? '<span class="hl">Auto</span> is turning your cards over.' : '<span class="hl">Your turn.</span> Tap your deck.') + secs,
+            sub: v.canShuffle && !this.auto ? 'You may shuffle your deck first.' : '' };
+        }
+        if (v.owe) return { main: this.name(v.turn) + ' is paying: ' + (v.owe === 1 ? 'one more card…' : NUM[v.owe] + ' more cards…'),
+          sub: 'If no Action Card turns up, ' + this.name(v.turn) + ' takes the pile.' };
+        return { main: this.name(v.turn) + '’s turn…', sub: d ? '' : (them && them.idle ? this.name(them.id) + ' is on autopilot.' : '') };
+      case 'pickup':
+        return { main: v.taker === me ? '<span class="em">You take the pile:</span> ' + v.pileCount + ' cards.' : this.name(v.taker) + ' takes the pile: ' + v.pileCount + ' cards.',
+          sub: 'They go under ' + (v.taker === me ? 'your' : 'the') + ' deck. ' + (d && d.by === me ? 'You start again.' : (d ? this.name(d.by) + ' starts again.' : '')) };
+      case 'roundOver':
+      case 'over': {
+        var r = v.result;
+        if (!r) return { main: '', sub: '' };
+        var won = r.winner === me;
+        var main = won ? '<span class="hl">Your deck is empty!</span>' : this.name(r.winner) + '’s deck is empty first.';
+        var sub = '';
+        if (v.strip && r.garment) {
+          var kind = outfitFor(v)[r.garment - 1];
+          var g = GARMENTS[kind];
+          sub = 'Off ' + (g.plural ? 'come ' : 'comes ') + this.poss(r.loser) + ' ' + g.name + '!';
+          if (v.phase === 'over') sub += r.loser === me ? ' That was your last one.' : ' That was the last one.';
+        } else if (v.phase === 'over') sub = won ? 'You win the game.' : this.name(r.winner) + ' wins the game.';
+        return { main: main, sub: sub };
+      }
+    }
+    return { main: '', sub: '' };
+  };
+
+  StripMeTable.prototype.renderStatus = function (v) {
+    var st = this.statusFor(v);
+    var key = st.main + '|' + st.sub;
+    if (this.statusKey === key) return;
+    this.statusKey = key;
+    this.el.statusMain.innerHTML = st.main;
+    this.el.statusSub.innerHTML = st.sub || '';
+  };
+
+  StripMeTable.prototype.renderControls = function (v) {
+    var deck = this.el.deck;
+    deck.classList.toggle('ready', !!v.canPlay);
+    deck.classList.toggle('paying', !!v.canPlay && v.owe > 0);
+    this.el.shuffle.disabled = !v.canShuffle;
+    this.el.autoBtn.setAttribute('aria-pressed', String(this.auto));
+    this.el.autoBtn.classList.toggle('on', this.auto);
+  };
+
+  /* ~60×/s from the app loop: Auto, and the seconds when time is short. */
+  StripMeTable.prototype.frame = function () {
+    var v = this.v;
+    if (!v) return;
+    var now = this.session.now();
+    if (this.auto && v.canPlay && !this.sending) {
+      var key = v.round + ':' + v.plays + ':' + v.owe;
+      if (this.autoKey !== key) { this.autoKey = key; this.autoAt = performance.now() + AUTO_MS; }
+      else if (performance.now() >= this.autoAt) { this.autoAt = Infinity; this.play(true); }
+    }
+    var span = this.el.statusMain.querySelector('.secs');
+    if (span) {
+      var left = v.turn === this.me && v.turnEndsAt ? Math.max(0, v.turnEndsAt - now) : null;
+      var sec = left == null ? null : Math.ceil(left / 1000);
+      span.textContent = sec != null && left <= 5000 && !this.auto ? '· ' + sec + 's' : '';
+      if (sec !== this.lastSecs) { this.lastSecs = sec; if (sec != null && left <= 3000 && sec > 0 && !this.auto) UI.Sound.play('tick'); }
+    }
+  };
+
+  /* ---------- input ---------- */
+
+  StripMeTable.prototype.send = function (type, payload, then) {
+    if (this.sending) return;
+    var self = this;
+    this.sending = true;
+    var finish = function (res) { self.sending = false; if (then) then(res); };
+    var res = this.session.act(this.me, type, payload, finish);
+    if (!res || !res.pending) finish(res);
+  };
+
+  StripMeTable.prototype.tapDeck = function () {
+    UI.Sound.unlock();
+    var v = this.v;
+    if (!v) return;
+    if (!v.canPlay) {
+      this.nudge(this.el.deck);
+      if (v.phase === 'play' && v.turn !== this.me && !this.waitToast) {
+        this.waitToast = true;
+        UI.toast('Wait for ' + this.name(v.turn) + '.');
+        var self = this;
+        this.later(function () { self.waitToast = false; }, 2500);
+      }
+      return;
+    }
+    this.play(false);
+  };
+
+  StripMeTable.prototype.play = function (auto) {
+    var self = this;
+    if (!auto) UI.buzz(8);
+    this.send('play', {}, function (res) {
+      if (!res.ok && res.code !== 'turn' && res.code !== 'phase') UI.toast(UI.esc(res.message));
+      if (res.ok) self.autoKey = null;
+    });
+  };
+
+  StripMeTable.prototype.shuffle = function () {
+    UI.Sound.unlock();
+    var self = this;
+    this.send('shuffle', {}, function (res) {
+      if (!res.ok) { UI.toast(UI.esc(res.message)); return; }
+      self.autoKey = null;
+    });
+  };
+
+  StripMeTable.prototype.setAuto = function (on) {
+    UI.Sound.unlock();
+    this.auto = on;
+    this.autoKey = null;
+    UI.store.set(AUTO_KEY, on);
+    if (this.v) { this.renderControls(this.v); this.renderStatus(this.v); }
+    UI.toast(on ? 'Auto is on: your cards turn over by themselves.' : 'Auto is off: tap your deck to play.');
+  };
+
+  StripMeTable.prototype.nudge = function (el) {
+    el.classList.remove('nudge');
+    void el.offsetWidth;
+    el.classList.add('nudge');
+  };
+
+  /* ---------- the strip sequence ---------- */
+
+  StripMeTable.prototype.mood = function (pid, mood, ms) {
+    var s = this.seats[pid];
+    if (!s) return;
+    s.av.classList.remove('mood-shock', 'mood-grin', 'mood-blush');
+    if (mood) s.av.classList.add('mood-' + mood);
+    var self = this;
+    if (ms) this.later(function () { if (s.av.classList.contains('mood-' + mood)) s.av.classList.remove('mood-' + mood); }, ms);
+    void self;
+  };
+
+  StripMeTable.prototype.say = function (pid, text, ms) {
+    var s = this.seats[pid];
+    if (!s) return;
+    s.bubble.textContent = text;
+    s.bubble.hidden = false;
+    s.bubble.classList.remove('pop'); void s.bubble.offsetWidth; s.bubble.classList.add('pop');
+    clearTimeout(s.sayTimer);
+    s.sayTimer = this.later(function () { s.bubble.hidden = true; }, ms || 1600);
+  };
+
+  StripMeTable.prototype.bounce = function (pid, cls, ms) {
+    var s = this.seats[pid];
+    if (!s) return;
+    s.fig.classList.remove(cls); void s.fig.offsetWidth; s.fig.classList.add(cls);
+    this.later(function () { s.fig.classList.remove(cls); }, ms);
+  };
+
+  /* The loser blushes, the garment flies off with a boing, they shiver; the winner cheers. */
+  StripMeTable.prototype.stripSequence = function (e, v) {
+    var self = this, loser = e.loser, winner = e.winner;
+    var kind = outfitFor(v)[e.garment - 1];
+    var s = this.seats[loser];
+    this.mood(winner, 'grin', 3200);
+    this.bounce(winner, 'cheer', 1100);
+    this.mood(loser, 'shock');
+    this.say(loser, e.final ? 'Nooo!' : ['Oh no!', 'Eek!', 'Hey!', 'Not that!'][e.round % 4], 1400);
+    this.later(function () {
+      var g = s && s.av.querySelector('.gm-' + kind);
+      if (g) { g.classList.add('flying', 'fly-' + kind); }
+      UI.Sound.play('boing');
+      self.later(function () { UI.Sound.play('whoosh'); }, 180);
+    }, 650);
+    this.later(function () {
+      var g = s && s.av.querySelector('.gm-' + kind);
+      if (g) { g.classList.remove('flying', 'fly-' + kind); g.classList.add('off'); }
+      if (self.flying && self.flying.pid === loser) self.flying = null;
+      if (self.v) self.renderSeat(self.v, self.player(self.v, loser));
+      self.mood(loser, e.final ? 'shock' : 'blush', e.final ? 0 : 2400);
+      self.bounce(loser, 'shiver', 1300);
+      self.say(loser, e.final ? 'That’s my last one!' : 'Brrr!', 1500);
+    }, 1750);
+  };
+
+  /* ---------- sounds and notices ---------- */
+
+  StripMeTable.prototype.react = function (events, v) {
+    var me = this.me, self = this;
+    events.forEach(function (e) {
+      switch (e.type) {
+        case 'deal': UI.Sound.play('riffle'); break;
+        case 'play':
+          if (e.demand) {
+            UI.Sound.play('action');
+            if (e.player !== me) { UI.buzz(30); self.say(e.player, e.cancelled ? 'Ha! Your turn!' : 'Pay up!', 1100); }
+            else self.say(e.player, e.cancelled ? 'Saved!' : 'Pay up!', 1000);
+          } else UI.Sound.play('flip');
+          break;
+        case 'paid':
+          UI.Sound.play(e.player === me ? 'nope' : 'win');
+          self.mood(e.player, 'shock', 1500);
+          self.mood(e.by, 'grin', 1500);
+          break;
+        case 'pickup': UI.Sound.play('draw'); break;
+        case 'shuffle':
+          UI.Sound.play('riffle');
+          var s = self.seats[e.player];
+          if (s) { s.stack.classList.remove('shuffling'); void s.stack.offsetWidth; s.stack.classList.add('shuffling'); }
+          if (e.player !== me) self.say(e.player, 'For luck!', 1000);
+          break;
+        case 'roundEnd':
+          UI.Sound.play(e.winner === me ? 'win' : 'lose');
+          if (e.garment) self.stripSequence(e, v);
+          else { self.mood(e.winner, 'grin', 3000); self.mood(e.loser, 'shock', 3000); self.bounce(e.winner, 'cheer', 1100); }
+          break;
+        case 'gameOver':
+          self.later(function () { UI.Sound.play(e.winners.indexOf(me) >= 0 ? 'victory' : 'lose'); }, 2600);
+          break;
+        case 'timeout':
+          if (e.player === me) { UI.toast('Time’s up: your cards turn over by themselves until you tap your deck.'); UI.Sound.play('nope'); }
+          break;
+      }
+    });
+  };
+
+  /* ---------- play-by-play: the moments that matter, not every card ---------- */
+
+  StripMeTable.prototype.pushLog = function (html, cls) {
+    var item = { html: html, cls: cls || '' };
+    this.logItems.push(item);
+    if (this.logItems.length > 600) this.logItems.shift();
+    return item;
+  };
+
+  StripMeTable.prototype.logEvent = function (e, v) {
+    var me = this.me, self = this;
+    var N = function (pid) { return self.name(pid); };
+    switch (e.type) {
+      case 'deal':
+        this.pushLog((v.strip ? 'Round ' + e.round + ': ' : '') + '26 cards each, face down. ' + (e.starter === me ? 'You start.' : N(e.starter) + ' starts.'), 'set');
+        break;
+      case 'play':
+        if (e.demand) {
+          var payer = e.player === me ? 'the other player' : 'you';
+          payer = e.player === me ? N(this.rival(v).id) : 'you';
+          this.pushLog((e.player === me ? 'You turned over ' : N(e.player) + ' turned over ') + UI.cardText(e.card) +
+            (e.cancelled ? ' while paying: the rest is cancelled, and ' : ': ') + payer + (payer === 'you' ? ' pay ' : ' pays ') + e.demand + '.');
+        }
+        if (e.last) this.pushLog((e.player === me ? 'You turned over your last card.' : N(e.player) + ' turned over their last card.'), 'win');
+        break;
+      case 'pickup':
+        this.pushLog((e.player === me ? 'You take the pile: ' : N(e.player) + ' takes the pile: ') + e.count + ' cards. ' +
+          (e.player === me ? 'Your deck: ' : N(e.player) + '’s deck: ') + e.counts[e.player] + '.');
+        break;
+      case 'shuffle':
+        this.pushLog((e.player === me ? 'You shuffled your deck.' : N(e.player) + ' shuffled their deck.'));
+        break;
+      case 'timeout':
+        this.pushLog((e.player === me ? 'Your time ran out: your cards turn over by themselves.' : N(e.player) + '’s time ran out.'));
+        break;
+      case 'roundEnd': {
+        var text = (e.winner === me ? 'You win' : N(e.winner) + ' wins') + (v.strip ? ' round ' + e.round : ' the round') + ' after ' + e.plays + ' cards.';
+        if (e.garment) {
+          var g = GARMENTS[outfitFor(v)[e.garment - 1]];
+          text += ' Off ' + (g.plural ? 'come ' : 'comes ') + this.poss(e.loser) + ' ' + g.name + '.';
+        }
+        this.pushLog(text, 'win');
+        break;
+      }
+      case 'gameOver':
+        this.pushLog((e.winners[0] === me ? 'You win the game.' : N(e.winners[0]) + ' wins the game.'), 'win');
+        break;
+    }
+  };
+
+  /* ---------- end of game ---------- */
+
+  StripMeTable.prototype.result = function (v) {
+    var me = this.me, self = this;
+    var w = v.winners && v.winners[0];
+    var loser = v.players.filter(function (p) { return p.id !== w; })[0];
+    var outfit = outfitFor(v);
+    var why = v.strip
+      ? (loser.id === me ? 'You lost all ' + v.garments + ' garments.' : this.name(loser.id) + ' lost all ' + v.garments + ' garments.')
+      : (w === me ? 'Your deck was empty first.' : this.name(w) + '’s deck was empty first.');
+    var cards = v.players.map(function (p) {
+      var left = v.strip ? outfit.length - p.lost : null;
+      return '<div class="sm-final' + (p.id === w ? ' champ' : '') + '" data-pid="' + p.id + '"><div class="sm-final-fig">' + avatarSvg(lookFor(p.seat)) + '</div>' +
+        '<b>' + (p.id === me ? 'You' : UI.esc(p.name)) + '</b><span>' +
+        (v.strip ? (left ? left + ' of ' + outfit.length + ' garments on' : 'no garments left') : (p.id === w ? 'empty deck' : p.count + ' cards left')) + '</span></div>';
+    }).join('');
+    return {
+      when: v.strip ? v.round + ' round' + (v.round === 1 ? '' : 's') : 'Quick Play',
+      why: why,
+      body: '<div class="sm-finals">' + cards + '</div>',
+      after: function (sheet) {
+        // dress the two figures as they ended up
+        v.players.forEach(function (p) {
+          var fig = sheet.querySelector('.sm-final[data-pid="' + p.id + '"] svg');
+          if (!fig) return;
+          var off = v.strip ? p.lost : 0;
+          ['hat', 'glasses', 'scarf', 'coat', 'socks'].forEach(function (kind) {
+            var at = outfit.indexOf(kind);
+            fig.querySelector('.gm-' + kind).classList.toggle('off', !(at >= 0 && at >= off));
+          });
+          fig.classList.add(p.id === w ? 'mood-grin' : 'mood-shock');
+        });
+        void self;
+      }
+    };
+  };
+
+  CT.UI.presenters = CT.UI.presenters || {};
+  CT.UI.presenters.stripme = StripMeTable;
+})(window.CT);
+
 /* ---- src/ui/online.js ---- */
 /* ==========================================================================
    ONLINE · rooms, the lobby, and playing with friends
@@ -10149,7 +11490,7 @@ CT.BUILD = {"version":"0.9.2","id":"dacba48","target":"app","server":"wss://burn
         var c = self.modeSettings(mode);
         $('screen-setup').querySelectorAll('[data-opp]').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.dataset.opp === c.opponents)); });
         $('help-opp').textContent = fixed
-          ? 'Always ' + (c.opponents + 1) + ' at the table: you and ' + c.opponents + ' computer players.'
+          ? 'Always ' + (c.opponents + 1) + ' at the table: you and ' + c.opponents + ' computer ' + (c.opponents === 1 ? 'player.' : 'players.')
           : c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
         (mode.options || []).forEach(function (o) {
           $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });

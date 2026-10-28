@@ -235,7 +235,7 @@
         var c = self.modeSettings(mode);
         $('screen-setup').querySelectorAll('[data-opp]').forEach(function (b) { b.setAttribute('aria-pressed', String(+b.dataset.opp === c.opponents)); });
         $('help-opp').textContent = fixed
-          ? 'Always ' + (c.opponents + 1) + ' at the table: you and ' + c.opponents + ' computer players.'
+          ? 'Always ' + (c.opponents + 1) + ' at the table: you and ' + c.opponents + ' computer ' + (c.opponents === 1 ? 'player.' : 'players.')
           : c.opponents + ' computer ' + (c.opponents === 1 ? 'player' : 'players') + ' join you, ' + (c.opponents + 1) + ' at the table.';
         (mode.options || []).forEach(function (o) {
           $('screen-setup').querySelectorAll('[data-opt="' + o.id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', String(c.options[o.id] === b.dataset.val)); });

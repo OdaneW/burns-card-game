@@ -366,6 +366,33 @@ test('Real Burns online: played to a loser, then every winner’s penalty turn',
   assert(!('deck' in v.penalty), 'phones never see the order of the penalty deck');
 });
 
+test('Strip-Me online: two phones, Strip Mode with two losses, played to the end', () => {
+  const { io, core } = setup(31);
+  const all = { burns: 3, donkey: 1, bull: 2, stripme: 1 };
+  join(core, 'a', T(1), 'Odane', { mode: 'stripme', size: 2, options: { mode: 'strip', losses: '2' }, engines: all });
+  join(core, 'b', T(2), 'Tess', { engines: all });
+  core.message('a', { t: 'start' });
+  const s = core.session.state;
+  eq([s.mode, s.players.map(p => p.isBot), s.options.losses], ['stripme', [false, false], '2'], 'two people, no computer player');
+  // short decks each round, so the test doesn't play hundreds of cards
+  const card = id => ({ id, rank: id.slice(0, -1), suit: id.slice(-1) });
+  let rigged = 0;
+  for (let i = 0; i < 400 && core.room.phase === 'playing'; i++) {
+    if (s.phase === 'dealing' && rigged < s.round) {
+      rigged = s.round;
+      const all52 = CT.standardDeck();
+      s.players[0].deck = all52.slice(0, 6).map(c => card(c.id));
+      s.players[1].deck = all52.slice(6).map(c => card(c.id));
+    }
+    playFor(core, io, ['a', 'b'], 5000);
+  }
+  eq(core.room.phase, 'over');
+  eq([s.phase, s.players.find(p => p.id !== s.winners[0]).lost], ['over', 2]);
+  const v = last(io, 'b', 'state').view;
+  eq([v.mode, v.phase, v.me, v.garments], ['stripme', 'over', 'p1', 2]);
+  assert(JSON.stringify(v).indexOf('"deck"') < 0, 'phones are never sent a deck');
+});
+
 test('apps without a room’s game are asked to update', () => {
   const { io, core } = setup();
   const all = { burns: 3, donkey: 1, bull: 1 };

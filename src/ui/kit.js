@@ -223,6 +223,10 @@
           case 'slapHard': this.tone(110, 0.14, 0.2, 'sine'); this.noise(0.11, 600, 0.42); this.noise(0.05, 1800, 0.12, 0.01); break;
           case 'riffle': for (var r = 0; r < 7; r++) this.noise(0.025, 2600 + r * 90, 0.07, r * 0.045); break;
           case 'thud': this.tone(120, 0.09, 0.08, 'sine'); this.noise(0.06, 600, 0.14); break;
+          // Strip-Me: an Action Card, a garment springing off, and it flying away
+          case 'action': this.tone(523, 0.08, 0.1, 'triangle'); this.tone(784, 0.15, 0.11, 'triangle', 0.07); break;
+          case 'boing': this.slide(170, 640, 0.17, 0.12, 'sine', 0); this.slide(640, 230, 0.3, 0.08, 'sine', 0.17); break;
+          case 'whoosh': for (var w = 0; w < 6; w++) this.noise(0.06, 800 + w * 420, 0.06, w * 0.035); break;
           case 'bull':   // a short, low call: two notes and a thump
             this.tone(196, 0.12, 0.12, 'triangle'); this.tone(147, 0.2, 0.12, 'triangle', 0.09); this.noise(0.08, 600, 0.22); break;
           case 'bray':   // a soft hee-haw

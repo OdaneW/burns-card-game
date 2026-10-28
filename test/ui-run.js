@@ -923,6 +923,221 @@ async function playGame(p, tag, want) {
       console.log('  errors:', errors.length ? errors : 'none');
     }
 
+    if (SCENARIO === 'online-stripme') {
+      // Two phones playing Strip-Me through the game server (run it locally: cd server && npm run dev).
+      // Strip Mode with two losses: the host taps, the guest starts on Auto, drops off for a while
+      // (their deck goes on autopilot), comes back, then both tap until someone has lost two garments.
+      const server = process.env.SERVER || 'ws://127.0.0.1:8787';
+      const phone = { viewport: { width: 390, height: 844 } };
+      const storage = { 'cardtable.server': server };
+      const host = await open(browser, { ctx: phone, seed: 41, storage });
+      const guest = await open(browser, { ctx: phone, seed: 42, storage });
+      const pages = [host, guest];
+      const tag = 'os';
+      const checks = [];
+      await host.tap('[data-online="create"]'); await sleep(300);
+      await host.tap('#overlay [data-mode="stripme"]');
+      await host.fill('#o-name', 'Odane');
+      await host.tap('#o-go');
+      await host.waitForSelector('.room-code', { timeout: 10000 });
+      const code = (await host.textContent('.room-code')).trim();
+      await guest.tap('[data-online="join"]'); await sleep(300);
+      await guest.fill('#o-code', code);
+      await guest.fill('#o-name', 'Tess');
+      await guest.tap('#o-go');
+      await guest.waitForSelector('.room-code', { timeout: 10000 });
+      await sleep(600);
+      // the host picks; a guest sees the choices as a list
+      const lossesShown = p => p.evaluate(() => !!document.querySelector('[data-l-opt="losses"]') ||
+        [...document.querySelectorAll('.lobby-choices li span')].some(s => /Losses/.test(s.textContent)));
+      checks.push('room ' + code + ': seat picker shown = ' + !!(await host.$('[data-l-size]')) +
+        ', losses shown (host/guest) = ' + await lossesShown(host) + '/' + await lossesShown(guest));
+      await host.tap('[data-l-opt="mode"][data-val="quick"]'); await sleep(600);
+      checks.push('Quick Play → losses shown (host/guest) = ' + await lossesShown(host) + '/' + await lossesShown(guest));
+      await shot(guest, tag + '-01-lobby-guest-quick');
+      await host.tap('[data-l-opt="mode"][data-val="strip"]'); await sleep(500);
+      await host.tap('[data-l-opt="losses"][data-val="2"]'); await sleep(600);
+      checks.push('Strip Mode, 2 losses → guest sees ' + JSON.stringify(await guest.evaluate(() => CT.App.online.room.options)) +
+        ', losses shown (host/guest) = ' + await lossesShown(host) + '/' + await lossesShown(guest));
+      await shot(host, tag + '-02-lobby-host');
+      await shot(guest, tag + '-02-lobby-guest-strip');
+      await host.tap('#l-start');
+      for (const p of pages) await p.waitForSelector('#screen-table:not([hidden])', { timeout: 10000 });
+      await sleep(1800);
+      await shot(host, tag + '-03-table-host');
+      await shot(guest, tag + '-04-table-guest');
+      const look = p => p.evaluate(() => {
+        const s = CT.App.session, o = CT.App.online;
+        const status = o.conn ? o.conn.status : 'none';
+        if (!s || !s.remote) return { none: true, sheet: CT.App.sheet, status };
+        const v = s.view(s.me, { events: false });
+        const i = v.players.findIndex(x => x.id === s.me);
+        return { me: s.me, i, phase: v.phase, round: v.round, plays: v.plays, canPlay: v.canPlay, turn: v.turn, game: s.game,
+          lost: v.players.map(x => x.lost), counts: v.players.map(x => x.count), idle: v.players.map(x => !!x.idle),
+          names: v.players.map(x => x.name + (x.isBot ? '*' : '')), sheet: CT.App.sheet, status,
+          flying: !!document.querySelector('.gm.flying') };
+      });
+      const tapDeck = async p => { try { await p.tap('#s-deck', { timeout: 1200 }); } catch (e) { /* the moment passed */ } };
+      const hostTaps = async ms => { const t = Date.now(); while (Date.now() - t < ms) { const h = await look(host); if (h.canPlay) await tapDeck(host); await sleep(90); } };
+      // the guest switches Auto on; only the host taps
+      await guest.tap('#s-auto'); await sleep(200);
+      const a0 = await look(host);
+      await hostTaps(14000);
+      const a1 = await look(host);
+      checks.push('guest on Auto (pressed = ' + await guest.evaluate(() => document.getElementById('s-auto').getAttribute('aria-pressed')) +
+        '), 14 s: round ' + a0.round + ' play ' + a0.plays + ' → round ' + a1.round + ' play ' + a1.plays + ', guest on autopilot = ' + a1.idle[1 - a1.i]);
+      // the guest's phone loses its connection: once their time runs out, their deck turns over by itself
+      await guest.context().setOffline(true);
+      const d0 = await look(host); let idleSeen = false;
+      const t1 = Date.now();
+      while (Date.now() - t1 < 18000) {
+        const h = await look(host);
+        if (!idleSeen && h.idle[1 - h.i]) { idleSeen = true; await sleep(300); await shot(host, tag + '-05-host-guest-autopilot'); }
+        if (h.canPlay) await tapDeck(host);
+        await sleep(90);
+      }
+      const d1 = await look(host);
+      checks.push('guest offline 18 s → host sees the guest on autopilot = ' + idleSeen + ', round ' + d0.round + ' play ' + d0.plays +
+        ' → round ' + d1.round + ' play ' + d1.plays + '; guest link ' + (await look(guest)).status);
+      await shot(guest, tag + '-06-guest-offline');
+      await guest.context().setOffline(false);
+      // back online: Auto is still on, so the guest's next card takes their deck off autopilot
+      const t2 = Date.now(); let cleared = false;
+      while (Date.now() - t2 < 20000) {
+        const h = await look(host), g = await look(guest);
+        if (g.status === 'open' && !h.idle[1 - h.i]) { cleared = true; break; }
+        if (h.canPlay) await tapDeck(host);
+        await sleep(90);
+      }
+      checks.push('guest back → link ' + (await look(guest)).status + ', off autopilot = ' + cleared + ' after ' + Math.round((Date.now() - t2) / 100) / 10 + ' s');
+      await sleep(400);
+      await shot(guest, tag + '-07-guest-back');
+      // Auto off; both tap until it's over
+      await guest.tap('#s-auto'); await sleep(150);
+      const seen = {};
+      const once = async (key, fn) => { if (seen[key]) return; seen[key] = 1; await fn(); };
+      const t3 = Date.now();
+      while (Date.now() - t3 < 10 * 60000) {
+        const h = await look(host), g = await look(guest);
+        if ((h.none || h.phase === 'over') && (g.none || g.phase === 'over')) break;
+        if (h.flying || g.flying) await once('strip' + h.round, async () => { await sleep(250); await shot(host, tag + '-08-strip-host-r' + h.round); await shot(guest, tag + '-09-strip-guest-r' + h.round); });
+        if (h.phase === 'roundOver') await once('ro' + h.round, async () => { checks.push('round ' + h.round + ' over: garments lost ' + JSON.stringify(h.names) + ' ' + JSON.stringify(h.lost)); await sleep(1600); await shot(host, tag + '-10-round-over-host-r' + h.round); });
+        if (h.canPlay) await tapDeck(host);
+        if (g.canPlay) await tapDeck(guest);
+        await sleep(50);
+      }
+      const end = await look(host);
+      checks.push('game over after ' + Math.round((Date.now() - t1) / 1000) + ' s more: garments lost ' + JSON.stringify(end.names) + ' ' + JSON.stringify(end.lost));
+      for (const p of pages) await p.waitForFunction(() => CT.App.sheet === 'result', null, { timeout: 20000 }).catch(() => {});
+      await sleep(700);
+      await shot(host, tag + '-11-result-host');
+      await shot(guest, tag + '-12-result-guest');
+      const res = p => p.evaluate(() => ({ sheet: CT.App.sheet, title: ((document.querySelector('#overlay h2') || {}).textContent || '').trim(),
+        again: !!document.getElementById('r-again'), wait: ((document.getElementById('r-wait') || {}).textContent || '').trim() }));
+      checks.push('result host ' + JSON.stringify(await res(host)) + ' · guest ' + JSON.stringify(await res(guest)));
+      // play again, then the guest leaves and the computer takes over their deck
+      await host.tap('#r-again'); await sleep(1800);
+      const g1 = await look(host), g2 = await look(guest);
+      checks.push('play again → host game ' + g1.game + ' ' + g1.phase + ' · guest game ' + g2.game + ' ' + g2.phase);
+      await guest.tap('#s-menu'); await sleep(300);
+      await guest.tap('#m-leave'); await sleep(300);
+      await guest.tap('#o-leave'); await sleep(1000);
+      const c0 = await look(host);
+      await host.tap('#s-auto'); await sleep(8000);
+      const c1 = await look(host);
+      checks.push('guest left → guest screen ' + await guest.evaluate(() => CT.App.screen) + '; host table ' + JSON.stringify(c1.names) +
+        ', host on Auto 8 s: round ' + c0.round + ' play ' + c0.plays + ' → round ' + c1.round + ' play ' + c1.plays);
+      await shot(host, tag + '-13-host-vs-computer');
+      await host.tap('#s-menu'); await sleep(300);
+      await host.tap('#m-leave'); await sleep(300);
+      await host.tap('#o-leave'); await sleep(800);
+      checks.push('host left → ' + await host.evaluate(() => CT.App.screen));
+      checks.forEach(c => console.log('  ' + c));
+      const errors = [].concat(...pages.map(p => p.errors)).filter(e => !/ERR_INTERNET_DISCONNECTED/.test(e));
+      console.log('  errors:', errors.length ? errors : 'none');
+    }
+
+    if (/^stripme(-small|-landscape|-quick)?$/.test(SCENARIO)) {
+      // Strip-Me through the screen. Rounds run to hundreds of cards, so each deal is
+      // rigged short: an Action Card, a payment cancelled by another, a pile taken,
+      // then a last card. -quick: Quick Play, one round.
+      const size = /small/.test(SCENARIO) ? { viewport: { width: 360, height: 640 } }
+        : /landscape/.test(SCENARIO) ? { viewport: { width: 844, height: 390 } } : { viewport: { width: 390, height: 844 } };
+      const quick = /quick/.test(SCENARIO);
+      const tag = SCENARIO;
+      const p = await open(browser, { ctx: size, seed: 23, settings: { format: 2, stripme: { options: { mode: quick ? 'quick' : 'strip', losses: '2' } } } });
+      await shot(p, tag + '-01-home');
+      await p.tap('[data-play="stripme"]'); await sleep(300);
+      await shot(p, tag + '-02-setup');
+      const losses = () => p.evaluate(() => { const h = document.getElementById('help-losses'); return !!h && !h.parentNode.hidden; });
+      const checks = [];
+      checks.push('setup: losses shown = ' + await losses());
+      await p.tap('[data-opt="mode"][data-val="' + (quick ? 'strip' : 'quick') + '"]'); await sleep(150);
+      checks.push('switch mode: losses shown = ' + await losses());
+      await p.tap('[data-opt="mode"][data-val="' + (quick ? 'quick' : 'strip') + '"]'); await sleep(150);
+      await p.tap('#s-deal'); await sleep(200);
+      // each round: You 2♠ · Mia Q♦ (You pay 2) · You 3♠, K♥ (cancelled: Mia pays 3) · Mia 4♣ 5♣ 6♣ takes the pile ·
+      // You lead 7♠ · Mia 8♣ · You 9♠ (your last card, round 1) — round 2 the other way round
+      const rig = round => p.evaluate(round => {
+        const st = CT.App.session.state;
+        const card = id => ({ id, rank: id.slice(0, -1), suit: id.slice(-1) });
+        const mine = ['2S', '3S', 'KH', '7S', '9S'], theirs = ['QD', '4C', '5C', '6C', '8C', '10C', '2C'];
+        const used = new Set(mine.concat(theirs));
+        const rest = CT.standardDeck().filter(c => !used.has(c.id));
+        const a = mine.map(card), b = theirs.map(card);
+        // whoever should lose this round keeps the spare cards
+        if (round % 2 === 1) { st.players[0].deck = a; st.players[1].deck = b.concat(rest); }
+        else { st.players[0].deck = a.concat(rest); st.players[1].deck = b; }
+        st.starter = 'p0'; st.turn = st.phase === 'play' ? 'p0' : st.turn;
+      }, round);
+      const look = () => p.evaluate(() => {
+        const s = CT.App.session; if (!s) return null;
+        const v = s.view('p0', { events: false });
+        return { phase: v.phase, round: v.round, turn: v.turn, owe: v.owe, canPlay: v.canPlay, canShuffle: v.canShuffle, pile: v.pileCount,
+          counts: v.players.map(x => x.count), lost: v.players.map(x => x.lost), sheet: CT.App.sheet, banner: document.getElementById('s-banner-what').textContent,
+          flying: !!document.querySelector('.gm.flying') };
+      });
+      let v = await look(), guard = 0, rigged = 0, shuffled = false, autoTried = false;
+      const seen = {};
+      const once = async (key, name, wait) => { if (seen[key]) return; seen[key] = 1; if (wait) await sleep(wait); await shot(p, tag + '-' + name); };
+      while (v && v.sheet !== 'result' && guard++ < 3000) {
+        if (v.phase === 'dealing' && rigged < v.round) { rigged = v.round; await rig(v.round); await once('deal' + v.round, '03-deal-r' + v.round, 300); }
+        if (v.phase === 'play' && v.owe && v.turn === 'p0') await once('pay', '05-you-pay', 150);
+        if (v.phase === 'play' && v.owe && v.turn === 'p1') await once('theypay', '06-mia-pays', 250);
+        if (v.phase === 'pickup') await once('pickup', '07-pickup', 200);
+        if (v.flying) await once('strip' + v.round, '08-strip-r' + v.round, 250);
+        if (v.phase === 'roundOver') await once('roundover' + v.round, '09-round-over-r' + v.round, 1900);
+        if (v.canPlay) {
+          await once('turn', '04-your-turn', 150);
+          if (v.canShuffle && !shuffled && v.counts[0] > 2) { shuffled = true; await p.tap('#s-shuffle'); await sleep(250); checks.push('shuffled: deck still ' + (await look()).counts[0] + ' cards'); }
+          else if (!autoTried && v.round === 2) {
+            // round 2: let Auto play for a while
+            autoTried = true;
+            await p.tap('#s-auto'); await sleep(2200);
+            const a = await look();
+            checks.push('Auto on for 2.2 s: your deck ' + v.counts[0] + ' → ' + a.counts[0]);
+            await p.tap('#s-auto'); await sleep(200);
+          } else { await p.tap('#s-deck'); await sleep(260); }
+        } else await sleep(120);
+        v = await look();
+      }
+      await sleep(600);
+      await shot(p, tag + '-10-result');
+      const end = await p.evaluate(() => {
+        const st = CT.App.session.state;
+        return { winner: st.winners && st.winners[0], lost: st.players.map(x => x.lost), rounds: st.round,
+          why: (document.querySelector('.result-why') || {}).textContent, title: (document.querySelector('.sheet.result .wordmark') || {}).textContent,
+          log: CT.App.table.logItems.slice(-6).map(x => x.html.replace(/<[^>]+>/g, '')) };
+      });
+      checks.forEach(c => console.log('  ' + c));
+      console.log('  game over:', JSON.stringify(end));
+      await p.tap('#r-table'); await sleep(300);
+      await p.tap('#s-menu'); await sleep(250);
+      await p.tap('#m-rules'); await sleep(300);
+      await shot(p, tag + '-11-rules');
+      console.log('  errors:', p.errors.length ? p.errors : 'none');
+    }
+
     if (SCENARIO === 'first-play') {
       // The first time each mode is played, Play offers its tutorial, once.
       const checks = [];

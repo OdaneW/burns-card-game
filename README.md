@@ -12,6 +12,11 @@ A phone-first card game with several game modes, played against computer players
 - **Bull**: the whole deck is dealt round a circular table. Play one to four cards face down as the next
   rank (Aces, then 2s, up to Kings and round again), bluff when you have to, and call "Bull!" on anyone
   you think is lying. Whoever is wrong picks up the pile. A rule choice turns over the bluffs nobody called.
+- **Strip-Me**: two players, 26 cards each, face down. Take turns turning over your top card. A Jack, Queen,
+  King or Ace makes the other player pay 1, 2, 3 or 4 cards; turn up one of those while paying and the payment
+  switches back. Pay in full and you pick up the whole pile under your deck. Play your last card to win the
+  round: the loser's cartoon avatar loses a garment, and you choose how many losses (2 to 5) end the game.
+  Quick Play is a single round.
 
 **Play:** https://odanew.github.io/burns-card-game/
 
@@ -50,6 +55,9 @@ at the bottom of the menu screen.
 | `src/modes/bull/bot.js` | The Bull computer player: when to bluff, and when to call Bull from the cards it has seen |
 | `src/modes/bull/ui.js` | The Bull table screen: three to six seats round an oval table |
 | `src/modes/bull/tutorial.js` | The interactive Bull tutorial: five rigged lessons on the real table, from your first play to calling Bull and winning |
+| `src/modes/stripme/rules.js` | The Strip-Me rules: the deal, Action Cards and payments, picking up the pile, rounds and garments, the shuffle and autopilot |
+| `src/modes/stripme/bot.js` | The Strip-Me computer player: it turns cards over at a human pace and sometimes shuffles |
+| `src/modes/stripme/ui.js` | The Strip-Me table screen: two avatars that lose a garment for each round they lose, Auto and the shuffle |
 | `src/ui/kit.js` | Shared screen pieces: cards, animations, sound effects, storage |
 | `src/ui/music.js` | Background music, composed live in the browser (no audio files) |
 | `src/ui/coach.js` | The tutorial's speech bubble and spotlight, usable by any mode |
@@ -103,7 +111,8 @@ game against the live server (`server/check.mjs`). The app connects to the addre
 To run it locally: `cd server && npm install && npm run dev`, then point the app at it by setting
 `localStorage['cardtable.server'] = '"ws://localhost:8787"'` in the browser console.
 `node test/online.test.mjs` tests the room logic with pretend phones, and `node test/ui-run.js <dir> online`
-plays through the screens with two phones against the local server (`online-burns` and `online-bull` use three).
+plays through the screens with two phones against the local server (`online-burns` and `online-bull` use three,
+and `online-stripme` plays Strip-Me with one phone on Auto that drops off for a while).
 
 A room's rules version must match the app's: when a mode's rules change in a way that affects saved or online
 games, bump its `ENGINE_VERSION`, and phones on an older app are asked to update.

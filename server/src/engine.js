@@ -9,5 +9,7 @@ import '../../src/modes/donkey/rules.js';
 import '../../src/modes/donkey/bot.js';
 import '../../src/modes/bull/rules.js';
 import '../../src/modes/bull/bot.js';
+import '../../src/modes/stripme/rules.js';
+import '../../src/modes/stripme/bot.js';
 
 export default globalThis.CT;
