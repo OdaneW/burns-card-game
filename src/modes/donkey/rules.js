@@ -581,6 +581,26 @@
     return 'Round ' + state.round + ' · ' + mine;
   }
 
+  /* Stats each player collects (CT.tally): fours of a kind, the fastest
+     put-down, letters taken and the times they spelled DONKEY. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'declare': add(t, e.player, 'fours'); break;
+        case 'react': CT.tally.best(t, e.player, 'bestReact', e.ms, 'min'); break;
+        case 'roundEnd': (e.losers || []).forEach(function (pid) { add(t, pid, 'letters'); }); break;
+        case 'gameEnd': (e.donkeys || []).forEach(function (pid) { add(t, pid, 'donkeys'); }); break;
+      }
+    },
+    show: [
+      { key: 'fours', label: 'Fours of a kind', rank: true, help: 'Fours of a kind put down.' },
+      { key: 'bestReact', label: 'Fastest put-down', rank: true, best: 'min', low: true, unit: 'ms', help: 'The quickest put-down after someone else’s four of a kind.' },
+      { key: 'letters', label: 'Letters taken', low: true, help: 'Letters for being the last to put your cards down.' },
+      { key: 'donkeys', label: 'Times the Donkey', low: true, help: 'Games lost by spelling DONKEY.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'donkey',
     name: 'Pass-Roun Donkey',
@@ -601,6 +621,7 @@
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'donkey'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));

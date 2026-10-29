@@ -1,7 +1,8 @@
 /* A live check of the deployed server: two pretend phones make a room, play
    a whole game of Burns against each other (deciding like the computer
    players do, from only what each is sent), check nobody was sent anyone
-   else's cards, then leave. Run after each deploy:
+   else's cards, then leave. Then two pretend players (the same two each
+   time) become friends and stop being friends again. Run after each deploy:
      node server/check.mjs https://burns-card-game.<you>.workers.dev */
 import CT from './src/engine.js';
 
@@ -29,6 +30,7 @@ function phone(name, token) {
     ws.onmessage = e => {
       if (e.data === 'pong') return;
       const m = JSON.parse(e.data);
+      if (m.t === 'pong') return;
       p.msgs.push(m);
       if (m.t === 'welcome') { p.code = m.code; clearTimeout(late); resolve(); }
       if (m.t === 'error') fail(name + ': ' + m.message);
@@ -54,6 +56,8 @@ try {
   console.log('Joined it from a second phone');
 } catch (e) { fail(e.message); }
 host.send({ t: 'start' });
+// like the app, check in every few seconds: a phone that's quiet for long during a game counts as gone
+setInterval(() => [host, guest].forEach(p => { if (p.ws.readyState === 1) p.send({ t: 'ping', c: Date.now() }); }), 4000);
 
 const mode = CT.getMode('burns');
 let rngState = 12345;
@@ -78,11 +82,36 @@ const v = host.view;
 console.log('Game over after ' + Math.round((Date.now() - started) / 1000) + ' s and ' + n + ' moves: ' +
   v.winners.map(id => v.players.find(p => p.id === id).name).join(' & ') + ' won');
 
-// no phone was told anyone else's token
+// no phone was told anyone else's token; everyone has a friend code
 const rooms = host.msgs.filter(m => m.t === 'room').map(m => JSON.stringify(m));
 if (rooms.some(r => r.includes(guest.token))) fail('a token was sent to another phone');
+const lastRoom = host.msgs.filter(m => m.t === 'room').pop().room;
+if (!lastRoom.members.every(m => /^[A-Z2-9]{8,}$/.test(m.code || ''))) fail('people in the room have no friend codes');
+if (!v.tally || typeof v.tally !== 'object') fail('the game’s stats weren’t counted');
+console.log('Friend codes in the room: ' + lastRoom.members.map(m => m.code).join(', ') + '; your stats this game: ' + JSON.stringify(v.tally));
 
 finished = true;
 host.send({ t: 'leave' });
 guest.send({ t: 'leave' });
+
+// friends: the same two pretend players every time, so nothing piles up
+const http = base.replace(/^ws/, 'http');
+const players = async (token, body) => {
+  const res = await fetch(http + '/players', { method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (res.status !== 200) fail('the friends server answered ' + res.status);
+  if (res.headers.get('access-control-allow-origin') !== '*') fail('the friends server can’t be reached from the app (no CORS)');
+  return res.json();
+};
+try {
+  const A = 'live-check-friend-aaaaaaaaaaaa', B = 'live-check-friend-bbbbbbbbbbbb';
+  const a = await players(A, { name: 'Check A', stats: { burns: { played: 1, won: 1, sets: 3 } } });
+  const b = await players(B, { name: 'Check B', remove: a.you.code });
+  const added = await players(B, { add: a.you.code });
+  if (!added.added || !added.friends.some(f => f.code === a.you.code && f.stats.burns && f.stats.burns.sets === 3)) fail('adding a friend didn’t work: ' + JSON.stringify(added));
+  const back = await players(A, {});
+  if (!back.friends.some(f => f.code === b.you.code)) fail('the friendship didn’t go both ways');
+  const gone = await players(A, { remove: b.you.code });
+  if (gone.friends.some(f => f.code === b.you.code)) fail('removing a friend didn’t work');
+  console.log('Friends: ' + a.you.code + ' and ' + b.you.code + ' added and removed each other');
+} catch (e) { fail('friends: ' + e.message); }
 setTimeout(() => { console.log('Both left. All good.'); process.exit(0); }, 800);

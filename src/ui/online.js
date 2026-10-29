@@ -57,6 +57,8 @@
 
   Online.prototype.store = function () { UI.store.set(KEY, this.data); };
   Online.prototype.available = function () { return !!serverUrl(); };
+  /* The same server over https, for everything that isn't a room (friends). */
+  Online.prototype.httpUrl = function (path) { return serverUrl().replace(/^ws/, 'http').replace(/\/+$/, '') + path; };
   Online.prototype.inRoom = function () { return !!this.conn; };
   Online.prototype.me = function () {
     var self = this;
@@ -242,6 +244,7 @@
         notice: function (m) { UI.toast(esc(m.message)); },
         chat: function (m) { self.social.receive(m.m); },
         react: function (m) { self.social.reaction(m); },
+        friend: function (m) { if (self.app.friends) self.app.friends.addedBy(m.from); },
         error: function (m) { self.onError(m); },
         lost: function () { if (self.remote) self.remote.dropPending(); },
         status: function (s) { self.onStatus(s); }
@@ -270,6 +273,7 @@
     this.data.room = { code: msg.code, mode: this.data.room && this.data.room.code === msg.code ? this.data.room.mode : null, at: Date.now() };
     this.store();
     this.social.history(msg.code, msg.chat);
+    if (this.app.friends) this.app.friends.touch();   // so the others in the room can add you as a friend
   };
 
   Online.prototype.onRoom = function (room) {
@@ -396,6 +400,7 @@
       ? size + ' at the table: ' + humans + (humans === 1 ? ' person' : ' people') + (size - humans ? ' and ' + (size - humans) + ' computer ' + (size - humans === 1 ? 'player' : 'players') : '') + '.' +
         (people.length > size ? ' Everyone else waits for the next game.' : '')
       : '';
+    var friends = this.app.friends;
     var seatRows = rows.map(function (row, i) {
       if (row.bot) {
         return '<li class="lobby-seat bot"><span class="avatar">' + UI.icon.people + '</span><span class="who">' + (row.name ? esc(row.name) + ' <small>computer player</small>' : 'Computer player') + '</span>' +
@@ -405,10 +410,19 @@
       var tags = [];
       if (m.id === self.you) tags.push('you');
       if (m.id === r.host) tags.push('host');
+      // anyone else here can be added as a friend, with a tap
+      var canAdd = friends && m.code && m.id !== self.you;
+      var friend = canAdd && friends.isFriend(m.code);
+      if (friend) tags.push('friend');
+      var adding = canAdd && friends.adding[m.code];
+      var add = canAdd && !friend
+        ? '<button class="add-friend" type="button" data-befriend="' + esc(m.code) + '" data-to="' + m.id + '" data-name="' + esc(m.name) + '" aria-label="Add ' + esc(m.name) + ' as a friend"' + (adding ? ' disabled' : '') + '>' +
+            UI.icon.addFriend + '<span>' + (adding ? 'Adding…' : 'Add') + '</span></button>'
+        : '';
       var state = row.waits ? (lobby ? 'Waits' : 'Next game') : m.computer ? 'Computer covering' : m.connected ? 'Here' : 'Away';
       return '<li class="lobby-seat' + (row.waits ? ' waits' : '') + '" data-member="' + m.id + '"><span class="avatar" style="--paint:' + PAINTS[i % PAINTS.length] + '">' + esc(m.name.charAt(0).toUpperCase()) + '</span>' +
         '<span class="who">' + esc(m.name) + (tags.length ? ' <small>' + tags.join(' · ') + '</small>' : '') + '</span>' +
-        '<span class="state ' + (m.connected ? 'on' : 'off') + '">' + state + '</span></li>';
+        '<span class="seat-end">' + add + '<span class="state ' + (m.connected ? 'on' : 'off') + '">' + state + '</span></span></li>';
     }).join('');
 
     var gameField = host && lobby
@@ -493,6 +507,13 @@
         if (b.dataset.lMode === r.mode) return;
         var m = CT.getMode(b.dataset.lMode), cfg = app.modeSettings(m);
         self.conn.send({ t: 'setup', mode: m.id, size: cfg.opponents + 1, options: cfg.options });
+      });
+    });
+    screen.querySelectorAll('[data-befriend]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        b.disabled = true;
+        b.lastChild.textContent = 'Adding…';
+        friends.addFromRoom(b.dataset.befriend, b.dataset.name, +b.dataset.to);
       });
     });
     screen.querySelectorAll('[data-l-size]').forEach(function (b) {

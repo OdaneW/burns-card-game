@@ -75,11 +75,13 @@
       }
 
       this.online = UI.Online ? new UI.Online(this) : null;
+      this.friends = this.online && UI.Friends ? new UI.Friends(this) : null;
 
       data = data || {};
       if (data.save && data.screen === 'table' && this.resume(data.save)) return;
       this.showHome();
       if (this.online) this.online.boot();
+      if (this.friends) this.friends.boot();
     },
 
     /* Each mode's rules version, to check an online room runs the same game. */
@@ -120,7 +122,7 @@
 
     show: function (name) {
       this.screen = name;
-      ['home', 'setup', 'table', 'lobby'].forEach(function (s) { var el = $('screen-' + s); if (el) el.hidden = s !== name; });
+      ['home', 'setup', 'table', 'lobby', 'friends'].forEach(function (s) { var el = $('screen-' + s); if (el) el.hidden = s !== name; });
     },
 
     showHome: function () {
@@ -157,6 +159,7 @@
           '</article>';
       });
       if (this.online) html += this.online.tileHtml();
+      if (this.friends) html += this.friends.tileHtml();
       html += '<article class="mode-tile soon"><h3>More games</h3><p>New modes appear here as their rules are added.</p></article></section>';
       var lines = modes.map(function (m) {
         var s = self.stats[m.id];
@@ -191,6 +194,7 @@
         });
       });
       if (this.online) this.online.wireHome(home);
+      if (this.friends) this.friends.wireHome(home);
     },
 
     modeSettings: function (mode) {
@@ -596,20 +600,19 @@
       this.startGame(g.modeId, { opponents: g.opponents, options: g.options, names: g.names });
     },
 
+    /* A finished game into this phone's record (standings.js): games, wins,
+       streaks and what the game counted for you, and online games again on
+       their own. Friends see it on their leaderboard. */
     record: function (v, me) {
       // once per game: online games are told apart by room and game number
       var key = this.session.remote ? 'online:' + (this.online && this.online.room ? this.online.room.code : '') + ':' + this.session.game : null;
       if (key ? this.recordedKey === key : this.recorded) return;
       if (key) this.recordedKey = key; else this.recorded = true;
-      var id = this.session.mode.id;
-      var s = this.stats[id] || (this.stats[id] = { played: 0, won: 0, flushWins: 0 });
-      s.played++;
-      if ((v.winners || []).indexOf(me || 'p0') >= 0) {
-        s.won++;
-        if (v.winReason === 'flush') s.flushWins++;
-      }
+      var won = (v.winners || []).indexOf(me || 'p0') >= 0;
+      CT.Standings.record(this.stats, this.session.mode, won, v.tally, !!key, Date.now());
       UI.store.set(STATS_KEY, this.stats);
       if (!key) UI.store.del(SAVE_KEY);
+      if (this.friends) this.friends.gamePlayed();
     },
 
     /* The end-of-game sheet. The table screen fills in what's particular to

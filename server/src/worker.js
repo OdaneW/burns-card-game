@@ -5,16 +5,30 @@
      GET /             a health check
      GET /rooms/new    (WebSocket) a new room with a fresh code
      GET /rooms/ABCD   (WebSocket) join room ABCD, or come back to it
+     POST /players     friends and their stats (players.js), in one more
+                       Durable Object that keeps every player's profile
    Sockets use the hibernation API, so a quiet room costs nothing while it
    waits; a room nobody has visited for a while is cleared away.
    ========================================================================== */
 import CT from './engine.js';
 import { RoomCore } from './room.js';
+import { Directory } from './players.js';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I to mix up
 const EXPIRE_MS = 6 * 60 * 60 * 1000;                     // an empty room is cleared after six hours
 const SAVE_MS = 3000;                                     // during play, save at most this often
 const MAX_MESSAGE = 8192;
+const MAX_PLAYERS_BODY = 16384;
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-max-age': '86400'
+};
+
+function json(status, body) {
+  return new Response(JSON.stringify(body), { status, headers: Object.assign({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, CORS) });
+}
 
 function newCode() {
   const bytes = new Uint8Array(4);
@@ -35,6 +49,13 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/' || url.pathname === '/health') {
       return new Response('Card table server is running.', { headers: { 'content-type': 'text/plain; charset=utf-8', 'access-control-allow-origin': '*' } });
+    }
+    if (url.pathname === '/players') {
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+      if (request.method !== 'POST') return json(405, { error: 'method' });
+      if (Number(request.headers.get('content-length') || 0) > MAX_PLAYERS_BODY) return json(413, { error: 'too-big' });
+      const res = await env.PLAYERS.get(env.PLAYERS.idFromName('directory')).fetch(request);
+      return new Response(res.body, { status: res.status, headers: Object.assign({}, Object.fromEntries(res.headers), CORS) });
     }
     const m = url.pathname.match(/^\/rooms\/([A-Za-z0-9]{4}|new)$/);
     if (!m) return new Response('Not found', { status: 404 });
@@ -185,5 +206,30 @@ export class Room {
     this.core = new RoomCore(this.io(), null);
     this.alarmSetAt = 0;
     await this.ctx.storage.deleteAll();
+  }
+}
+
+/* Every player's profile, friends and stats, in one place (players.js). */
+export class Players {
+  constructor(ctx) {
+    const storage = ctx.storage;
+    this.dir = new Directory({
+      get: key => storage.get(key),
+      getMany: keys => storage.get(keys),
+      put: (key, value) => storage.put(key, value)
+    });
+  }
+
+  async fetch(request) {
+    const auth = request.headers.get('authorization') || '';
+    const token = auth.replace(/^Bearer\s+/i, '');
+    let body = {};
+    try {
+      const text = await request.text();
+      if (text.length > MAX_PLAYERS_BODY) return json(413, { error: 'too-big' });
+      body = text ? JSON.parse(text) : {};
+    } catch (e) { return json(400, { error: 'bad-json' }); }
+    const res = await this.dir.handle(token, body);
+    return json(res.status, res.body);
   }
 }

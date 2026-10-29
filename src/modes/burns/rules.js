@@ -873,6 +873,30 @@
       ' · ' + (state.players.length - 1) + ' opponents';
   }
 
+  /* Stats each player collects (CT.tally): sets won, Flushes, and in Real
+     Burns the slaps given and taken, and the times you were left holding cards. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'setWon': add(t, e.player, 'sets'); break;
+        case 'flush': (e.players || []).forEach(function (pid) { add(t, pid, 'flushWins'); }); break;
+        case 'loser': add(t, e.player, 'burned'); break;
+        case 'penaltyResult':
+          add(t, e.shuffler, 'slapsGiven', (e.soft || 0) + (e.hard || 0));
+          add(t, e.loser, 'slapsTaken', (e.soft || 0) + (e.hard || 0));
+          break;
+      }
+    },
+    show: [
+      { key: 'sets', label: 'Sets won', rank: true, help: 'Sets won with the highest card.' },
+      { key: 'flushWins', label: 'Flushes', rank: true, help: 'Starting hands with all four suits, when the Flush rule is on.' },
+      { key: 'slapsGiven', label: 'Slaps given', rank: true, note: 'Real Burns', help: 'Slaps counted on the loser’s hand in Real Burns penalty rounds.' },
+      { key: 'burned', label: 'Times burned', low: true, note: 'Real Burns', help: 'Games of Real Burns lost: the last one left holding cards.' },
+      { key: 'slapsTaken', label: 'Slaps taken', low: true, note: 'Real Burns', help: 'Slaps taken in Real Burns penalty rounds.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'burns',
     name: 'Burns',
@@ -888,6 +912,7 @@
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'burns'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));

@@ -18,8 +18,14 @@ jobs:
         run: node test/donkey.test.js
       - name: Bull rules and simulated games
         run: node test/bull.test.js
+      - name: Strip-Me rules and simulated games
+        run: node test/stripme.test.js
+      - name: Stats each game counts, and the leaderboard
+        run: node test/stats.test.js && node test/standings.test.js
       - name: Online rooms
         run: node test/online.test.mjs
+      - name: Friends on the server
+        run: node test/players.test.mjs
       - name: Built app matches the source
         run: |
           node build.js

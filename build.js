@@ -14,6 +14,7 @@ const ROOT = __dirname;
 const SOURCES = [
   'src/engine/core.js',
   'src/engine/session.js',
+  'src/engine/standings.js',
   'src/modes/burns/rules.js',
   'src/modes/burns/bot.js',
   'src/modes/donkey/rules.js',
@@ -37,6 +38,7 @@ const SOURCES = [
   'src/modes/stripme/tutorial.js',
   'src/ui/social.js',
   'src/ui/online.js',
+  'src/ui/friends.js',
   'src/ui/app.js'
 ];
 const FONTS = [

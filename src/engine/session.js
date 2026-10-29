@@ -56,6 +56,13 @@
       timing: config.timing,
       now: this.clock.now()
     });
+    // each player's stats for this game, counted from its events as they
+    // happen (a game saved before there were stats counts from here on)
+    if (!this.state.tally) {
+      this.state.tally = {};
+      this.state.tallySeq = config.state ? (this.state.seq || 0) : 0;
+    }
+    this._count();
     this.botRng = CT.makeRng((config.botSeed != null ? config.botSeed : (this.state.rng ^ 0x9E3779B9)) >>> 0);
     this.botPlans = {};
     this.botMemory = {};
@@ -71,7 +78,23 @@
   };
 
   Session.prototype._changed = function (info) {
+    this._count();
     for (var i = 0; i < this.listeners.length; i++) this.listeners[i](info);
+  };
+
+  /* New events go into each player's stats for this game (mode.stats.count). */
+  Session.prototype._count = function () {
+    var stats = this.mode.stats, s = this.state;
+    if (!stats || !stats.count || !s.events || !s.tally) return;
+    var from = s.tallySeq || 0;
+    if ((s.seq || 0) < from) from = 0;      // renumbered (a tutorial lays out its own table)
+    for (var i = 0; i < s.events.length; i++) {
+      var e = s.events[i];
+      if (!(e.seq > from)) continue;
+      try { stats.count(s.tally, e, s); } catch (err) { /* a stat must never stop a game */ }
+      from = e.seq;
+    }
+    s.tallySeq = from;
   };
 
   /** Apply a player's action. Returns the mode's { ok, code, message, … }. */
@@ -116,8 +139,11 @@
     }
   };
 
+  /* What one player may see, with their own stats for this game so far. */
   Session.prototype.view = function (playerId, opts) {
-    return this.mode.view(this.state, playerId, opts || {});
+    var v = this.mode.view(this.state, playerId, opts || {});
+    if (v && this.state.tally) v.tally = JSON.parse(JSON.stringify(this.state.tally[playerId] || {}));
+    return v;
   };
 
   Session.prototype.pause = function () { this.clock.pause(); };

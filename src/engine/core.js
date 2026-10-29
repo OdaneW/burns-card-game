@@ -134,6 +134,25 @@
     return out;
   }
 
+  /* ---------- stats counted as a game is played ---------------------------
+     A mode may give `stats`: { count(tally, event, state), show: [...] }.
+     The Session calls count() with each new event, and it adds to
+     tally[pid]. `show` says what the records and the leaderboard display:
+       { key, label, help (what it counts, in a line), rank: true (on the
+         leaderboard), low: true (fewer is better), best: 'min' (the best
+         single game rather than a total), rate: [part, whole] (a
+         percentage), min (how many before a rate ranks), unit, note } */
+  function tallyAdd(t, pid, key, n) {
+    if (pid == null) return;
+    var p = t[pid] || (t[pid] = {});
+    p[key] = (p[key] || 0) + (n == null ? 1 : n);
+  }
+  function tallyBest(t, pid, key, v, how) {
+    if (pid == null || typeof v !== 'number' || !isFinite(v)) return;
+    var p = t[pid] || (t[pid] = {});
+    if (p[key] == null || (how === 'max' ? v > p[key] : v < p[key])) p[key] = v;
+  }
+
   /* A rule choice that only matters with another one (showIf: { mode: 'strip' })
      is left off the setup screen otherwise. */
   function optionShown(opt, values) {
@@ -160,4 +179,5 @@
   CT.listModes = listModes;
   CT.resolveOptions = resolveOptions;
   CT.optionShown = optionShown;
+  CT.tally = { add: tallyAdd, best: tallyBest };
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));

@@ -1,4 +1,5 @@
-# The online game server: a Cloudflare Worker with one Durable Object per room.
+# The online game server: a Cloudflare Worker with one Durable Object per room,
+# and one more for players' profiles (friends and stats).
 # Deployed by .github/workflows/server.yml; run locally with `npm run dev` here.
 name = "burns-card-game"
 main = "src/worker.js"
@@ -12,6 +13,15 @@ enabled = true
 name = "ROOMS"
 class_name = "Room"
 
+[[durable_objects.bindings]]
+name = "PLAYERS"
+class_name = "Players"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+# friends and their stats: one more Durable Object, for every player's profile
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Players"]

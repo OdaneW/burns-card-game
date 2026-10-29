@@ -1930,6 +1930,204 @@ async function playGame(p, tag, want) {
       console.log('  errors:', p.errors.length ? p.errors : 'none');
     }
 
+    if (SCENARIO === 'friends') {
+      // Friends and the leaderboard, with three phones against the local game server
+      // (cd server && npm run dev): a phone, a small phone and a landscape phone.
+      const server = process.env.SERVER || 'ws://127.0.0.1:8787';
+      const rec = (played, won, streak, bestStreak, extra, online) => Object.assign({ played, won, streak, bestStreak }, extra, online ? { online } : {});
+      const odaneStats = {
+        burns: rec(14, 6, 2, 3, { sets: 41, flushWins: 1, slapsGiven: 7, burned: 1, slapsTaken: 3 }, { played: 5, won: 3, streak: 2, bestStreak: 2, sets: 16, slapsGiven: 4 }),
+        bull: rec(9, 4, 0, 2, { calls: 12, callsRight: 8, caught: 5, piles: 9 }, { played: 2, won: 1, streak: 1, bestStreak: 1, calls: 3, callsRight: 2, caught: 1, piles: 2 }),
+        donkey: rec(3, 1, 1, 1, { fours: 2, bestReact: 512, letters: 9, donkeys: 1 })
+      };
+      const tessStats = {
+        burns: rec(20, 7, 0, 4, { sets: 55, flushWins: 2 }),
+        bull: rec(4, 3, 3, 3, { calls: 6, callsRight: 5, caught: 2, piles: 3 }, { played: 4, won: 3, streak: 3, bestStreak: 3, calls: 6, callsRight: 5, caught: 2, piles: 3 }),
+        stripme: rec(6, 4, 1, 2, { roundsWon: 13, garmentsTaken: 9, roundsLost: 8, garmentsLost: 5, piles: 30 })
+      };
+      const base = { 'cardtable.server': server };
+      const odane = await open(browser, { ctx: { viewport: { width: 390, height: 844 } }, seed: 71, storage: Object.assign({ 'cardtable.online.v1': { name: 'Odane' }, 'cardtable.stats.v1': odaneStats }, base) });
+      const tess = await open(browser, { ctx: { viewport: { width: 360, height: 640 } }, seed: 72, storage: Object.assign({ 'cardtable.online.v1': { name: 'Tess' }, 'cardtable.stats.v1': tessStats }, base) });
+      const ravi = await open(browser, { ctx: { viewport: { width: 844, height: 390 } }, seed: 73, speed: 40, storage: base });
+      const pages = [odane, tess, ravi];
+      const tag = 'fr';
+      const checks = [];
+      const look = p => p.evaluate(() => {
+        const f = CT.App.friends;
+        const text = sel => (document.querySelector(sel) || {}).textContent || '';
+        return { screen: CT.App.screen, code: f.code(), friends: f.data.friends.map(x => x.name), status: f.status,
+          rows: [...document.querySelectorAll('#f-board .board-row')].map(r => (r.querySelector('.rank').textContent || '·') + ' ' + r.querySelector('.name').textContent.trim() + ' ' + r.querySelector('.val').textContent + ' (' + r.querySelector('.sub').textContent + ')'),
+          error: text('#f-error:not([hidden])') || text('#o-error:not([hidden])'), note: text('#f-note'), toast: text('#toast.show'), tile: text('.friends-tile .tag'), help: text('.board-help') };
+      });
+      const settle = async p => { await p.waitForFunction(() => CT.App.friends.status !== 'loading', null, { timeout: 10000 }); await sleep(300); };
+      const toBoard = p => p.evaluate(() => { const b = document.getElementById('f-board'); b.closest('.setup-body').scrollTop = b.offsetTop - 60; });
+
+      // home: the Friends tile, before any friends
+      await odane.evaluate(() => document.querySelector('.friends-tile').scrollIntoView({ block: 'center' }));
+      await sleep(200);
+      await shot(odane, tag + '-01-home-tile');
+      checks.push('home tile: "' + (await look(odane)).tile + '"');
+      await odane.tap('[data-friends]');
+      await settle(odane);
+      const o1 = await look(odane);
+      checks.push('Odane opens Friends → code ' + o1.code + ', leaderboard ' + JSON.stringify(o1.rows));
+      await shot(odane, tag + '-02-odane-no-friends');
+      // Ravi has never been online: a name first
+      await ravi.tap('[data-friends]');
+      await sleep(400);
+      await shot(ravi, tag + '-03-ravi-name-first');
+      await ravi.tap('#f-name-go');
+      checks.push('Ravi saves no name → "' + (await look(ravi)).error + '"');
+      await ravi.fill('#o-name', 'Ravi');
+      await ravi.tap('#f-name-go');
+      await settle(ravi);
+      const r1 = await look(ravi);
+      checks.push('Ravi named → code ' + r1.code + ', his online name now "' + await ravi.evaluate(() => CT.App.online.data.name) + '"');
+      await shot(ravi, tag + '-04-ravi-code-landscape');
+      // Tess adds Odane by typing his code in lower case, with a dash
+      await tess.tap('[data-friends]');
+      await settle(tess);
+      const typed = o1.code.slice(0, 4).toLowerCase() + '-' + o1.code.slice(4).toLowerCase();
+      await tess.fill('#f-code', typed);
+      checks.push('Tess types "' + typed + '" → the field shows "' + await tess.inputValue('#f-code') + '"');
+      await tess.tap('#f-go');
+      await tess.waitForFunction(() => CT.App.friends.data.friends.length === 1, null, { timeout: 10000 });
+      await sleep(300);
+      const t1 = await look(tess);
+      checks.push('Tess adds Odane → toast "' + t1.toast + '", leaderboard ' + JSON.stringify(t1.rows));
+      await shot(tess, tag + '-05-tess-added-odane');
+      await toBoard(tess); await sleep(200);
+      await shot(tess, tag + '-06-tess-board-small');
+      // Odane sees Tess too, just by refreshing
+      await odane.tap('#f-refresh');
+      await settle(odane);
+      checks.push('Odane refreshes → friends ' + JSON.stringify((await look(odane)).friends));
+      // codes that don't work
+      for (const bad of ['ABC', o1.code, 'ZZZZ2222']) {
+        await odane.fill('#f-code', bad);
+        await odane.tap('#f-go');
+        await odane.waitForSelector('#f-error:not([hidden])', { timeout: 10000 });
+        checks.push('Odane adds "' + bad + '" → "' + (await look(odane)).error + '"');
+        await sleep(150);
+      }
+      await shot(odane, tag + '-07-odane-bad-code');
+      await odane.fill('#f-code', '');
+      // Ravi opens Odane's invite link
+      await ravi.goto('file://' + wrapperPath + '?friend=' + o1.code, { waitUntil: 'domcontentloaded' });
+      await ravi.waitForSelector('#f-code', { timeout: 5000 });
+      await sleep(600);
+      checks.push('Ravi opens the invite link → ' + JSON.stringify(await ravi.evaluate(() => ({ screen: CT.App.screen, field: document.getElementById('f-code').value, address: location.search, help: document.getElementById('f-help').textContent }))));
+      await shot(ravi, tag + '-08-ravi-invite-link');
+      await ravi.tap('#f-go');
+      await ravi.waitForFunction(() => CT.App.friends.data.friends.length === 1, null, { timeout: 10000 });
+      await sleep(300);
+      checks.push('Ravi adds Odane → leaderboard ' + JSON.stringify((await look(ravi)).rows));
+      // the leaderboard: by game and stat, every game or online only
+      await odane.tap('#f-refresh');
+      await settle(odane);
+      await toBoard(odane); await sleep(200);
+      checks.push('Odane overall → ' + JSON.stringify((await look(odane)).rows));
+      await shot(odane, tag + '-09-odane-overall');
+      await odane.tap('[data-f-mode="burns"]'); await sleep(150);
+      await odane.tap('[data-f-metric="sets"]'); await sleep(150);
+      checks.push('Burns, sets won → ' + JSON.stringify((await look(odane)).rows));
+      await shot(odane, tag + '-10-burns-sets');
+      await odane.tap('[data-f-mode="bull"]'); await sleep(150);
+      await odane.tap('[data-f-metric="callRate"]'); await sleep(150);
+      const bull = await look(odane);
+      checks.push('Bull, calls right → ' + JSON.stringify(bull.rows) + ' · "' + bull.help + '"');
+      await shot(odane, tag + '-11-bull-call-rate');
+      await odane.tap('[data-f-online="1"]'); await sleep(150);
+      checks.push('… online only → ' + JSON.stringify((await look(odane)).rows));
+      await shot(odane, tag + '-12-bull-online');
+      await odane.tap('[data-f-mode="donkey"]'); await sleep(150);
+      await odane.tap('[data-f-online="0"]'); await sleep(150);
+      await odane.tap('[data-f-metric="bestReact"]'); await sleep(150);
+      checks.push('Donkey, fastest put-down (smaller wins) → ' + JSON.stringify((await look(odane)).rows));
+      await odane.tap('[data-f-mode="stripme"]'); await sleep(150);
+      await shot(odane, tag + '-13-stripme-pills');
+      // side by side with Tess, then remove her
+      await odane.tap('[data-f-mode="bull"]'); await sleep(150);
+      const tessCode = (await look(tess)).code;
+      await odane.tap('.board-row[data-who="' + tessCode + '"]');
+      await sleep(450);
+      await shot(odane, tag + '-14-compare-tess');
+      checks.push('Tess and Odane, Bull → ' + JSON.stringify(await odane.evaluate(() => [...document.querySelectorAll('.vs tbody tr')].map(tr => [...tr.children].map(c => (c.className === 'better' ? '▲' : '') + c.textContent).join(' | ')))));
+      await odane.tap('#f-remove'); await sleep(250);
+      await shot(odane, tag + '-15-remove-confirm');
+      await odane.tap('#f-remove-yes');
+      await odane.waitForFunction(() => !CT.App.sheet, null, { timeout: 10000 });
+      await sleep(200);
+      const o3 = await look(odane);
+      checks.push('Odane removes Tess → friends ' + JSON.stringify(o3.friends) + ', toast "' + o3.toast + '"');
+      await tess.tap('#f-refresh');
+      await settle(tess);
+      checks.push('… and Tess’s list after refreshing: ' + JSON.stringify((await look(tess)).friends));
+      // your own stats on the small phone
+      await toBoard(tess); await sleep(150);
+      await tess.tap('.board-row.me');
+      await sleep(450);
+      await shot(tess, tag + '-16-tess-own-stats');
+      await tess.tap('#overlay [data-close]'); await sleep(200);
+      // Ravi plays a quick game of Donkey on his own (fast-forwarded); his stats reach Odane
+      await ravi.tap('#f-back'); await sleep(300);
+      await ravi.tap('[data-play="donkey"]'); await sleep(300);
+      await ravi.tap('#s-deal');
+      await ravi.waitForFunction(() => CT.App.sheet === 'result', null, { timeout: 180000 });
+      const rd = await ravi.evaluate(() => CT.App.stats.donkey);
+      checks.push('Ravi finishes a game of Donkey → his record ' + JSON.stringify(rd));
+      await sleep(3000);
+      await odane.tap('#f-refresh');
+      await settle(odane);
+      await odane.tap('[data-f-mode="donkey"]'); await sleep(150);
+      await odane.tap('[data-f-metric="played"]'); await sleep(150);
+      const od = await look(odane);
+      checks.push('Odane sees Ravi’s game → ' + JSON.stringify(od.rows));
+      await shot(odane, tag + '-17-ravi-donkey-arrives');
+      // offline: what was saved is still there
+      await odane.context().setOffline(true);
+      await odane.tap('#f-refresh');
+      await settle(odane);
+      const off = await look(odane);
+      checks.push('Odane offline → status ' + off.status + ', note "' + off.note + '", rows still ' + off.rows.length);
+      await odane.evaluate(() => { document.querySelector('.friends-body').scrollTop = 0; });
+      await shot(odane, tag + '-18-offline');
+      await odane.context().setOffline(false);
+      await odane.tap('#f-retry');
+      await settle(odane);
+      checks.push('… back online → status ' + (await look(odane)).status);
+      // in a room: Add next to someone who isn't a friend yet
+      await odane.tap('#f-back'); await sleep(300);
+      checks.push('home tile now: "' + (await look(odane)).tile + '"');
+      await odane.tap('[data-online="create"]'); await sleep(300);
+      await odane.tap('#o-go');
+      await odane.waitForSelector('.room-code', { timeout: 10000 });
+      const room = (await odane.textContent('.room-code')).trim();
+      await tess.tap('#f-back'); await sleep(300);
+      await tess.tap('[data-online="join"]'); await sleep(300);
+      await tess.fill('#o-code', room);
+      await tess.tap('#o-go');
+      await tess.waitForSelector('.room-code', { timeout: 10000 });
+      await sleep(900);
+      const seats = p => p.evaluate(() => [...document.querySelectorAll('.lobby-seat')].map(li => li.querySelector('.who').textContent + (li.querySelector('.add-friend') ? ' [Add]' : '')));
+      checks.push('Odane’s room → ' + JSON.stringify(await seats(odane)) + ' · Tess’s → ' + JSON.stringify(await seats(tess)));
+      await odane.evaluate(() => document.querySelector('.lobby-seats').scrollIntoView({ block: 'center' }));
+      await sleep(200);
+      await shot(odane, tag + '-19-lobby-add');
+      await odane.tap('.add-friend');
+      await odane.waitForFunction(() => CT.App.friends.data.friends.some(f => f.name === 'Tess'), null, { timeout: 10000 });
+      await tess.waitForFunction(() => CT.App.friends.data.friends.some(f => f.name === 'Odane'), null, { timeout: 10000 });
+      await sleep(300);
+      checks.push('Odane taps Add → his room ' + JSON.stringify(await seats(odane)) + ', toast "' + (await look(odane)).toast + '" · Tess’s room ' + JSON.stringify(await seats(tess)) + ', toast "' + (await look(tess)).toast + '"');
+      await shot(odane, tag + '-20-lobby-friends');
+      await tess.evaluate(() => document.querySelector('.lobby-seats').scrollIntoView({ block: 'center' }));
+      await sleep(200);
+      await shot(tess, tag + '-21-tess-told');
+      checks.forEach(c => console.log('  ' + c));
+      const errors = [].concat(...pages.map(p => p.errors)).filter(e => !/ERR_INTERNET_DISCONNECTED|Failed to fetch/.test(e));
+      console.log('  errors:', errors.length ? errors : 'none');
+    }
+
     if (SCENARIO === 'desktop') {
       const p = await open(browser, { ctx: { viewport: { width: 1280, height: 820 }, isMobile: false, hasTouch: true, deviceScaleFactor: 1 }, seed: 5, speed: 1 });
       await shot(p, '08-desktop-home');

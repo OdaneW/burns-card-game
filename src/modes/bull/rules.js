@@ -436,6 +436,28 @@
     return (n === 1 ? '1 card' : n + ' cards') + ' in your hand · ' + rankName(RANKS[state.rank], 2) + ' next';
   }
 
+  /* Stats each player collects (CT.tally): Bull calls and how many caught a
+     bluff, the times they were caught bluffing, and the piles they picked up. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'bull':
+          add(t, e.challenger, 'calls');
+          if (e.lie) { add(t, e.challenger, 'callsRight'); add(t, e.accused, 'caught'); }
+          break;
+        case 'pickup': add(t, e.player, 'piles'); break;
+      }
+    },
+    show: [
+      { key: 'callsRight', label: 'Bluffs caught', rank: true, help: 'Bull calls that caught a bluff.' },
+      { key: 'callRate', label: 'Bull calls right', rank: true, rate: ['callsRight', 'calls'], min: 5, help: 'How often a Bull call caught a bluff, from 5 calls on.' },
+      { key: 'calls', label: 'Bull calls', help: 'Every Bull call, right or wrong.' },
+      { key: 'caught', label: 'Caught bluffing', low: true, help: 'Bluffs someone called Bull on.' },
+      { key: 'piles', label: 'Piles picked up', low: true, help: 'Times picking up the whole pile.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'bull',
     name: 'Bull',
@@ -456,6 +478,7 @@
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'bull'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));

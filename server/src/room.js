@@ -21,6 +21,7 @@
      now()  random()  clock(startAt)  wake(ms)  persist(now?)
    ========================================================================== */
 import CT from './engine.js';
+import { idFor, codeFor } from './players.js';
 
 export const PROTOCOL = 1;
 
@@ -38,6 +39,7 @@ const CHAT_KEEP = 40;           // messages kept for phones that join or come ba
 const CHAT_BURST = 5;           // at most this many messages from one person…
 const CHAT_WINDOW_MS = 8000;    // …in this long
 const REACT_GAP_MS = 500;       // and a reaction at most this often
+const FRIEND_GAP_MS = 1000;     // "I've added you as a friend", at most this often
 const FIRST_MODES = ['burns', 'donkey'];   // what apps from before they said which games they have can play
 
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
@@ -152,7 +154,7 @@ export class RoomCore {
     return {
       code: r.code, phase: r.phase, gameNo: r.gameNo,
       mode: r.mode, size: r.size, options: r.options, host: r.host,
-      members: this.active().map(m => ({ id: m.id, name: m.name, connected: m.connected, pid: m.pid, computer: m.computer })),
+      members: this.active().map(m => ({ id: m.id, name: m.name, connected: m.connected, pid: m.pid, computer: m.computer, code: m.code || null })),
       // computer players at the table who aren't standing in for anyone
       bots: this.session ? this.session.state.players.filter(p => p.isBot && !seated.has(p.id)).map(p => ({ pid: p.id, name: p.name })) : []
     };
@@ -234,6 +236,7 @@ export class RoomCore {
       case 'leave': this.leave(m); break;
       case 'chat': this.chat(m, msg.text); break;
       case 'react': this.react(m, msg.r); break;
+      case 'friend': this.befriend(m, msg.to); break;
     }
   }
 
@@ -259,7 +262,8 @@ export class RoomCore {
       if (this.active().length >= MAX_MEMBERS) { this.fail(connId, 'full'); return; }
       m = {
         id: r.nextId++, token: token, name: this.uniqueName(cleanName(msg.name) || 'Player', null),
-        since: this.io.now(), goneAt: null, pid: null, computer: false, left: false
+        since: this.io.now(), goneAt: null, pid: null, computer: false, left: false,
+        code: codeFor(idFor(token))      // their friend code, so the others can add them as a friend
       };
       r.members.push(m);
       if (!this.member(r.host) || this.member(r.host).left) r.host = m.id;
@@ -270,6 +274,7 @@ export class RoomCore {
       }
     }
     m.modes = modes;
+    if (!m.code) m.code = codeFor(idFor(token));   // (someone who joined before there were friend codes)
     m.connId = connId;
     m.connected = true;
     m.goneAt = null;
@@ -313,7 +318,7 @@ export class RoomCore {
 
   rateFor(m) {
     let r = this.rates.get(m.id);
-    if (!r) { r = { chat: [], react: -Infinity }; this.rates.set(m.id, r); }
+    if (!r) { r = { chat: [], react: -Infinity, friend: -Infinity }; this.rates.set(m.id, r); }
     return r;
   }
 
@@ -340,6 +345,18 @@ export class RoomCore {
     if (now - rate.react < REACT_GAP_MS) return;
     rate.react = now;
     this.toAll({ t: 'react', from: m.id, r: kind, at: now });
+  }
+
+  /* "I've just added you as a friend" (on the friends server): to that person
+     only, so their app can update its list now and say so. Their app checks
+     with the friends server before believing it. */
+  befriend(m, to) {
+    const other = this.room.members.find(x => x.id === to && !x.left);
+    if (!other || other === m || !other.connId) return;
+    const now = this.io.now(), rate = this.rateFor(m);
+    if (now - rate.friend < FRIEND_GAP_MS) return;
+    rate.friend = now;
+    this.io.send(other.connId, { t: 'friend', from: m.id, name: m.name });
   }
 
   /* ---------- the game ---------- */
@@ -546,7 +563,7 @@ export class RoomCore {
       v: 1,
       room: Object.assign({}, this.room, {
         members: this.room.members.map(m => ({
-          id: m.id, token: m.token, name: m.name, since: m.since, pid: m.pid, computer: m.computer, left: m.left, modes: m.modes,
+          id: m.id, token: m.token, name: m.name, since: m.since, pid: m.pid, computer: m.computer, left: m.left, modes: m.modes, code: m.code,
           goneAt: m.connected ? now : m.goneAt
         }))
       }),

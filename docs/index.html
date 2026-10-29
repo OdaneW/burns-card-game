@@ -1479,6 +1479,100 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   .chat-pop { animation: none !important; }
 }
 
+/* ---------- friends and the leaderboard ---------- */
+.friends-tile { background: linear-gradient(160deg, #3F3D68, var(--board-deep) 82%); }
+.friends-tile .online-icon { background: rgba(201, 168, 240, .16); color: #D9C3F7; }
+.friends-chip { background: rgba(201, 168, 240, .16); color: #D9C3F7; }
+
+#screen-friends { padding-block: 10px 16px; gap: 10px; }
+#screen-friends .setup-head .wordmark { font-size: 26px; }
+/* the rows of choices reach the screen's edges, and nothing else may scroll sideways */
+.friends-body { gap: 20px; margin-inline: -16px; padding-inline: 16px; overflow-x: hidden; }
+.icon-btn.spin svg { animation: spin 1s linear infinite; }
+.lobby-note.warn { background: rgba(240, 100, 60, .12); box-shadow: inset 0 0 0 1.5px rgba(240, 100, 60, .4); }
+.lobby-note .link-btn { padding: 0 2px; font-size: inherit; color: var(--ink); }
+.friend-card .add-row { margin-top: 6px; }
+.friend-title { font: 800 22px/1.2 var(--font-ui); }
+.friend-code { font-size: clamp(28px, 9.4vw, 44px); letter-spacing: .1em; padding-left: .1em; }
+.friend-code.waiting { opacity: .35; text-shadow: none; }
+.link-btn.inline { display: inline; padding: 0 2px; font-size: inherit; }
+.add-row { display: flex; gap: 8px; width: 100%; }
+.add-row .text-input { flex: 1; min-width: 0; }
+.add-row .btn { flex: none; padding: 0 20px; }
+.friend-input { padding: 13px 8px 11px; font-size: 22px; letter-spacing: .12em; }
+.friend-input::placeholder { letter-spacing: .12em; }
+#f-add .help { min-height: 0; }
+
+.board { display: grid; gap: 10px; }
+.board h3 { font: 700 16px/1.25 var(--font-ui); }
+/* rows of choices that scroll sideways when they don't fit */
+.pills {
+  position: relative;   /* what the choices' offsetLeft is measured from */
+  display: flex; gap: 6px;
+  overflow-x: auto; scrollbar-width: none;
+  margin-inline: -16px; padding: 2px 16px 4px;
+}
+.pills::-webkit-scrollbar { display: none; }
+.pills button {
+  flex: none; border: 0; border-radius: 99px; padding: 9px 15px;
+  background: var(--board-deep); color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  font: 700 15px/1.1 var(--font-ui); white-space: nowrap;
+  cursor: pointer; touch-action: manipulation;
+}
+.pills button[aria-pressed="true"] { background: var(--marigold); color: var(--ink-on-paint); box-shadow: 0 2px 0 var(--marigold-deep); }
+.pills-sm button { padding: 7px 12px; font-size: 13px; }
+.pills-sm button[aria-pressed="true"] { background: var(--ink); color: var(--ink-on-paint); box-shadow: none; }
+.seg-sm button { padding: 8px 6px; font-size: 14px; }
+
+.board-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.board-row {
+  width: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 9px 14px 9px 8px; border: 0; border-radius: 12px;
+  background: rgba(6, 30, 29, .45); color: var(--ink);
+  text-align: left; cursor: pointer; touch-action: manipulation;
+}
+.board-row:active { background: rgba(6, 30, 29, .7); }
+.board-row.me { background: rgba(244, 185, 66, .1); box-shadow: inset 0 0 0 1.5px rgba(244, 185, 66, .45); }
+.board-row.fresh { animation: friendIn 1.8s ease-out; }
+.board-row .rank { font: 400 17px/1 var(--font-display); text-align: center; color: var(--ink-soft); }
+.board-row .rank.top1 { font-size: 22px; color: var(--marigold); text-shadow: .06em .06em 0 var(--ember); }
+.board-row .rank.top2 { font-size: 19px; color: var(--ink); }
+.board-row .rank.top3 { font-size: 19px; color: #F3A27F; }
+.board-row .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--paint, var(--marigold)); color: var(--ink-on-paint); font: 800 15px/1 var(--font-ui); }
+.board-row .who { display: grid; gap: 1px; min-width: 0; }
+.board-row .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row .name small { margin-left: 4px; color: var(--ink-soft); font-weight: 600; }
+.board-row .sub { color: var(--ink-soft); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row .val { font: 400 20px/1 var(--font-display); color: var(--marigold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.board-row.unranked .val { color: var(--ink-soft); opacity: .6; }
+.board-empty { padding: 14px; border-radius: 12px; text-align: center; color: var(--ink-soft); font-weight: 600; box-shadow: inset 0 0 0 1.5px var(--line); }
+.board-help { min-height: 0 !important; }
+@keyframes friendIn { from { box-shadow: inset 0 0 0 2px var(--marigold), 0 0 0 6px rgba(244, 185, 66, .35); } }
+
+/* a friend and you, side by side */
+.sheet-sub { margin-top: -6px; color: var(--ink-soft); font-size: 14px; }
+.vs-wrap { margin-inline: -4px; }
+.vs { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.vs th, .vs td { padding: 9px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+.vs thead th { font: 700 14px/1.2 var(--font-ui); color: var(--ink); max-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs tbody th { text-align: left; font-weight: 600; color: var(--ink-soft); }
+.vs td { font-weight: 800; color: var(--ink); min-width: 56px; white-space: nowrap; }
+.vs td.better { color: var(--marigold); }
+.vs td.better::before { content: '▲ '; font-size: .7em; vertical-align: .15em; }
+
+/* in a room: add someone as a friend */
+.seat-end { display: flex; align-items: center; gap: 8px; }
+.add-friend {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 10px 6px 8px; border: 0; border-radius: 99px;
+  background: rgba(201, 168, 240, .16); color: #D9C3F7;
+  font: 700 13px/1 var(--font-ui); cursor: pointer; touch-action: manipulation;
+}
+.add-friend svg { width: 16px; height: 16px; }
+.add-friend:disabled { opacity: .6; }
+
 </style>
 </head>
 <body>
@@ -1497,6 +1591,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
   <main class="screen" id="screen-setup" aria-label="Game setup" hidden></main>
   <main class="screen" id="screen-table" aria-label="Card table" hidden></main>
   <main class="screen" id="screen-lobby" aria-label="Online room" hidden></main>
+  <main class="screen" id="screen-friends" aria-label="Friends and leaderboard" hidden></main>
 </div>
 <div class="net-bar" id="net-bar" role="status" hidden><span class="net-spin" aria-hidden="true"></span>Connection lost. Reconnecting…</div>
 <div class="overlay" id="overlay" hidden></div>
@@ -1510,7 +1605,7 @@ h1, h2, h3 { margin: 0; text-wrap: balance; }
 
 <script>
 window.CT = window.CT || {};
-CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
+CT.BUILD = {"version":"0.12.0","id":"3a5648a","target":"app","server":"wss://burns-card-game.odanew1.workers.dev"};
 /* ---- src/engine/core.js ---- */
 /* ==========================================================================
    CARD TABLE ENGINE · core
@@ -1648,6 +1743,25 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     return out;
   }
 
+  /* ---------- stats counted as a game is played ---------------------------
+     A mode may give `stats`: { count(tally, event, state), show: [...] }.
+     The Session calls count() with each new event, and it adds to
+     tally[pid]. `show` says what the records and the leaderboard display:
+       { key, label, help (what it counts, in a line), rank: true (on the
+         leaderboard), low: true (fewer is better), best: 'min' (the best
+         single game rather than a total), rate: [part, whole] (a
+         percentage), min (how many before a rate ranks), unit, note } */
+  function tallyAdd(t, pid, key, n) {
+    if (pid == null) return;
+    var p = t[pid] || (t[pid] = {});
+    p[key] = (p[key] || 0) + (n == null ? 1 : n);
+  }
+  function tallyBest(t, pid, key, v, how) {
+    if (pid == null || typeof v !== 'number' || !isFinite(v)) return;
+    var p = t[pid] || (t[pid] = {});
+    if (p[key] == null || (how === 'max' ? v > p[key] : v < p[key])) p[key] = v;
+  }
+
   /* A rule choice that only matters with another one (showIf: { mode: 'strip' })
      is left off the setup screen otherwise. */
   function optionShown(opt, values) {
@@ -1674,6 +1788,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
   CT.listModes = listModes;
   CT.resolveOptions = resolveOptions;
   CT.optionShown = optionShown;
+  CT.tally = { add: tallyAdd, best: tallyBest };
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
 
 /* ---- src/engine/session.js ---- */
@@ -1735,6 +1850,13 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
       timing: config.timing,
       now: this.clock.now()
     });
+    // each player's stats for this game, counted from its events as they
+    // happen (a game saved before there were stats counts from here on)
+    if (!this.state.tally) {
+      this.state.tally = {};
+      this.state.tallySeq = config.state ? (this.state.seq || 0) : 0;
+    }
+    this._count();
     this.botRng = CT.makeRng((config.botSeed != null ? config.botSeed : (this.state.rng ^ 0x9E3779B9)) >>> 0);
     this.botPlans = {};
     this.botMemory = {};
@@ -1750,7 +1872,23 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
   };
 
   Session.prototype._changed = function (info) {
+    this._count();
     for (var i = 0; i < this.listeners.length; i++) this.listeners[i](info);
+  };
+
+  /* New events go into each player's stats for this game (mode.stats.count). */
+  Session.prototype._count = function () {
+    var stats = this.mode.stats, s = this.state;
+    if (!stats || !stats.count || !s.events || !s.tally) return;
+    var from = s.tallySeq || 0;
+    if ((s.seq || 0) < from) from = 0;      // renumbered (a tutorial lays out its own table)
+    for (var i = 0; i < s.events.length; i++) {
+      var e = s.events[i];
+      if (!(e.seq > from)) continue;
+      try { stats.count(s.tally, e, s); } catch (err) { /* a stat must never stop a game */ }
+      from = e.seq;
+    }
+    s.tallySeq = from;
   };
 
   /** Apply a player's action. Returns the mode's { ok, code, message, … }. */
@@ -1795,8 +1933,11 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     }
   };
 
+  /* What one player may see, with their own stats for this game so far. */
   Session.prototype.view = function (playerId, opts) {
-    return this.mode.view(this.state, playerId, opts || {});
+    var v = this.mode.view(this.state, playerId, opts || {});
+    if (v && this.state.tally) v.tally = JSON.parse(JSON.stringify(this.state.tally[playerId] || {}));
+    return v;
   };
 
   Session.prototype.pause = function () { this.clock.pause(); };
@@ -1827,6 +1968,202 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
   CT.Clock = Clock;
   CT.ManualClock = ManualClock;
   CT.Session = Session;
+})(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
+
+/* ---- src/engine/standings.js ---- */
+/* ==========================================================================
+   STANDINGS · each phone's record of its own games, and the leaderboard
+   For each game a phone keeps: games played and won, the current and best
+   winning streaks, and what that game counts for the player (its
+   mode.stats.show list: sets won, fours of a kind, bluffs caught, …), added
+   up game after game, or only the best kept (the fastest put-down). Online
+   games are kept again on their own, under `online`.
+
+   The friends screen ranks you and your friends from these records, by
+   wins, win rate, games, best streak, or anything the game ranks by.
+   Nothing here touches the page, so the tests use it as it is.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var MIN_GAMES = 5;   // a win rate counts from this many games
+
+  function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+
+  /* One finished game into a record: { played, won, streak, bestStreak, …the game's counts }. */
+  function addGame(rec, won, tally, mode) {
+    rec.played = (rec.played || 0) + 1;
+    rec.won = (rec.won || 0) + (won ? 1 : 0);
+    rec.streak = won ? (rec.streak || 0) + 1 : 0;
+    rec.bestStreak = Math.max(num(rec.bestStreak) || 0, rec.streak);
+    var show = (mode && mode.stats && mode.stats.show) || [];
+    show.forEach(function (x) {
+      if (x.rate) return;                     // worked out from two counts when shown
+      var n = num(tally ? tally[x.key] : null);
+      if (n == null) return;
+      if (x.best === 'min') { if (num(rec[x.key]) == null || n < rec[x.key]) rec[x.key] = n; }
+      else if (x.best === 'max') { if (num(rec[x.key]) == null || n > rec[x.key]) rec[x.key] = n; }
+      else rec[x.key] = (rec[x.key] || 0) + n;
+    });
+    return rec;
+  }
+
+  /* A finished game into everything the phone keeps (all: { modeId: record }). */
+  function record(all, mode, won, tally, online, now) {
+    var rec = all[mode.id] || (all[mode.id] = {});
+    addGame(rec, won, tally, mode);
+    if (online) addGame(rec.online || (rec.online = {}), won, tally, mode);
+    rec.last = now;
+    return rec;
+  }
+
+  /* One player's record for a game ('all': every game added together), online games only or not. */
+  function recordFor(all, modeId, online) {
+    all = all || {};
+    if (modeId !== 'all') {
+      var rec = all[modeId] || {};
+      return (online ? rec.online : rec) || {};
+    }
+    var sum = { played: 0, won: 0, bestStreak: 0 };
+    CT.listModes().forEach(function (m) {
+      var r = all[m.id];
+      r = r && (online ? r.online : r);
+      if (!r) return;
+      sum.played += num(r.played) || 0;
+      sum.won += num(r.won) || 0;
+      sum.bestStreak = Math.max(sum.bestStreak, num(r.bestStreak) || 0);
+    });
+    return sum;
+  }
+
+  var fmt = {
+    count: function (n) { return String(Math.round(n)); },
+    pct: function (n) { return Math.round(n * 100) + '%'; },
+    ms: function (n) { return (n / 1000).toFixed(2) + ' s'; }
+  };
+
+  /* What a leaderboard ranks by, for one game or for 'all':
+     { id, label, help, get(rec) → number or null (can't count it yet), fmt(n), low (smaller is better), need(rec) }. */
+  function metrics(modeId) {
+    var games = function (r) { return num(r.played) || 0; };
+    var list = [
+      { id: 'won', label: 'Wins', help: 'Games won. A shared win counts for everyone who shared it.',
+        get: function (r) { return games(r) ? num(r.won) || 0 : null; } },
+      { id: 'rate', label: 'Win %', help: 'Wins out of games played, once someone has played ' + MIN_GAMES + ' games.', pct: true,
+        get: function (r) { return games(r) >= MIN_GAMES ? (num(r.won) || 0) / games(r) : null; },
+        need: function (r) { return 'Win % after ' + MIN_GAMES + ' games · ' + games(r) + ' so far'; } },
+      { id: 'played', label: 'Games', help: 'Games played to the end.', get: function (r) { return games(r) || null; } },
+      { id: 'bestStreak', label: 'Best streak', help: modeId === 'all' ? 'The most wins in a row, in any one game.' : 'The most wins in a row.',
+        get: function (r) { return games(r) ? num(r.bestStreak) || 0 : null; } }
+    ];
+    var mode = modeId === 'all' ? null : CT.getMode(modeId);
+    ((mode && mode.stats && mode.stats.show) || []).forEach(function (x) {
+      if (!x.rank) return;
+      list.push(statMetric(x, mode));
+    });
+    list.forEach(function (m) { if (!m.fmt) m.fmt = m.pct ? fmt.pct : fmt.count; });
+    return list;
+  }
+
+  function labelOf(mode, key) {
+    var x = mode.stats.show.filter(function (y) { return y.key === key; })[0];
+    return x ? x.label.toLowerCase() : key;
+  }
+
+  /* A count a game keeps, as something to rank by or show. */
+  function statMetric(x, mode) {
+    var m = { id: x.key, label: x.label, help: x.help || x.label, low: !!x.low, note: x.note || '' };
+    if (x.rate) {
+      var top = x.rate[0], bottom = x.rate[1], min = x.min || 1;
+      m.pct = true;
+      m.get = function (r) { var d = num(r[bottom]) || 0; return d >= min ? (num(r[top]) || 0) / d : null; };
+      m.need = function (r) { return 'Counts from ' + min + ' ' + labelOf(mode, bottom) + ' · ' + (num(r[bottom]) || 0) + ' so far'; };
+      m.sub = function (r) { return (num(r[top]) || 0) + ' of ' + plural(num(r[bottom]) || 0, labelOf(mode, bottom).replace(/s$/, '')); };
+    } else if (x.best) {
+      m.get = function (r) { return num(r[x.key]); };
+      m.need = function () { return 'None yet'; };
+      if (x.unit === 'ms') m.fmt = fmt.ms;
+    } else {
+      m.get = function (r) { return (num(r.played) || 0) ? num(r[x.key]) || 0 : null; };
+    }
+    return m;
+  }
+
+  /* Every line of the side-by-side comparison for a game: what it ranks by, then the rest. */
+  function details(modeId) {
+    var list = metrics(modeId);
+    list.splice(3, 0, { id: 'streak', label: 'Current streak', help: 'Wins in a row right now.', fmt: fmt.count,
+      get: function (r) { return (num(r.played) || 0) ? num(r.streak) || 0 : null; } });
+    list.forEach(function (m) { if (m.id === 'played') m.neutral = true; });   // more games isn't better
+    if (modeId === 'all') {
+      CT.listModes().forEach(function (mode) {
+        list.push({ id: 'wins-' + mode.id, label: (mode.shortName || mode.name) + ' wins', help: 'Games of ' + mode.name + ' won.', fmt: fmt.count,
+          get: function (r, all, online) {      // (this one needs the whole record)
+            var rec = recordFor(all, mode.id, online);
+            return num(rec.played) ? num(rec.won) || 0 : null;
+          } });
+      });
+      return list;
+    }
+    var mode = CT.getMode(modeId);
+    ((mode && mode.stats && mode.stats.show) || []).forEach(function (x) {
+      if (x.rank) return;
+      var m = statMetric(x, mode);
+      if (!m.fmt) m.fmt = m.pct ? fmt.pct : fmt.count;
+      if (!x.low) m.neutral = true;     // more isn't better or worse (Bull calls)
+      list.push(m);
+    });
+    return list;
+  }
+
+  /* The leaderboard: people [{ name, me?, stats }] ranked for one game and metric, best first.
+     → [{ person, rec, value, rank }]; rank is null for anyone it can't count yet (they go last).
+     Equal values share a rank. */
+  function standings(people, modeId, metricId, online) {
+    var list = metrics(modeId);
+    var metric = list.filter(function (m) { return m.id === metricId; })[0] || list[0];
+    var rows = people.map(function (p) {
+      var rec = recordFor(p.stats, modeId, online);
+      return { person: p, rec: rec, value: metric.get(rec) };
+    });
+    rows.sort(function (a, b) {
+      var an = a.value == null, bn = b.value == null;
+      if (an !== bn) return an ? 1 : -1;
+      if (!an && a.value !== b.value) return metric.low ? a.value - b.value : b.value - a.value;
+      var ga = num(a.rec.played) || 0, gb = num(b.rec.played) || 0;
+      if (ga !== gb) return gb - ga;
+      if (!!a.person.me !== !!b.person.me) return a.person.me ? -1 : 1;
+      return String(a.person.name).localeCompare(String(b.person.name));
+    });
+    var rank = 0, last = null;
+    rows.forEach(function (r, i) {
+      if (r.value == null) { r.rank = null; return; }
+      if (last === null || r.value !== last) { rank = i + 1; last = r.value; }
+      r.rank = rank;
+    });
+    return { metric: metric, rows: rows };
+  }
+
+  /* Under a name on the leaderboard: how many games, and what's missing if it can't be ranked yet. */
+  function summary(rec, metric, value, online) {
+    var games = num(rec.played) || 0;
+    if (!games) return online ? 'No online games yet' : 'No games yet';
+    if (value == null && metric.need) return metric.need(rec);
+    if (metric.sub) return metric.sub(rec);
+    return plural(games, 'game') + ' · ' + plural(num(rec.won) || 0, 'win');
+  }
+
+  CT.Standings = {
+    MIN_GAMES: MIN_GAMES,
+    addGame: addGame,
+    record: record,
+    recordFor: recordFor,
+    metrics: metrics,
+    details: details,
+    standings: standings,
+    summary: summary,
+    fmt: fmt
+  };
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
 
 /* ---- src/modes/burns/rules.js ---- */
@@ -2705,6 +3042,30 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
       ' · ' + (state.players.length - 1) + ' opponents';
   }
 
+  /* Stats each player collects (CT.tally): sets won, Flushes, and in Real
+     Burns the slaps given and taken, and the times you were left holding cards. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'setWon': add(t, e.player, 'sets'); break;
+        case 'flush': (e.players || []).forEach(function (pid) { add(t, pid, 'flushWins'); }); break;
+        case 'loser': add(t, e.player, 'burned'); break;
+        case 'penaltyResult':
+          add(t, e.shuffler, 'slapsGiven', (e.soft || 0) + (e.hard || 0));
+          add(t, e.loser, 'slapsTaken', (e.soft || 0) + (e.hard || 0));
+          break;
+      }
+    },
+    show: [
+      { key: 'sets', label: 'Sets won', rank: true, help: 'Sets won with the highest card.' },
+      { key: 'flushWins', label: 'Flushes', rank: true, help: 'Starting hands with all four suits, when the Flush rule is on.' },
+      { key: 'slapsGiven', label: 'Slaps given', rank: true, note: 'Real Burns', help: 'Slaps counted on the loser’s hand in Real Burns penalty rounds.' },
+      { key: 'burned', label: 'Times burned', low: true, note: 'Real Burns', help: 'Games of Real Burns lost: the last one left holding cards.' },
+      { key: 'slapsTaken', label: 'Slaps taken', low: true, note: 'Real Burns', help: 'Slaps taken in Real Burns penalty rounds.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'burns',
     name: 'Burns',
@@ -2720,6 +3081,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'burns'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
@@ -3498,6 +3860,26 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     return 'Round ' + state.round + ' · ' + mine;
   }
 
+  /* Stats each player collects (CT.tally): fours of a kind, the fastest
+     put-down, letters taken and the times they spelled DONKEY. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'declare': add(t, e.player, 'fours'); break;
+        case 'react': CT.tally.best(t, e.player, 'bestReact', e.ms, 'min'); break;
+        case 'roundEnd': (e.losers || []).forEach(function (pid) { add(t, pid, 'letters'); }); break;
+        case 'gameEnd': (e.donkeys || []).forEach(function (pid) { add(t, pid, 'donkeys'); }); break;
+      }
+    },
+    show: [
+      { key: 'fours', label: 'Fours of a kind', rank: true, help: 'Fours of a kind put down.' },
+      { key: 'bestReact', label: 'Fastest put-down', rank: true, best: 'min', low: true, unit: 'ms', help: 'The quickest put-down after someone else’s four of a kind.' },
+      { key: 'letters', label: 'Letters taken', low: true, help: 'Letters for being the last to put your cards down.' },
+      { key: 'donkeys', label: 'Times the Donkey', low: true, help: 'Games lost by spelling DONKEY.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'donkey',
     name: 'Pass-Roun Donkey',
@@ -3518,6 +3900,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'donkey'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
@@ -4054,6 +4437,28 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     return (n === 1 ? '1 card' : n + ' cards') + ' in your hand · ' + rankName(RANKS[state.rank], 2) + ' next';
   }
 
+  /* Stats each player collects (CT.tally): Bull calls and how many caught a
+     bluff, the times they were caught bluffing, and the piles they picked up. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'bull':
+          add(t, e.challenger, 'calls');
+          if (e.lie) { add(t, e.challenger, 'callsRight'); add(t, e.accused, 'caught'); }
+          break;
+        case 'pickup': add(t, e.player, 'piles'); break;
+      }
+    },
+    show: [
+      { key: 'callsRight', label: 'Bluffs caught', rank: true, help: 'Bull calls that caught a bluff.' },
+      { key: 'callRate', label: 'Bull calls right', rank: true, rate: ['callsRight', 'calls'], min: 5, help: 'How often a Bull call caught a bluff, from 5 calls on.' },
+      { key: 'calls', label: 'Bull calls', help: 'Every Bull call, right or wrong.' },
+      { key: 'caught', label: 'Caught bluffing', low: true, help: 'Bluffs someone called Bull on.' },
+      { key: 'piles', label: 'Piles picked up', low: true, help: 'Times picking up the whole pile.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'bull',
     name: 'Bull',
@@ -4074,6 +4479,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'bull'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
@@ -4676,6 +5082,29 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     return 'Round ' + state.round + ' · ' + deck + ' · garments: you ' + (n - (me ? me.lost : 0)) + ', ' + (them ? them.name : 'them') + ' ' + (n - (them ? them.lost : 0));
   }
 
+  /* Stats each player collects (CT.tally): rounds won and lost, garments
+     taken off the other player and lost, and the piles picked up. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'roundEnd':
+          add(t, e.winner, 'roundsWon');
+          add(t, e.loser, 'roundsLost');
+          if (e.garment) { add(t, e.winner, 'garmentsTaken'); add(t, e.loser, 'garmentsLost'); }
+          break;
+        case 'pickup': add(t, e.player, 'piles'); break;
+      }
+    },
+    show: [
+      { key: 'roundsWon', label: 'Rounds won', rank: true, help: 'Rounds won, in Strip Mode and Quick Play.' },
+      { key: 'garmentsTaken', label: 'Garments taken', rank: true, help: 'Garments the other player took off after losing a round to you.' },
+      { key: 'roundsLost', label: 'Rounds lost', low: true, help: 'Rounds lost.' },
+      { key: 'garmentsLost', label: 'Garments lost', low: true, help: 'Garments you took off after losing a round.' },
+      { key: 'piles', label: 'Piles picked up', low: true, help: 'Times picking up the pile.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'stripme',
     name: 'Strip-Me',
@@ -4694,6 +5123,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'stripme'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
@@ -11741,6 +12171,8 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
 
   Online.prototype.store = function () { UI.store.set(KEY, this.data); };
   Online.prototype.available = function () { return !!serverUrl(); };
+  /* The same server over https, for everything that isn't a room (friends). */
+  Online.prototype.httpUrl = function (path) { return serverUrl().replace(/^ws/, 'http').replace(/\/+$/, '') + path; };
   Online.prototype.inRoom = function () { return !!this.conn; };
   Online.prototype.me = function () {
     var self = this;
@@ -11926,6 +12358,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
         notice: function (m) { UI.toast(esc(m.message)); },
         chat: function (m) { self.social.receive(m.m); },
         react: function (m) { self.social.reaction(m); },
+        friend: function (m) { if (self.app.friends) self.app.friends.addedBy(m.from); },
         error: function (m) { self.onError(m); },
         lost: function () { if (self.remote) self.remote.dropPending(); },
         status: function (s) { self.onStatus(s); }
@@ -11954,6 +12387,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
     this.data.room = { code: msg.code, mode: this.data.room && this.data.room.code === msg.code ? this.data.room.mode : null, at: Date.now() };
     this.store();
     this.social.history(msg.code, msg.chat);
+    if (this.app.friends) this.app.friends.touch();   // so the others in the room can add you as a friend
   };
 
   Online.prototype.onRoom = function (room) {
@@ -12080,6 +12514,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
       ? size + ' at the table: ' + humans + (humans === 1 ? ' person' : ' people') + (size - humans ? ' and ' + (size - humans) + ' computer ' + (size - humans === 1 ? 'player' : 'players') : '') + '.' +
         (people.length > size ? ' Everyone else waits for the next game.' : '')
       : '';
+    var friends = this.app.friends;
     var seatRows = rows.map(function (row, i) {
       if (row.bot) {
         return '<li class="lobby-seat bot"><span class="avatar">' + UI.icon.people + '</span><span class="who">' + (row.name ? esc(row.name) + ' <small>computer player</small>' : 'Computer player') + '</span>' +
@@ -12089,10 +12524,19 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
       var tags = [];
       if (m.id === self.you) tags.push('you');
       if (m.id === r.host) tags.push('host');
+      // anyone else here can be added as a friend, with a tap
+      var canAdd = friends && m.code && m.id !== self.you;
+      var friend = canAdd && friends.isFriend(m.code);
+      if (friend) tags.push('friend');
+      var adding = canAdd && friends.adding[m.code];
+      var add = canAdd && !friend
+        ? '<button class="add-friend" type="button" data-befriend="' + esc(m.code) + '" data-to="' + m.id + '" data-name="' + esc(m.name) + '" aria-label="Add ' + esc(m.name) + ' as a friend"' + (adding ? ' disabled' : '') + '>' +
+            UI.icon.addFriend + '<span>' + (adding ? 'Adding…' : 'Add') + '</span></button>'
+        : '';
       var state = row.waits ? (lobby ? 'Waits' : 'Next game') : m.computer ? 'Computer covering' : m.connected ? 'Here' : 'Away';
       return '<li class="lobby-seat' + (row.waits ? ' waits' : '') + '" data-member="' + m.id + '"><span class="avatar" style="--paint:' + PAINTS[i % PAINTS.length] + '">' + esc(m.name.charAt(0).toUpperCase()) + '</span>' +
         '<span class="who">' + esc(m.name) + (tags.length ? ' <small>' + tags.join(' · ') + '</small>' : '') + '</span>' +
-        '<span class="state ' + (m.connected ? 'on' : 'off') + '">' + state + '</span></li>';
+        '<span class="seat-end">' + add + '<span class="state ' + (m.connected ? 'on' : 'off') + '">' + state + '</span></span></li>';
     }).join('');
 
     var gameField = host && lobby
@@ -12177,6 +12621,13 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
         if (b.dataset.lMode === r.mode) return;
         var m = CT.getMode(b.dataset.lMode), cfg = app.modeSettings(m);
         self.conn.send({ t: 'setup', mode: m.id, size: cfg.opponents + 1, options: cfg.options });
+      });
+    });
+    screen.querySelectorAll('[data-befriend]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        b.disabled = true;
+        b.lastChild.textContent = 'Adding…';
+        friends.addFromRoom(b.dataset.befriend, b.dataset.name, +b.dataset.to);
       });
     });
     screen.querySelectorAll('[data-l-size]').forEach(function (b) {
@@ -12316,6 +12767,537 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
   UI.Online = Online;
 })(window.CT);
 
+/* ---- src/ui/friends.js ---- */
+/* ==========================================================================
+   FRIENDS · friend codes and the leaderboard
+   Everyone who plays online, or opens Friends, gets a friend code. Type a
+   friend's code here, open their invite link, or tap Add next to them in an
+   online room, and you're on each other's list until either of you removes
+   the other.
+
+   The leaderboard ranks you and your friends in each game (standings.js):
+   wins, win %, games, best streak, and whatever that game counts. Each
+   phone keeps the record of its own games and sends it to the server after
+   every game, so friends see it; counting every game, or online ones only.
+   The server (server/src/players.js) knows a phone only by its online token.
+   ========================================================================== */
+(function (CT) {
+  'use strict';
+  var UI = CT.UI;
+  var S = CT.Standings;
+  var KEY = 'cardtable.friends.v1';   // { joined, you: { code, name }, friends: [{ code, name, stats, updated }], at, view }
+  var TIMEOUT_MS = 10000;
+  var TOUCH_MS = 60000;               // joining a room tells the server you're about, at most this often
+  var PAINTS = ['#F4B942', '#F0643C', '#7FD1C1', '#C9A8F0', '#9BC76B', '#F59BB8'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return UI.esc(s); }
+
+  UI.icon.trophy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5h10v5a5 5 0 01-10 0z"/><path d="M7 5.5H4.5v1.2a3.3 3.3 0 003.1 3.3M17 5.5h2.5v1.2a3.3 3.3 0 01-3.1 3.3"/><path d="M12 13.5v3.5M8 20.5h8M9.2 20.5c.3-2 1.4-3.4 2.8-3.4s2.5 1.4 2.8 3.4"/></svg>';
+  UI.icon.refresh = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.5 15.75A7.5 7.5 0 1118.5 8.25"/><path d="M19.5 3.5v5h-5"/></svg>';
+  UI.icon.addFriend = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9.5" cy="8" r="3.5"/><path d="M3 20c.6-3.7 3.3-5.8 6.5-5.8s5.9 2.1 6.5 5.8"/><path d="M19 7.5v6M16 10.5h6"/></svg>';
+
+  /* What someone typed: "k7pq-2mxd" → "K7PQ2MXD" (codes never use 0, O, 1 or I). */
+  function cleanCode(s) { return String(s == null ? '' : s).toUpperCase().replace(/[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g, '').slice(0, 16); }
+  /* K7PQ2MXD → K7PQ-2MXD, easier to read out */
+  function showCode(code) { return String(code || '').replace(/(.{4})(?=.)/g, '$1-'); }
+  function paintFor(code) {
+    var h = 0;
+    for (var i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) >>> 0;
+    return PAINTS[h % PAINTS.length];
+  }
+  function initial(name) { return (Array.from(String(name || '?').trim())[0] || '?').toUpperCase(); }
+  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function ago(t) {
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+    var d = Math.floor(s / 86400);
+    return d === 1 ? 'yesterday' : d + ' days ago';
+  }
+
+  function Friends(app) {
+    this.app = app;
+    this.online = app.online;
+    var d = UI.store.get(KEY, null);
+    this.data = d && typeof d === 'object' ? d : {};
+    if (!Array.isArray(this.data.friends)) this.data.friends = [];
+    var v = this.data.view || {};
+    this.view = { mode: v.mode || 'all', metric: v.metric || 'won', online: !!v.online };
+    this.status = null;     // null, 'loading', 'offline' or 'error' (with this.message)
+    this.message = '';
+    this.flash = null;      // a friend just added: their row lights up
+    this.adding = {};       // codes being added from a room (the room may redraw meanwhile)
+  }
+
+  Friends.prototype.save = function () { this.data.view = this.view; UI.store.set(KEY, this.data); };
+  Friends.prototype.available = function () { return !!(this.online && this.online.available()); };
+  Friends.prototype.name = function () { return this.online.data.name || ''; };
+  Friends.prototype.code = function () { return this.data.you ? this.data.you.code : ''; };
+  Friends.prototype.isFriend = function (code) { return this.data.friends.some(function (f) { return f.code === code; }); };
+
+  /* ---------- the server ---------- */
+
+  /* This phone's record, as the server keeps it: numbers only, and not when each game was played. */
+  Friends.prototype.myStats = function () {
+    var out = {}, all = this.app.stats || {};
+    CT.listModes().forEach(function (m) {
+      var rec = all[m.id];
+      if (!rec || !rec.played) return;
+      var o = {};
+      Object.keys(rec).forEach(function (k) {
+        var v = rec[k];
+        if (k === 'online' && v && typeof v === 'object') {
+          o.online = {};
+          Object.keys(v).forEach(function (j) { if (typeof v[j] === 'number') o.online[j] = v[j]; });
+        } else if (k !== 'last' && typeof v === 'number') o[k] = v;
+      });
+      out[m.id] = o;
+    });
+    return out;
+  };
+
+  /* One request does everything: your name and stats go up with every one,
+     your friends (and theirs) come back. body: { add?: code, remove?: code }. */
+  Friends.prototype.request = function (body) {
+    var self = this, online = this.online;
+    body = body || {};
+    if (online.data.name) body.name = online.data.name;
+    body.stats = this.myStats();
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, TIMEOUT_MS);
+    return fetch(online.httpUrl('/players'), {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + online.data.token, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        clearTimeout(timer);
+        data = data && typeof data === 'object' ? data : {};
+        if (!res.ok && !data.error) data.error = 'server';
+        if (data.you) {
+          self.data.you = data.you;
+          self.data.friends = Array.isArray(data.friends) ? data.friends : [];
+          self.data.at = Date.now();
+          self.data.joined = true;
+          self.save();
+        }
+        return data;
+      });
+    }, function (e) { clearTimeout(timer); throw e; });
+  };
+
+  /* In a room: make sure the server knows you, so the others can add you. */
+  Friends.prototype.touch = function () {
+    if (!this.available() || (this.data.joined && Date.now() - (this.data.at || 0) < TOUCH_MS)) return;
+    this.request({}).catch(function () { /* next time */ });
+  };
+
+  /* After each game: the new stats go up for your friends to see. */
+  Friends.prototype.gamePlayed = function () {
+    var self = this;
+    if (!this.available() || !this.data.joined) return;
+    clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(function () {
+      self.request({}).then(function () { if (self.app.screen === 'friends') self.paint(); }, function () { /* next time */ });
+    }, 1500);
+  };
+
+  Friends.prototype.add = function (code) { return this.request({ add: code }); };
+  Friends.prototype.remove = function (code) { return this.request({ remove: code }); };
+
+  /* Add next to someone in an online room. They may have only just arrived, so one more try.
+     Then the room tells them (to: their place in the room), so their list updates too. */
+  Friends.prototype.addFromRoom = function (code, name, to) {
+    var self = this, tries = 0;
+    if (this.adding[code]) return;
+    this.adding[code] = true;
+    var done = function () { delete self.adding[code]; if (self.online.room) self.online.renderLobby(); };
+    var go = function () {
+      self.add(code).then(function (data) {
+        if (data.error === 'no-player' && tries++ < 1) { setTimeout(go, 2000); return; }
+        if (data.error === 'no-player') UI.toast(esc('Couldn’t add ' + name + ' yet: they need the latest version of the app.'));
+        else if (data.error) UI.toast(esc(data.message || 'Couldn’t add ' + name + '. Try again.'));
+        else {
+          UI.toast(esc('You and ' + name + ' are friends now. See how you compare under Friends.'));
+          if (self.online.conn && to != null) self.online.conn.send({ t: 'friend', to: to });
+        }
+        done();
+      }, function () {
+        UI.toast('Can’t reach the server. Try again in a moment.');
+        done();
+      });
+    };
+    go();
+  };
+
+  /* Someone in the room says they've added you: check with the server, and say so if it's true. */
+  Friends.prototype.addedBy = function (memberId) {
+    var self = this, online = this.online;
+    var member = online.room && online.room.members.filter(function (m) { return m.id === memberId; })[0];
+    if (!member || !member.code || this.isFriend(member.code)) return;
+    this.request({}).then(function () {
+      if (!self.isFriend(member.code)) return;
+      UI.toast(esc(member.name + ' added you as a friend. See how you compare under Friends.'));
+      if (online.room) online.renderLobby();
+    }, function () { /* next time */ });
+  };
+
+  /* ---------- home ---------- */
+
+  Friends.prototype.people = function () {
+    var me = { me: true, name: this.name() || 'You', code: this.code(), stats: this.app.stats || {} };
+    return [me].concat(this.data.friends.map(function (f) {
+      return { name: f.name, code: f.code, stats: f.stats || {}, updated: f.updated };
+    }));
+  };
+
+  Friends.prototype.tileHtml = function () {
+    if (!this.available()) return '';
+    var n = this.data.friends.length, line;
+    if (n) {
+      // where you stand on wins, every game together
+      var rows = S.standings(this.people(), 'all', 'won', false).rows;
+      var mine = rows.filter(function (r) { return r.person.me; })[0];
+      var level = rows.filter(function (r) { return !r.person.me && r.rank === 1; });
+      if (!mine || !mine.rank) line = 'Finish a game to get on the leaderboard.';
+      else if (mine.rank === 1 && level.length) line = 'You and ' + level[0].person.name + (level.length > 1 ? ' and others' : '') + ' share the top spot for wins.';
+      else if (mine.rank === 1) line = 'You’re top for wins, out of you and ' + n + (n === 1 ? ' friend.' : ' friends.');
+      else line = 'You’re ' + ordinal(mine.rank) + ' of ' + (n + 1) + ' for wins. ' + rows[0].person.name + ' is top.';
+    } else {
+      line = 'Add friends with a code and see who comes out on top in every game.';
+    }
+    return '<article class="mode-tile friends-tile">' +
+      '<div class="online-top"><span class="online-icon">' + UI.icon.trophy + '</span>' +
+      '<h2>Friends</h2><span class="chip friends-chip">' + (n ? n + (n === 1 ? ' friend' : ' friends') : 'Leaderboard') + '</span></div>' +
+      '<p class="tag">' + esc(line) + '</p>' +
+      '<div class="mode-actions"><button class="btn btn-primary" type="button" data-friends>' + (n ? 'See the leaderboard' : 'Add friends') + '</button></div>' +
+      '</article>';
+  };
+
+  Friends.prototype.wireHome = function (root) {
+    var self = this, b = root.querySelector('[data-friends]');
+    if (b) b.addEventListener('click', function () { self.open(); });
+  };
+
+  /* A friend's invite link: …/?friend=K7PQ2MXD opens Friends with their code ready to add. */
+  Friends.prototype.boot = function () {
+    if (!this.available()) return;
+    var m = (location.search + '&' + location.hash).match(/[?&#]friend=([A-Za-z0-9-]{8,24})/);
+    if (!m) return;
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* keep the address */ }
+    if (this.app.screen === 'home' && !this.app.sheet) this.open({ code: m[1] });
+  };
+
+  /* ---------- the screen ---------- */
+
+  Friends.prototype.open = function (opts) {
+    opts = opts || {};
+    this.app.closeSheet(true);
+    this.app.show('friends');
+    this.render(opts.code ? cleanCode(opts.code) : '');
+    this.refresh();
+  };
+
+  Friends.prototype.refresh = function () {
+    var self = this;
+    if (!this.name()) { this.status = null; this.paint(); return; }   // a name first
+    this.status = 'loading';
+    this.paintNote();
+    this.request({}).then(function (data) {
+      self.status = data.error ? 'error' : null;
+      self.message = data.message || (data.error ? 'Something went wrong on the server. Try again in a moment.' : '');
+      self.paint();
+    }, function () {
+      self.status = 'offline';
+      self.paint();
+    });
+  };
+
+  Friends.prototype.render = function (prefill) {
+    var self = this, app = this.app;
+    $('screen-friends').innerHTML =
+      '<header class="setup-head">' +
+        '<button class="icon-btn" id="f-back" type="button" aria-label="Back to games">' + UI.icon.back + '</button>' +
+        '<span class="wordmark">FRIENDS</span><span class="spacer"></span>' +
+        '<button class="icon-btn" id="f-refresh" type="button" aria-label="Refresh">' + UI.icon.refresh + '</button>' +
+      '</header>' +
+      '<div class="setup-body friends-body">' +
+        '<div id="f-note" role="status"></div>' +
+        '<section class="invite friend-card" id="f-card"></section>' +
+        '<section class="field" id="f-add">' +
+          '<h3><label for="f-code">Add a friend</label></h3>' +
+          '<div class="add-row">' +
+            '<input class="text-input code-input friend-input" id="f-code" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" placeholder="ABCD2345" value="' + esc(prefill || '') + '">' +
+            '<button class="btn btn-primary" type="button" id="f-go">Add</button>' +
+          '</div>' +
+          '<p class="form-error" id="f-error" role="alert" hidden></p>' +
+          '<p class="help" id="f-help">' + (prefill ? 'That’s the code from your friend’s invite link. Tap Add.' : 'Ask friends for their code: it’s under Friends on their phone. Or tap Add next to them in an online room.') + '</p>' +
+        '</section>' +
+        '<section class="board" id="f-board" aria-labelledby="f-board-title"></section>' +
+      '</div>';
+    $('f-back').addEventListener('click', function () { app.showHome(); });
+    $('f-refresh').addEventListener('click', function () { self.refresh(); });
+    var input = $('f-code');
+    input.addEventListener('input', function () {
+      var v = cleanCode(input.value);
+      if (v !== input.value) input.value = v;
+      $('f-error').hidden = true;
+    });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') self.addTyped(); });
+    $('f-go').addEventListener('click', function () { self.addTyped(); });
+    $('f-board').addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      var v = self.view;
+      if (b.dataset.fMode) { v.mode = b.dataset.fMode; self.save(); self.paintBoard(); }
+      else if (b.dataset.fMetric) { v.metric = b.dataset.fMetric; self.save(); self.paintBoard(); }
+      else if (b.dataset.fOnline) { v.online = b.dataset.fOnline === '1'; self.save(); self.paintBoard(); }
+      else if (b.dataset.who != null) self.openPerson(b.dataset.who);
+    });
+    this.paint();
+    if (prefill && this.name()) try { $('f-go').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+  };
+
+  Friends.prototype.paint = function () {
+    if (this.app.screen !== 'friends' || !$('f-card')) return;
+    this.paintNote();
+    this.paintCard();
+    $('f-add').hidden = !this.name();
+    this.paintBoard();
+  };
+
+  Friends.prototype.paintNote = function () {
+    var el = $('f-note'), self = this;
+    if (!el) return;
+    var html = '';
+    if (this.status === 'loading' && !this.code()) html = '<p class="lobby-note">Getting your friend code…</p>';
+    else if (this.status === 'offline') {
+      html = '<p class="lobby-note warn">Can’t reach the server right now.' +
+        (this.data.at && this.data.friends.length ? ' Your friends’ stats are from ' + esc(ago(this.data.at)) + '.' : '') +
+        ' <button class="link-btn" type="button" id="f-retry">Try again</button></p>';
+    } else if (this.status === 'error') html = '<p class="lobby-note warn">' + esc(this.message) + '</p>';
+    el.innerHTML = html;
+    el.hidden = !html;
+    var retry = $('f-retry');
+    if (retry) retry.addEventListener('click', function () { self.refresh(); });
+    var r = $('f-refresh');
+    if (r) r.classList.toggle('spin', this.status === 'loading');
+  };
+
+  Friends.prototype.paintCard = function () {
+    var self = this, card = $('f-card');
+    if (!this.name()) {
+      // first time: the name your friends will see (the same one rooms use)
+      card.innerHTML =
+        '<h2 class="friend-title">First, your name</h2>' +
+        '<p class="invite-help">Your friends see it on the leaderboard, and so does everyone in a room with you.</p>' +
+        '<div class="add-row">' +
+          '<input class="text-input" id="o-name" type="text" maxlength="16" autocomplete="nickname" autocapitalize="words" enterkeyhint="go" spellcheck="false" placeholder="Your name">' +
+          '<button class="btn btn-primary" type="button" id="f-name-go">Save</button>' +
+        '</div>' +
+        '<p class="form-error" id="o-error" role="alert" hidden></p>';
+      var go = function () { if (self.online.readName()) self.refresh(); };
+      $('f-name-go').addEventListener('click', go);
+      $('o-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+      return;
+    }
+    var code = this.code();
+    card.innerHTML =
+      '<p class="eyebrow">Your friend code</p>' +
+      '<p class="room-code friend-code' + (code ? '' : ' waiting') + '"' + (code ? ' aria-label="Friend code ' + esc(code.split('').join(' ')) + '"' : '') + '>' + (code ? esc(showCode(code)) : '····-····') + '</p>' +
+      '<p class="invite-help">Friends see you as <b>' + esc(this.name()) + '</b> <button class="link-btn inline" type="button" id="f-rename">Change</button></p>' +
+      '<div class="invite-actions">' +
+        '<button class="btn btn-primary" type="button" id="f-share"' + (code ? '' : ' disabled') + '>' + UI.icon.share + '<span>Share code</span></button>' +
+        '<button class="btn btn-ghost" type="button" id="f-copy"' + (code ? '' : ' disabled') + '>Copy code</button>' +
+      '</div>';
+    $('f-rename').addEventListener('click', function () { self.openRename(); });
+    $('f-share').addEventListener('click', function () { self.share(); });
+    $('f-copy').addEventListener('click', function () { self.copy(code, 'Friend code copied.'); });
+  };
+
+  Friends.prototype.paintBoard = function () {
+    var box = $('f-board');
+    if (!box) return;
+    var v = this.view, flash = this.flash;
+    this.flash = null;
+    if (v.mode !== 'all' && !CT.getMode(v.mode)) v.mode = 'all';
+    var b = S.standings(this.people(), v.mode, v.metric, v.online);
+    v.metric = b.metric.id;
+    var pill = function (attr, value, label, on) {
+      return '<button type="button" data-' + attr + '="' + value + '" aria-pressed="' + on + '">' + esc(label) + '</button>';
+    };
+    var games = [{ id: 'all', label: 'Overall' }].concat(CT.listModes().map(function (m) { return { id: m.id, label: m.shortName || m.name }; }));
+    var rows = b.rows.map(function (r) {
+      var p = r.person;
+      var value = r.value == null ? '–' : b.metric.fmt(r.value);
+      var sub = S.summary(r.rec, b.metric, r.value, v.online);
+      var said = (r.rank ? ordinal(r.rank) + ': ' : '') + p.name + (p.me ? ' (you)' : '') + ', ' +
+        (r.value == null ? 'not counted yet' : b.metric.label + ' ' + value) + '. ' + sub + (p.me ? '' : '. Tap to compare.');
+      return '<li><button type="button" class="board-row' + (p.me ? ' me' : '') + (r.rank == null ? ' unranked' : '') + (flash && p.code === flash ? ' fresh' : '') + '" data-who="' + (p.me ? '' : esc(p.code)) + '" aria-label="' + esc(said) + '">' +
+        '<span class="rank' + (r.rank && r.rank <= 3 ? ' top' + r.rank : '') + '">' + (r.rank || '') + '</span>' +
+        '<span class="avatar" style="--paint:' + (p.me ? 'var(--marigold)' : paintFor(p.code || p.name)) + '">' + esc(initial(p.name)) + '</span>' +
+        '<span class="who"><span class="name">' + esc(p.name) + (p.me ? ' <small>you</small>' : '') + '</span>' +
+        '<span class="sub">' + esc(sub) + '</span></span>' +
+        '<span class="val">' + esc(value) + '</span>' +
+      '</button></li>';
+    }).join('');
+    var friends = this.data.friends.length;
+    var note = b.metric.note ? ' Only in games with ' + b.metric.note + ' on.' : '';
+    var scrolled = Array.prototype.map.call(box.querySelectorAll('.pills'), function (row) { return row.scrollLeft; });
+    box.innerHTML =
+      '<h3 id="f-board-title">Leaderboard</h3>' +
+      '<div class="pills" role="group" aria-label="Game">' + games.map(function (g) { return pill('f-mode', g.id, g.label, g.id === v.mode); }).join('') + '</div>' +
+      '<div class="pills pills-sm" role="group" aria-label="Rank by">' + S.metrics(v.mode).map(function (m) { return pill('f-metric', m.id, m.label, m.id === v.metric); }).join('') + '</div>' +
+      '<div class="seg seg-sm" role="group" aria-label="Which games count">' + pill('f-online', '0', 'All games', !v.online) + pill('f-online', '1', 'Online only', v.online) + '</div>' +
+      '<ol class="board-list">' + rows + '</ol>' +
+      (friends ? '' : '<p class="board-empty">No friends here yet. Share your code, or add theirs above, to see how you compare.</p>') +
+      '<p class="help board-help">' + esc(b.metric.help + note) + ' ' +
+        (v.online ? 'Counting only games in online rooms.' : 'Counting every game, against the computer too.') +
+        (friends ? ' Tap anyone to compare.' : '') + '</p>';
+    // each row of choices stays where it was scrolled to, moving only to bring the chosen one into view
+    box.querySelectorAll('.pills').forEach(function (row, i) {
+      row.scrollLeft = scrolled[i] || 0;
+      var on = row.querySelector('[aria-pressed="true"]');
+      if (!on) return;
+      var from = on.offsetLeft - 16, to = on.offsetLeft + on.offsetWidth + 16 - row.clientWidth;
+      if (row.scrollLeft > from) row.scrollLeft = Math.max(0, from);
+      else if (row.scrollLeft < to) row.scrollLeft = to;
+    });
+  };
+
+  /* ---------- adding, comparing, removing ---------- */
+
+  Friends.prototype.addTyped = function () {
+    var self = this, input = $('f-code'), btn = $('f-go');
+    var code = cleanCode(input.value);
+    var fail = function (text) {
+      var err = $('f-error');
+      if (err) { err.textContent = text; err.hidden = false; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+    };
+    if (code.length < 8) { fail('A friend code has 8 letters and numbers.'); input.focus(); return; }
+    if (code === this.code()) { fail('That’s your own code. Share it with your friends so they can add you.'); return; }
+    var already = this.isFriend(code);
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    $('f-error').hidden = true;
+    this.add(code).then(function (data) {
+      if (data.error) { fail(data.message || 'That didn’t work. Try again.'); return; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+      if ($('f-code')) $('f-code').value = '';
+      var help = $('f-help');
+      if (help) help.textContent = 'Ask friends for their code: it’s under Friends on their phone. Or tap Add next to them in an online room.';
+      var name = data.added ? data.added.name : 'They';
+      UI.toast(esc(already ? name + ' is already your friend.' : 'You and ' + name + ' are friends now.'));
+      self.status = null;
+      self.flash = data.added ? data.added.code : null;
+      self.paint();
+    }, function () {
+      fail('Can’t reach the server. Check your internet connection and try again.');
+    });
+  };
+
+  /* You and a friend side by side (or just you), for the game the leaderboard shows. */
+  Friends.prototype.openPerson = function (code) {
+    var self = this, app = this.app, v = this.view;
+    var people = this.people(), me = people[0];
+    var them = code ? people.filter(function (p) { return p.code === code; })[0] : null;
+    if (code && !them) return;
+    var cols = them ? [them, me] : [me];
+    var mode = v.mode === 'all' ? null : CT.getMode(v.mode);
+    var lines = S.details(v.mode).map(function (m) {
+      var vals = cols.map(function (p) { return m.get(S.recordFor(p.stats, v.mode, v.online), p.stats, v.online); });
+      var best = -1;
+      if (cols.length === 2 && !m.neutral && vals[0] != null && vals[1] != null && vals[0] !== vals[1]) best = (m.low ? vals[0] < vals[1] : vals[0] > vals[1]) ? 0 : 1;
+      return '<tr><th scope="row">' + esc(m.label) + '</th>' + vals.map(function (x, i) {
+        return '<td' + (i === best ? ' class="better"' : '') + '>' + (x == null ? '–' : esc(m.fmt(x))) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var title = them ? them.name + ' and you' : 'Your stats';
+    var where = (mode ? mode.name : 'All games together') + (v.online ? ' · online games only' : '') + (them && them.updated ? ' · their stats from ' + ago(them.updated) : '');
+    var sheet = app.openSheet('friend', app.sheetHead(esc(title)) +
+      '<p class="sheet-sub">' + esc(where) + '</p>' +
+      '<div class="vs-wrap"><table class="vs"><thead><tr><td></td>' + cols.map(function (p) { return '<th scope="col">' + esc(p.me ? 'You' : p.name) + '</th>'; }).join('') + '</tr></thead>' +
+        '<tbody>' + lines + '</tbody></table></div>' +
+      (them ? '<p class="help">Friend code ' + esc(showCode(them.code)) + '</p><div id="f-remove-box"><button class="btn btn-ghost btn-wide" type="button" id="f-remove">Remove friend</button></div>' : '') +
+      '<button class="btn btn-primary" type="button" data-close>Done</button>', { label: title });
+    app.wireClose(sheet);
+    if (!them) return;
+    $('f-remove').addEventListener('click', function () {
+      $('f-remove-box').innerHTML = '<div class="confirm"><p>Remove ' + esc(them.name) + '? You’ll both drop off each other’s leaderboard. You can add each other again with your codes.</p>' +
+        '<p class="form-error" id="f-remove-error" role="alert" hidden></p>' +
+        '<div class="confirm-actions"><button class="btn btn-primary" type="button" id="f-remove-yes">Remove</button>' +
+        '<button class="btn btn-ghost" type="button" id="f-remove-no">Keep</button></div></div>';
+      $('f-remove-no').addEventListener('click', function () { self.openPerson(code); });
+      $('f-remove-yes').addEventListener('click', function () {
+        var yes = $('f-remove-yes');
+        yes.disabled = true;
+        yes.textContent = 'Removing…';
+        self.remove(them.code).then(function (data) {
+          if (data.error) throw new Error(data.message);
+          app.closeSheet(true);
+          UI.toast(esc(them.name + ' is no longer on your list.'));
+          self.status = null;
+          self.paint();
+        }).catch(function () {
+          yes.disabled = false;
+          yes.textContent = 'Remove';
+          var err = $('f-remove-error');
+          if (err) { err.textContent = 'Can’t reach the server. Try again in a moment.'; err.hidden = false; }
+        });
+      });
+    });
+  };
+
+  Friends.prototype.openRename = function () {
+    var self = this, app = this.app;
+    var sheet = app.openSheet('rename', app.sheetHead('Your name') +
+      '<div class="online-form">' + this.online.nameField() +
+        '<p class="form-error" id="o-error" role="alert" hidden></p>' +
+        '<button class="btn btn-primary btn-wide" type="button" id="f-name-save">Save</button>' +
+        '<p class="form-help">Friends see this name on the leaderboard, and so does everyone in a room with you.</p>' +
+      '</div>', { label: 'Your name' });
+    app.wireClose(sheet);
+    var save = function () {
+      if (!self.online.readName()) return;
+      app.closeSheet(true);
+      self.paint();
+      self.refresh();
+    };
+    $('f-name-save').addEventListener('click', save);
+    $('o-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
+    try { $('o-name').focus({ preventScroll: true }); $('o-name').select(); } catch (e) { /* ignore */ }
+  };
+
+  Friends.prototype.share = function () {
+    var self = this, code = this.code();
+    if (!code) return;
+    var url = location.href.split(/[?#]/)[0] + '?friend=' + code;
+    var text = 'Add me as a friend in the Burns card game. My friend code is ' + showCode(code) + '.';
+    if (navigator.share) {
+      navigator.share({ title: 'Add me as a friend', text: text, url: url }).catch(function (e) {
+        if (e && e.name !== 'AbortError') self.copy(text + ' ' + url, 'Invite copied. Paste it in a message to your friends.');
+      });
+    } else {
+      this.copy(text + ' ' + url, 'Invite copied. Paste it in a message to your friends.');
+    }
+  };
+
+  Friends.prototype.copy = function (text, done) {
+    var ok = function () { UI.toast(esc(done)); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, function () { window.prompt('Copy this:', text); });
+    } else {
+      window.prompt('Copy this:', text);
+    }
+  };
+
+  UI.Friends = Friends;
+})(window.CT);
+
 /* ---- src/ui/app.js ---- */
 /* ==========================================================================
    APP SHELL — menu, setup, sheets, saving, and the game loop.
@@ -12394,11 +13376,13 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
       }
 
       this.online = UI.Online ? new UI.Online(this) : null;
+      this.friends = this.online && UI.Friends ? new UI.Friends(this) : null;
 
       data = data || {};
       if (data.save && data.screen === 'table' && this.resume(data.save)) return;
       this.showHome();
       if (this.online) this.online.boot();
+      if (this.friends) this.friends.boot();
     },
 
     /* Each mode's rules version, to check an online room runs the same game. */
@@ -12439,7 +13423,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
 
     show: function (name) {
       this.screen = name;
-      ['home', 'setup', 'table', 'lobby'].forEach(function (s) { var el = $('screen-' + s); if (el) el.hidden = s !== name; });
+      ['home', 'setup', 'table', 'lobby', 'friends'].forEach(function (s) { var el = $('screen-' + s); if (el) el.hidden = s !== name; });
     },
 
     showHome: function () {
@@ -12476,6 +13460,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
           '</article>';
       });
       if (this.online) html += this.online.tileHtml();
+      if (this.friends) html += this.friends.tileHtml();
       html += '<article class="mode-tile soon"><h3>More games</h3><p>New modes appear here as their rules are added.</p></article></section>';
       var lines = modes.map(function (m) {
         var s = self.stats[m.id];
@@ -12510,6 +13495,7 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
         });
       });
       if (this.online) this.online.wireHome(home);
+      if (this.friends) this.friends.wireHome(home);
     },
 
     modeSettings: function (mode) {
@@ -12915,20 +13901,19 @@ CT.BUILD = {"version":"0.11.1","id":"7646101","target":"app","server":"wss://bur
       this.startGame(g.modeId, { opponents: g.opponents, options: g.options, names: g.names });
     },
 
+    /* A finished game into this phone's record (standings.js): games, wins,
+       streaks and what the game counted for you, and online games again on
+       their own. Friends see it on their leaderboard. */
     record: function (v, me) {
       // once per game: online games are told apart by room and game number
       var key = this.session.remote ? 'online:' + (this.online && this.online.room ? this.online.room.code : '') + ':' + this.session.game : null;
       if (key ? this.recordedKey === key : this.recorded) return;
       if (key) this.recordedKey = key; else this.recorded = true;
-      var id = this.session.mode.id;
-      var s = this.stats[id] || (this.stats[id] = { played: 0, won: 0, flushWins: 0 });
-      s.played++;
-      if ((v.winners || []).indexOf(me || 'p0') >= 0) {
-        s.won++;
-        if (v.winReason === 'flush') s.flushWins++;
-      }
+      var won = (v.winners || []).indexOf(me || 'p0') >= 0;
+      CT.Standings.record(this.stats, this.session.mode, won, v.tally, !!key, Date.now());
       UI.store.set(STATS_KEY, this.stats);
       if (!key) UI.store.del(SAVE_KEY);
+      if (this.friends) this.friends.gamePlayed();
     },
 
     /* The end-of-game sheet. The table screen fills in what's particular to

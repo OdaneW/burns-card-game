@@ -457,6 +457,29 @@
     return 'Round ' + state.round + ' · ' + deck + ' · garments: you ' + (n - (me ? me.lost : 0)) + ', ' + (them ? them.name : 'them') + ' ' + (n - (them ? them.lost : 0));
   }
 
+  /* Stats each player collects (CT.tally): rounds won and lost, garments
+     taken off the other player and lost, and the piles picked up. */
+  var STATS = {
+    count: function (t, e) {
+      var add = CT.tally.add;
+      switch (e.type) {
+        case 'roundEnd':
+          add(t, e.winner, 'roundsWon');
+          add(t, e.loser, 'roundsLost');
+          if (e.garment) { add(t, e.winner, 'garmentsTaken'); add(t, e.loser, 'garmentsLost'); }
+          break;
+        case 'pickup': add(t, e.player, 'piles'); break;
+      }
+    },
+    show: [
+      { key: 'roundsWon', label: 'Rounds won', rank: true, help: 'Rounds won, in Strip Mode and Quick Play.' },
+      { key: 'garmentsTaken', label: 'Garments taken', rank: true, help: 'Garments the other player took off after losing a round to you.' },
+      { key: 'roundsLost', label: 'Rounds lost', low: true, help: 'Rounds lost.' },
+      { key: 'garmentsLost', label: 'Garments lost', low: true, help: 'Garments you took off after losing a round.' },
+      { key: 'piles', label: 'Piles picked up', low: true, help: 'Times picking up the pile.' }
+    ]
+  };
+
   CT.registerMode({
     id: 'stripme',
     name: 'Strip-Me',
@@ -475,6 +498,7 @@
     act: act,
     tick: tick,
     view: view,
+    stats: STATS,
     presenter: 'stripme'
   });
 })(typeof globalThis !== 'undefined' ? (globalThis.CT = globalThis.CT || {}) : (window.CT = window.CT || {}));
